@@ -1,0 +1,1145 @@
+/* ================================
+   Discovery Browser - Control Panel Styles
+   ================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  overflow: hidden;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-attachment: fixed;
+}
+
+.header-bar {
+  flex-shrink: 0;
+  height: 88px;
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  z-index: 100;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: white;
+}
+
+.logo-icon {
+  font-size: 32px;
+}
+
+.app-title {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  white-space: nowrap;
+}
+
+.nav-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
+.nav-btn:active {
+  background: rgba(255, 255, 255, 0.35);
+  transform: scale(0.95);
+}
+
+.nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Settings panel styles */
+.settings-panel {
+  position: absolute;
+  top: 88px;
+  right: 24px;
+  width: 360px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(12px);
+  padding: 12px;
+  border-radius: 12px;
+  color: white;
+  z-index: 200;
+  display: none;
+}
+
+.settings-panel h3 { margin-bottom: 6px; }
+.settings-panel .muted { color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 8px; }
+.settings-panel .addon-form { display:flex; gap:8px; margin-bottom:8px; }
+.settings-panel input { flex:1; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.12); color: white; }
+.addons-list { list-style:none; padding:0; margin:0; max-height:200px; overflow:auto; }
+.addon-item { display:flex; justify-content:space-between; gap:8px; align-items:center; padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); margin-bottom:6px; }
+.addon-name { font-weight:600; }
+.uninstall-btn { background: rgba(255,67,67,0.9); color:white; border:none; padding:6px 8px; border-radius:8px; cursor:pointer; }
+
+.addons-list .btn { padding:6px 8px; border-radius:8px; border:none; cursor:pointer; background: rgba(255,255,255,0.06); color:white; }
+.addons-list .btn:hover { background: rgba(255,255,255,0.12); }
+
+/* Toggle button for addons */
+.addon-toggle {
+  padding:6px 10px;
+  border-radius:8px;
+  border:none;
+  cursor:pointer;
+  color:white;
+}
+.addon-toggle.on { background: rgba(40,200,120,0.9); }
+.addon-toggle.off { background: rgba(200,80,80,0.9); }
+
+.card-counter {
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.btn-primary {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Search Input Styling */
+.search-input {
+  flex: 1;
+  max-width: 300px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  color: white;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.search-input:focus {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+}
+
+.btn-primary:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-primary:active {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(0);
+}
+
+.card-dock {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(15px);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 12px 16px;
+  display: flex;
+  z-index: 50;
+  max-width: 90%;
+  overflow-x: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.dock-content {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+}
+
+.dock-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  min-width: 60px;
+  position: relative;
+}
+
+.dock-item:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
+.dock-item.active {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 20px rgba(240, 147, 251, 0.3);
+}
+
+.dock-item-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+}
+
+.dock-close-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 67, 67, 0.9);
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  font-weight: bold;
+  padding: 0;
+  line-height: 1;
+}
+
+.dock-item:hover .dock-close-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dock-close-btn:hover {
+  background: rgba(255, 50, 50, 1);
+  transform: scale(1.15);
+}
+
+.dock-close-btn:active {
+  transform: scale(0.95);
+}
+
+.dock-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: white;
+  font-size: 14px;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #f093fb 100%);
+}
+
+.dock-item-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 50px;
+  text-align: center;
+}
+
+.dock-item:hover .dock-item-label {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: white;
+}
+
+.logo-icon {
+  font-size: 32px;
+}
+
+.app-title {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.card-counter {
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+/* ================================
+   Main Content Area
+   ================================ */
+
+.main-content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.card-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.card-overlays-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.card-overlays-container > * {
+  pointer-events: auto;
+}
+
+/* ================================
+   Browser Card (Main Component)
+   ================================ */
+
+.browser-card {
+  position: fixed;
+  width: 650px;
+  height: 500px;
+  background: white;
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
+}
+
+.browser-card.active {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5),
+              0 0 0 3px rgba(102, 126, 234, 0.6);
+  opacity: 1;
+  transform: scale(1);
+  z-index: 50;
+}
+
+.browser-card.inactive {
+  opacity: 0.75;
+  transform: scale(0.98);
+}
+
+/* ================================
+   Card Titlebar
+   ================================ */
+
+.card-titlebar {
+  height: 48px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+  cursor: grab;
+  user-select: none;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.card-titlebar:active {
+  cursor: grabbing;
+}
+
+.titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.card-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.card-title {
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.titlebar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.titlebar-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.titlebar-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
+.titlebar-btn:active {
+  transform: scale(0.95);
+}
+
+/* ================================
+   Card Navbar (Controls)
+   ================================ */
+
+.card-navbar {
+  height: 60px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.navbar-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  color: #333;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.navbar-btn:hover {
+  background: #f0f0f0;
+  border-color: #667eea;
+  color: #667eea;
+  transform: scale(1.08);
+}
+
+.navbar-btn:active {
+  transform: scale(0.95);
+}
+
+/* URL Input Group */
+
+.url-input-group {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 0 12px;
+  height: 36px;
+  transition: all 0.2s ease;
+}
+
+.url-input-group:focus-within {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.url-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #333;
+  font-size: 13px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.url-input::placeholder {
+  color: #999;
+}
+
+/* ================================
+   Card Content Area
+   ================================ */
+
+.card-content {
+  flex: 1;
+  background: white;
+  position: relative;
+  overflow: hidden;
+}
+
+/* BrowserView renders here - no styling needed */
+
+/* ================================
+   Card Status Bar
+   ================================ */
+
+.card-status-bar {
+  height: 32px;
+  background: #f8f9fa;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 12px;
+  color: #666;
+  flex-shrink: 0;
+}
+
+.status-text {
+  flex: 1;
+}
+
+.security-badge {
+  white-space: nowrap;
+  font-weight: 500;
+  color: #667eea;
+}
+
+/* ================================
+   Floating Dock (Bottom Center)
+   ================================ */
+
+.card-dock {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 8px 12px;
+  display: flex;
+  gap: 8px;
+  z-index: 200;
+  max-width: 90%;
+  overflow-x: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.dock-content {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.dock-item {
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dock-item:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
+.dock-item.active {
+  background: rgba(102, 126, 234, 0.8);
+  border-color: rgba(102, 126, 234, 1);
+  box-shadow: 0 0 12px rgba(102, 126, 234, 0.6);
+}
+
+/* ================================
+   Buttons (Global)
+   ================================ */
+
+.btn {
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(245, 87, 108, 0.4);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+/* ================================
+   Animations & Transitions
+   ================================ */
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.browser-card {
+  animation: fadeIn 0.3s ease;
+}
+
+/* ================================
+   Scrollbar Styling
+   ================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.4);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.6);
+}
+
+/* ================================
+   Responsive Adjustments
+   ================================ */
+
+@media (max-width: 1200px) {
+  .browser-card {
+    width: 700px;
+    height: 550px;
+  }
+
+  .app-title {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-title {
+    display: none;
+  }
+
+  .header-bar {
+    height: 70px;
+    padding: 0 16px;
+  }
+
+  .browser-card {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+}
+
+/* ================================
+   Addon Manager Styles
+   ================================ */
+
+.addon-manager {
+  padding: 0;
+}
+
+.addon-manager-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.addon-manager-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.addon-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.addon-card {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+  align-items: flex-start;
+}
+
+.addon-card:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.addon-icon {
+  font-size: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.addon-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.addon-info h4 {
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.addon-info p {
+  margin: 0 0 4px 0;
+  font-size: 11px;
+  opacity: 0.75;
+  line-height: 1.4;
+  max-height: 2.2em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.addon-version {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.addon-controls {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.addon-toggle {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: white;
+  min-width: 40px;
+}
+
+.addon-toggle.enabled {
+  background: rgba(40, 200, 120, 0.8);
+}
+
+.addon-toggle.disabled {
+  background: rgba(200, 80, 80, 0.8);
+}
+
+.addon-toggle:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-remove {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 100, 100, 0.2);
+  color: rgba(255, 100, 100, 1);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.btn-remove:hover {
+  background: rgba(255, 100, 100, 0.35);
+}
+
+/* ================================
+   Addon Discovery Modal
+   ================================ */
+
+.addon-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.addon-modal[aria-hidden="true"] {
+  display: none !important;
+}
+
+.modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.addon-modal-content {
+  position: relative;
+  z-index: 1001;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.addon-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.addon-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.btn-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  color: #333;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-close:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.addon-search-form {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.addon-search-form input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.addon-search-form input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.addon-search-form .btn {
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.addon-search-form .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.addon-search-results {
+  flex: 1;
+  padding: 12px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.addon-search-result-card {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+  align-items: flex-start;
+}
+
+.addon-search-result-card:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+.addon-search-result-card h4 {
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.addon-search-result-card p {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  color: #666;
+  line-height: 1.4;
+}
+
+.addon-search-result-card .btn-primary {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.muted {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  text-align: center;
+  padding: 24px 12px;
+}
+
+/* ================================
+   Print Styles
+   ================================ */
+
+@media print {
+  .header-bar,
+  .card-dock,
+  .titlebar-btn,
+  .navbar-btn {
+    display: none;
+  }
+}

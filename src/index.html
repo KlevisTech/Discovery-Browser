@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discovery Browser</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Main App Container (Control Panel) -->
+  <div class="app-container">
+    <!-- Header Bar -->
+    <header class="header-bar">
+      <div class="header-content">
+        <div class="header-left">
+          <div class="logo">
+            <span class="logo-icon">🌐</span>
+            <h1 class="app-title">Discovery</h1>
+          </div>
+          <!-- Navigation Buttons -->
+          <div class="nav-controls">
+            <button class="nav-btn" id="main-back-btn" title="Back">←</button>
+            <button class="nav-btn" id="main-forward-btn" title="Forward">→</button>
+            <button class="nav-btn" id="main-reload-btn" title="Reload">↻</button>
+          </div>
+          <!-- Search/Address Bar -->
+          <input type="text" id="search-input" class="search-input" placeholder="Enter web address or search..." />
+        </div>
+        <div class="header-right">
+          <div class="card-counter">
+            <span id="card-count">0</span> Cards
+          </div>
+          <button class="btn btn-primary" id="new-card-btn">
+            + New
+          </button>
+          <button class="btn" id="settings-btn" title="Extensions">🧩</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Settings/Extensions panel (hidden by default) -->
+    <div id="settings-panel" class="settings-panel" aria-hidden="true">
+      <div class="addon-manager">
+        <div class="addon-manager-header">
+          <h3>Extensions</h3>
+          <button id="discover-addons-btn" class="btn btn-primary">+ Discover</button>
+        </div>
+        <div id="installed-addons-grid" class="addon-grid"></div>
+        <p id="no-addons-msg" class="muted">No extensions installed. Click "Discover" to find addons.</p>
+      </div>
+    </div>
+
+    <!-- Addon discovery modal (hidden by default) -->
+    <div id="addon-discovery-modal" class="addon-modal" aria-hidden="true">
+      <div class="modal-overlay"></div>
+      <div class="addon-modal-content">
+        <div class="addon-modal-header">
+          <h3>Discover Extensions</h3>
+          <button id="close-discovery-modal" class="btn-close">✕</button>
+        </div>
+        <div class="addon-search-form">
+          <input id="addon-search-input" placeholder="Search for addon (e.g., uBlock Origin, AdBlock Plus)" />
+          <button id="addon-search-btn" class="btn btn-primary">Search</button>
+        </div>
+        <div id="addon-search-results" class="addon-search-results"></div>
+      </div>
+    </div>
+
+    <!-- Dock Container -->
+    <div class="dock-container">
+      <div id="dock-content" class="dock-content"></div>
+    </div>
+  </div>
+
+  <script src="addon-service.js"></script>
+  <script src="renderer-new.js"></script>

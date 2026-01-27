@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build output
+dist/
+build/
+out/
+
+# Development
+.DS_Store
+.env
+.env.local
+*.log
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Electron
+electron-builder.config.js

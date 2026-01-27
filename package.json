@@ -1,0 +1,79 @@
+{
+  "name": "discovery-browser",
+  "version": "1.0.0",
+  "description": "A beautiful, unique card-style web browser built with Electron",
+  "main": "main.js",
+  "author": "Discovery Team",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:win:portable": "electron-builder --win portable",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.discovery.browser",
+    "productName": "Discovery Browser",
+    "files": [
+      "main.js",
+      "preload.js",
+      "preload-card.js",
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "protocols": [
+      {
+        "name": "HTTP",
+        "schemes": ["http"],
+        "role": "Viewer"
+      },
+      {
+        "name": "HTTPS", 
+        "schemes": ["https"],
+        "role": "Viewer"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "publisherName": "Discovery Team",
+      "fileAssociations": [
+        {
+          "ext": "html",
+          "name": "HTML Document",
+          "description": "HTML Document",
+          "role": "Viewer"
+        },
+        {
+          "ext": "htm",
+          "name": "HTM Document", 
+          "description": "HTM Document",
+          "role": "Viewer"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Discovery Browser",
+      "perMachine": true,
+      "allowElevation": true,
+      "runAfterFinish": true,
+      "include": "installer.nsh"
+    }
+  }
+}
