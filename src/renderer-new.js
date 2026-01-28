@@ -387,3 +387,4 @@ class DiscoveryBrowser {
 document.addEventListener('DOMContentLoaded', () => {
   window.discoveryBrowser = new DiscoveryBrowser();
 });
+

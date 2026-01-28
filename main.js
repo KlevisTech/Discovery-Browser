@@ -2,6 +2,47 @@
 const { app, BrowserWindow, ipcMain, session } = require('electron');
 const path = require('path');
 
+const { Menu, MenuItem } = require('electron');
+
+// Function to create and show the context menu
+app.on('web-contents-created', (event, contents) => {
+  contents.on('context-menu', (e, props) => {
+    const menu = new Menu();
+
+    // Add Copy if text is selected
+    if (props.selectionText && props.selectionText.trim() !== '') {
+      menu.append(new MenuItem({ label: 'Copy', role: 'copy' }));
+    }
+
+    // Add Cut if text is selected and the area is editable
+    if (props.isEditable && props.selectionText && props.selectionText.trim() !== '') {
+      menu.append(new MenuItem({ label: 'Cut', role: 'cut' }));
+    }
+
+    // Add Paste if the area is editable
+    if (props.isEditable) {
+      menu.append(new MenuItem({ label: 'Paste', role: 'paste' }));
+    }
+
+    // Add Select All
+    menu.append(new MenuItem({ label: 'Select All', role: 'selectAll' }));
+
+    // Add a separator and Inspect Element (useful for development)
+    if (!app.isPackaged) {
+      menu.append(new MenuItem({ type: 'separator' }));
+      menu.append(new MenuItem({
+        label: 'Inspect Element',
+        click: () => { contents.inspectElement(props.x, props.y); }
+      }));
+    }
+
+    // Only show the menu if there are items in it
+    if (menu.items.length > 0) {
+      menu.popup({ window: BrowserWindow.fromWebContents(contents) });
+    }
+  });
+});
+
 // Helper function to extract URL from command line arguments
 function getUrlFromArgs(argv) {
   return argv.find(arg => arg.startsWith('http://') || arg.startsWith('https://'));
@@ -270,81 +311,8 @@ function setupAddonBlocking() {
     return callback({ cancel: false });
   };
   
-  session.defaultSession.webRequest.onBeforeRequest(requestHandler);
-  
-  const cardPartition = 'persist:cards';
-  const cardSession = session.fromPartition(cardPartition);
-  if (cardSession && cardSession.webRequest) {
-    cardSession.webRequest.onBeforeRequest(requestHandler);
-    cardSession.webRequest.onBeforeRedirect((details, callback) => {
-      try {
-        const location = details.redirectURL || '';
-        if (location) {
-          let hostname = '';
-          try {
-            hostname = new URL(location).hostname;
-          } catch (e) {
-            const match = location.match(/^https?:\/\/([^/?#]+)/);
-            hostname = match ? match[1] : location;
-          }
-          
-          if (blocklist.size > 0) {
-            for (const blocked of blocklist) {
-              if (!blocked) continue;
-              if (hostname === blocked || hostname.endsWith('.' + blocked) || 
-                  (blocked.includes('.') === false && hostname.includes(blocked))) {
-                blockCount++;
-                console.log(`[Block Redirect #${blockCount}] Blocked redirect to: ${hostname}`);
-                return callback({ cancel: true });
-              }
-            }
-          }
-        }
-      } catch (e) {
-        // ignore errors
-      }
-      return callback({});
-    });
-    console.log('[Addon] Ad blocking registered for card webview partition');
-  }
-  
-  const defaultPartition = 'persist:webview';
-  const webviewSession = session.fromPartition(defaultPartition);
-  if (webviewSession && webviewSession.webRequest) {
-    webviewSession.webRequest.onBeforeRequest(requestHandler);
-    webviewSession.webRequest.onBeforeRedirect((details, callback) => {
-      try {
-        const location = details.redirectURL || '';
-        if (location) {
-          let hostname = '';
-          try {
-            hostname = new URL(location).hostname;
-          } catch (e) {
-            const match = location.match(/^https?:\/\/([^/?#]+)/);
-            hostname = match ? match[1] : location;
-          }
-          
-          if (blocklist.size > 0) {
-            for (const blocked of blocklist) {
-              if (!blocked) continue;
-              if (hostname === blocked || hostname.endsWith('.' + blocked) || 
-                  (blocked.includes('.') === false && hostname.includes(blocked))) {
-                blockCount++;
-                console.log(`[Block Redirect #${blockCount}] Blocked redirect to: ${hostname}`);
-                return callback({ cancel: true });
-              }
-            }
-          }
-        }
-      } catch (e) {
-        // ignore errors
-      }
-      return callback({});
-    });
-    console.log('[Addon] Ad blocking registered for default webview partition');
-  }
-  
-  session.defaultSession.webRequest.onBeforeRedirect((details, callback) => {
+  // Redirect handler - NO CALLBACK, just returns normally
+  const redirectHandler = (details) => {
     try {
       const location = details.redirectURL || '';
       if (location) {
@@ -363,7 +331,7 @@ function setupAddonBlocking() {
                 (blocked.includes('.') === false && hostname.includes(blocked))) {
               blockCount++;
               console.log(`[Block Redirect #${blockCount}] Blocked redirect to: ${hostname}`);
-              return callback({ cancel: true });
+              // Note: onBeforeRedirect is informational only, can't cancel
             }
           }
         }
@@ -371,12 +339,49 @@ function setupAddonBlocking() {
     } catch (e) {
       // ignore errors
     }
-    return callback({});
-  });
+  };
+  
+  session.defaultSession.webRequest.onBeforeRequest(requestHandler);
+  session.defaultSession.webRequest.onBeforeRedirect(redirectHandler);
+  
+  const cardPartition = 'persist:cards';
+  const cardSession = session.fromPartition(cardPartition);
+  if (cardSession && cardSession.webRequest) {
+    cardSession.webRequest.onBeforeRequest(requestHandler);
+    cardSession.webRequest.onBeforeRedirect(redirectHandler);
+    
+    // Enable clipboard and other permissions for webviews
+    cardSession.setPermissionRequestHandler((webContents, permission, callback) => {
+      const allowedPermissions = [
+        'clipboard-read',
+        'clipboard-write', 
+        'clipboard-sanitized-write',
+        'media',
+        'geolocation',
+        'notifications',
+        'fullscreen'
+      ];
+      
+      if (allowedPermissions.includes(permission)) {
+        callback(true);
+      } else {
+        callback(false);
+      }
+    });
+    
+    console.log('[Addon] Ad blocking registered for card webview partition');
+  }
+  
+  const defaultPartition = 'persist:webview';
+  const webviewSession = session.fromPartition(defaultPartition);
+  if (webviewSession && webviewSession.webRequest) {
+    webviewSession.webRequest.onBeforeRequest(requestHandler);
+    webviewSession.webRequest.onBeforeRedirect(redirectHandler);
+    console.log('[Addon] Ad blocking registered for default webview partition');
+  }
   
   console.log('[Addon] Ad blocking webRequest handler registered');
 }
-
 // ========================
 // Enhanced create-card handler with beautiful animations
 // ========================

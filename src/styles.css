@@ -1,3 +1,5 @@
+/*styles.css
+
 /* ================================
    Discovery Browser - Control Panel Styles
    ================================ */
@@ -113,6 +115,214 @@ html, body {
   align-items: center;
   gap: 20px;
 }
+
+/* ================================
+   TAB BAR SECTION (NEW)
+   ================================ */
+
+.tabs-section {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 16px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.tabs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  opacity: 0.9;
+}
+
+.tabs-count {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+}
+
+.tabs-container {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+  min-height: 52px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1);
+}
+
+.tabs-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.tabs-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.tabs-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+.tabs-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Individual Tab Styles */
+.site-tab {
+  min-width: 140px;
+  max-width: 180px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  flex-shrink: 0;
+  animation: tabSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes tabSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.site-tab:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.site-tab.active {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.6), rgba(240, 147, 251, 0.6));
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.tab-favicon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.tab-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tab-title {
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.tab-url {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.tab-close {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(255, 100, 100, 0.6);
+  border: none;
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  opacity: 0;
+}
+
+.site-tab:hover .tab-close {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  background: rgba(255, 67, 67, 0.9);
+  transform: scale(1.15);
+}
+
+.tab-close:active {
+  transform: scale(0.95);
+}
+
+/* Empty state */
+.tabs-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* Animation for tab removal */
+@keyframes tabSlideOut {
+  to {
+    opacity: 0;
+    transform: scale(0.8) translateX(-20px);
+    max-width: 0;
+    min-width: 0;
+    padding: 0;
+    margin: 0;
+    border-width: 0;
+  }
+}
+
+.site-tab.removing {
+  animation: tabSlideOut 0.3s ease forwards;
+}
+
+/* ================================
+   END TAB BAR SECTION
+   ================================ */
 
 /* Settings panel styles */
 .settings-panel {
@@ -357,36 +567,6 @@ html, body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.5);
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: white;
-}
-
-.logo-icon {
-  font-size: 32px;
-}
-
-.app-title {
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: -0.5px;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.card-counter {
-  color: white;
-  font-size: 14px;
-  font-weight: 500;
-  opacity: 0.9;
 }
 
 /* ================================
@@ -639,93 +819,6 @@ html, body {
   white-space: nowrap;
   font-weight: 500;
   color: #667eea;
-}
-
-/* ================================
-   Floating Dock (Bottom Center)
-   ================================ */
-
-.card-dock {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 16px;
-  padding: 8px 12px;
-  display: flex;
-  gap: 8px;
-  z-index: 200;
-  max-width: 90%;
-  overflow-x: auto;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-.dock-content {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.dock-item {
-  padding: 8px 14px;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  color: white;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.dock-item:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: scale(1.05);
-}
-
-.dock-item.active {
-  background: rgba(102, 126, 234, 0.8);
-  border-color: rgba(102, 126, 234, 1);
-  box-shadow: 0 0 12px rgba(102, 126, 234, 0.6);
-}
-
-/* ================================
-   Buttons (Global)
-   ================================ */
-
-.btn {
-  padding: 10px 18px;
-  border-radius: 12px;
-  border: none;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(245, 87, 108, 0.4);
-}
-
-.btn-primary:active {
-  transform: translateY(0);
 }
 
 /* ================================
@@ -1139,7 +1232,8 @@ html, body {
   .header-bar,
   .card-dock,
   .titlebar-btn,
-  .navbar-btn {
+  .navbar-btn,
+  .tabs-section {
     display: none;
   }
 }
