@@ -1,58 +1,80 @@
-// preload.js
+// preload.js - For main control panel window
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Expose safe IPC methods via contextBridge
 contextBridge.exposeInMainWorld('electronAPI', {
   // Card management
-  createCard: (cardId, url, position) => 
-    ipcRenderer.invoke('create-card', cardId, url, position),
+  createCard: (cardId, url, position) => ipcRenderer.invoke('create-card', cardId, url, position),
+  closeCard: (cardId) => ipcRenderer.invoke('close-card', cardId),
   
-  updateCardPosition: (cardId, x, y) => 
-    ipcRenderer.invoke('update-card-position', cardId, x, y),
+  // Card navigation
+  cardGoBack: (cardId) => ipcRenderer.invoke('card-go-back', cardId),
+  cardGoForward: (cardId) => ipcRenderer.invoke('card-go-forward', cardId),
+  cardReload: (cardId) => ipcRenderer.invoke('card-reload', cardId),
   
-  navigateCard: (cardId, url) => 
-    ipcRenderer.invoke('navigate-card', cardId, url),
-  
-  closeCard: (cardId) => 
-    ipcRenderer.invoke('close-card', cardId),
-
-  // Navigation controls
-  cardGoBack: (cardId) => 
-    ipcRenderer.invoke('card-go-back', cardId),
-  
-  cardGoForward: (cardId) => 
-    ipcRenderer.invoke('card-go-forward', cardId),
-  
-  cardReload: (cardId) => 
-    ipcRenderer.invoke('card-reload', cardId),
-
-  // Event listeners
+  // Card events from main process
   onCardClosed: (callback) => {
-    const listener = (event, cardId) => callback(cardId);
-    ipcRenderer.on('card-closed', listener);
-    return () => ipcRenderer.removeListener('card-closed', listener);
+    ipcRenderer.on('card-closed', (event, cardId) => callback(cardId));
   },
-
   onCardTitleUpdated: (callback) => {
-    const listener = (event, cardId, title) => callback(cardId, title);
-    ipcRenderer.on('card-title-updated', listener);
-    return () => ipcRenderer.removeListener('card-title-updated', listener);
+    ipcRenderer.on('card-title-updated', (event, cardId, title) => callback(cardId, title));
   },
-
   onCardUrlUpdated: (callback) => {
-    const listener = (event, cardId, url) => callback(cardId, url);
-    ipcRenderer.on('card-url-updated', listener);
-    return () => ipcRenderer.removeListener('card-url-updated', listener);
+    ipcRenderer.on('card-url-updated', (event, cardId, url) => callback(cardId, url));
+  },
+  onCardLoadingStart: (callback) => {
+    ipcRenderer.on('card-loading-start', (event, cardId) => callback(cardId));
+  },
+  onCardLoadingFinish: (callback) => {
+    ipcRenderer.on('card-loading-finish', (event, cardId, title, url) => callback(cardId, title, url));
+  },
+  
+  // External URL handler - for when links are opened from outside the app
+  onOpenUrl: (callback) => {
+    ipcRenderer.on('open-external-url', (event, url) => callback(url));
+  },
+  
+  // Bookmark management
+  onToggleBookmark: (callback) => {
+    ipcRenderer.on('toggle-bookmark', (event, bookmarkData) => callback(bookmarkData));
+  },
+  
+  onCheckBookmarkStatus: (callback) => {
+    ipcRenderer.on('check-bookmark-status', (event, url) => callback(url));
+  },
+  
+  sendBookmarkStatus: (isBookmarked) => {
+    ipcRenderer.send('bookmark-status-response', isBookmarked);
   },
 
-  // Update addons metadata (from renderer)
-  updateAddons: (addonsArray) =>
-    ipcRenderer.invoke('update-addons', addonsArray),
+  onGetBookmarkFolders: (callback) => {
+    ipcRenderer.on('get-bookmark-folders', (event) => callback());
+  },
 
-  // ADD THIS:
-  onOpenUrl: (callback) => {
-    const listener = (event, url) => callback(url);
-    ipcRenderer.on('open-external-url', listener);
-    return () => ipcRenderer.removeListener('open-external-url', listener);
-  }
+  sendBookmarkFolders: (folders) => {
+    ipcRenderer.send('bookmark-folders-response', folders);
+  },
+
+  onSaveBookmarkToFolder: (callback) => {
+    ipcRenderer.on('save-bookmark-to-folder', (event, bookmarkData, folderId) => callback(bookmarkData, folderId));
+  },
+
+  // Sync folders to main process so card windows can read them directly
+  syncBookmarkFolders: (folders) => {
+    ipcRenderer.invoke('sync-bookmark-folders', folders);
+  },
+
+  // Password management
+  onSavePassword: (callback) => {
+    ipcRenderer.on('save-password', (event, passwordData) => callback(passwordData));
+  },
+
+  syncPasswords: (passwords) => {
+    ipcRenderer.invoke('sync-passwords', passwords);
+  },
+  
+  // Addon management
+  updateAddons: (addons) => ipcRenderer.invoke('update-addons', addons),
+  
+  // Default browser setting
+  setAsDefaultBrowser: () => ipcRenderer.invoke('set-as-default-browser-ui'),
 });

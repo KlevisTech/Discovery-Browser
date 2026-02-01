@@ -29,6 +29,31 @@ contextBridge.exposeInMainWorld('cardAPI', {
   toggleFullscreen: (cardId, shouldBeFullscreen) =>
     ipcRenderer.invoke('toggle-fullscreen', cardId, shouldBeFullscreen),
 
+  // Minimize card
+  minimizeCard: (cardId) =>
+    ipcRenderer.invoke('minimize-card', cardId),
+
+  // Bookmark management
+  toggleBookmark: (bookmarkData) =>
+    ipcRenderer.invoke('toggle-bookmark', bookmarkData),
+
+  isBookmarked: (url) =>
+    ipcRenderer.invoke('is-bookmarked', url),
+
+  getBookmarkFolders: () =>
+    ipcRenderer.invoke('get-bookmark-folders'),
+
+  saveBookmarkToFolder: (bookmarkData, folderId) =>
+    ipcRenderer.invoke('save-bookmark-to-folder', bookmarkData, folderId),
+
+  // Password management
+  savePassword: (passwordData) =>
+    ipcRenderer.invoke('save-password', passwordData),
+
+  onPasswordDetected: (callback) => {
+    ipcRenderer.on('password-detected', (event, data) => callback(data));
+  },
+
   // Get current window position
   getWindowPosition: () => {
     return {

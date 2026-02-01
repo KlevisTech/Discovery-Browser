@@ -1,28 +1,117 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Card App</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discovery Browser</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <!-- Tab bar -->
-        <div class="tab-bar">
-            <div id="tabs-container" class="tabs-container">
-                <!-- Tabs will be dynamically inserted here -->
-            </div>
+  <!-- Main App Container (Control Panel) -->
+  <div class="app-container">
+    <!-- Header Bar -->
+    <header class="header-bar">
+      <div class="header-content">
+        <div class="header-left">
+          <div class="logo">
+            <span class="logo-icon">🌐</span>
+            <h1 class="app-title">Discovery</h1>
+          </div>
+          <!-- Search/Address Bar -->
+          <input type="text" id="search-input" class="search-input" placeholder="Enter web address or search..." />
         </div>
+        <div class="header-right">
+          <div class="card-counter">
+            <span id="card-count">0</span> Cards
+          </div>
+          <button class="btn btn-primary" id="new-card-btn">
+            + New
+          </button>
+          <button class="btn" id="extensions-btn" title="Extensions">🧩</button>
+          <button class="btn" id="settings-btn" title="Settings">⚙️</button>
+        </div>
+      </div>
+    </header>
 
-        <!-- Main content -->
-        <div class="main-content">
-            <div class="url-input-container">
-                <input type="text" id="url-input" placeholder="Enter a URL and press Enter">
-                <button id="go-btn">Go</button>
-            </div>
-        </div>
+    <!-- Tabs Section -->
+    <div class="tabs-section">
+      <div class="tabs-header">
+        <span>Visited Sites</span>
+        <span class="tabs-count"><span id="tab-count">0</span>/8</span>
+      </div>
+      <div id="tabs-container" class="tabs-container">
+        <div class="tabs-empty">No sites visited yet</div>
+      </div>
     </div>
 
-    <script src="renderer.js"></script>
+    <!-- Extensions panel (hidden by default) -->
+    <div id="extensions-panel" class="settings-panel" aria-hidden="true">
+      <div class="addon-manager">
+        <div class="addon-manager-header">
+          <h3>Extensions</h3>
+          <button id="discover-addons-btn" class="btn btn-primary">+ Discover</button>
+        </div>
+        <div id="installed-addons-grid" class="addon-grid"></div>
+        <p id="no-addons-msg" class="muted">No extensions installed. Click "Discover" to find addons.</p>
+      </div>
+    </div>
+
+    <!-- Settings panel (hidden by default) -->
+    <div id="settings-panel" class="settings-panel" aria-hidden="true">
+      <div class="settings-content" style="padding: 12px; max-height: 350px; overflow-y: auto;">
+        <!-- Settings nav tabs -->
+        <div style="display: flex; gap: 4px; margin-bottom: 12px; background: rgba(255,255,255,0.07); border-radius: 8px; padding: 3px;">
+          <button id="settings-tab-bookmarks" style="flex: 1; padding: 6px 0; font-size: 11px; background: rgba(255,255,255,0.2); border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: 600;">🔖 Bookmarks</button>
+          <button id="settings-tab-passwords" style="flex: 1; padding: 6px 0; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer;">🔐 Passwords</button>
+        </div>
+
+        <!-- Bookmarks tab content -->
+        <div id="settings-bookmarks-tab">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="margin: 0; color: white; font-size: 13px;">Bookmarks</h3>
+            <button id="new-folder-btn" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">+ New Folder</button>
+          </div>
+          <div id="bookmarks-folders-list" class="bookmarks-folders-list"></div>
+        </div>
+
+        <!-- Passwords tab content (hidden by default) -->
+        <div id="settings-passwords-tab" style="display: none;">
+          <h3 style="margin: 0 0 10px 0; color: white; font-size: 13px;">Saved Passwords</h3>
+          <div id="passwords-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Folder name input modal -->
+    <div id="folder-modal" class="folder-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center;">
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 12px; width: 300px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+        <h3 style="color: white; margin: 0 0 12px 0; font-size: 14px;" id="folder-modal-title">New Folder</h3>
+        <input type="text" id="folder-name-input" placeholder="Folder name" style="width: 100%; padding: 8px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; background: rgba(255,255,255,0.1); color: white; font-size: 12px; margin-bottom: 12px;">
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button id="folder-modal-cancel" class="btn" style="padding: 6px 12px; font-size: 11px; background: rgba(255,255,255,0.2);">Cancel</button>
+          <button id="folder-modal-ok" class="btn btn-primary" style="padding: 6px 12px; font-size: 11px;">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Addon discovery modal (hidden by default) -->
+    <div id="addon-discovery-modal" class="addon-modal" aria-hidden="true">
+      <div class="modal-overlay"></div>
+      <div class="addon-modal-content">
+        <div class="addon-modal-header">
+          <h3>Discover Extensions</h3>
+          <button id="close-discovery-modal" class="btn-close">✕</button>
+        </div>
+        <div class="addon-search-form">
+          <input id="addon-search-input" placeholder="Search for addon (e.g., uBlock Origin, AdBlock Plus)" />
+          <button id="addon-search-btn" class="btn btn-primary">Search</button>
+        </div>
+        <div id="addon-search-results" class="addon-search-results"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="addon-service.js"></script>
+  <script src="renderer.js"></script>
 </body>
 </html>

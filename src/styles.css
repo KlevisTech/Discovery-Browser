@@ -320,6 +320,42 @@ html, body {
   animation: tabSlideOut 0.3s ease forwards;
 }
 
+/* Bookmark styles */
+.bookmarks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.bookmark-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.bookmark-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateX(4px);
+}
+
+.bookmark-remove-btn:hover {
+  background: rgba(255, 67, 67, 0.95) !important;
+  transform: scale(1.1);
+}
+
+.settings-content {
+  padding: 20px;
+}
+
 /* ================================
    END TAB BAR SECTION
    ================================ */
@@ -599,6 +635,105 @@ html, body {
 
 .card-overlays-container > * {
   pointer-events: auto;
+}
+
+/* Compact Bookmark styles for small app window */
+.bookmarks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.bookmark-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.bookmark-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.bookmark-info {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.bookmark-title {
+  color: white;
+  font-weight: 600;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.bookmark-url {
+  color: rgba(255,255,255,0.6);
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: monospace;
+}
+
+.bookmark-remove-btn {
+  background: rgba(255,100,100,0.8);
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.bookmark-remove-btn:hover {
+  background: rgba(255, 67, 67, 0.95);
+  transform: scale(1.05);
+}
+
+.settings-content {
+  padding: 12px;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.settings-content h3 {
+  margin-bottom: 10px;
+  color: white;
+  font-size: 15px;
+}
+
+/* Scrollbar styling for bookmark list */
+.bookmarks-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.bookmarks-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.bookmarks-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.bookmarks-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* ================================

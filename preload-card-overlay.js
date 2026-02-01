@@ -1,3 +1,5 @@
+
+//preload-card-overlay.js
 const { contextBridge, ipcRenderer } = require('electron');
 
 // Expose card API for navigation

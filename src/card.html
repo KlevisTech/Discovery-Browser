@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -150,6 +148,21 @@
       background: rgba(100, 200, 255, 0.7);
     }
 
+    .card-button.minimize-btn {
+      background: rgba(255, 200, 50, 0.7);
+    }
+
+    /* Bookmark button - white/transparent */
+    .card-button.bookmark-btn {
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .card-button.bookmark-btn.bookmarked {
+      background: rgba(255, 215, 0, 0.8);
+      border-color: rgba(255, 215, 0, 0.9);
+    }
+
     .card-button:hover {
       background: rgba(255, 67, 67, 0.9);
       transform: scale(1.15) rotate(5deg);
@@ -159,6 +172,23 @@
     .card-button.size-btn:hover {
       background: rgba(67, 180, 255, 0.9);
       box-shadow: 0 4px 12px rgba(67, 180, 255, 0.4);
+    }
+
+    .card-button.minimize-btn:hover {
+      background: rgba(255, 180, 30, 0.9);
+      transform: scale(1.15) rotate(5deg);
+      box-shadow: 0 4px 12px rgba(255, 180, 30, 0.4);
+    }
+
+    .card-button.bookmark-btn:hover {
+      background: rgba(255, 255, 255, 0.35);
+      transform: scale(1.15);
+      box-shadow: 0 4px 12px rgba(255, 255, 255, 0.4);
+    }
+
+    .card-button.bookmark-btn.bookmarked:hover {
+      background: rgba(255, 215, 0, 0.95);
+      box-shadow: 0 4px 12px rgba(255, 215, 0, 0.6);
     }
 
     .card-button:active {
@@ -329,6 +359,13 @@
         opacity: 1;
       }
     }
+
+    @keyframes slideOut {
+      to {
+        transform: scale(0.8) translateY(20px);
+        opacity: 0;
+      }
+    }
   </style>
 </head>
 <body>
@@ -341,6 +378,8 @@
         <button class="card-button" id="reload-btn" title="Reload">↻</button>
         <button class="card-button size-btn" id="wide-btn" title="Wide View (800px)">⇔</button>
         <button class="card-button size-btn" id="fullscreen-btn" title="Toggle Fullscreen">⛶</button>
+        <button class="card-button minimize-btn" id="minimize-btn" title="Minimize">−</button>
+        <button class="card-button bookmark-btn" id="bookmark-btn" title="Bookmark">🔖</button>
       </div>
       <span class="title-text">New Tab</span>
       <div class="card-controls">
@@ -377,10 +416,16 @@
     const reloadBtn = document.getElementById('reload-btn');
     const wideBtn = document.getElementById('wide-btn');
     const fullscreenBtn = document.getElementById('fullscreen-btn');
+    const minimizeBtn = document.getElementById('minimize-btn');
+    const bookmarkBtn = document.getElementById('bookmark-btn');
     const urlInput = document.getElementById('url-input');
     const titleElement = document.querySelector('.title-text');
     const webview = document.getElementById('card-webview');
     const titlebar = document.querySelector('.card-titlebar');
+
+    // Track current page info for bookmarking
+    let currentPageTitle = 'New Tab';
+    let currentPageUrl = initialUrl || '';
 
     // Track current size state
     let isWideView = false;
@@ -391,20 +436,51 @@
     if (initialUrl) {
       webview.src = initialUrl;
       urlInput.value = initialUrl;
+      currentPageUrl = initialUrl;
     }
 
     // Update URL and title when webview navigates
     webview.addEventListener('did-navigate', (e) => {
-      try { urlInput.value = e.url; } catch (err) {}
+      try { 
+        urlInput.value = e.url;
+        currentPageUrl = e.url;
+        checkBookmarkStatus();
+      } catch (err) {}
     });
 
     webview.addEventListener('did-navigate-in-page', (e) => {
-      try { urlInput.value = e.url; } catch (err) {}
+      try { 
+        urlInput.value = e.url;
+        currentPageUrl = e.url;
+        checkBookmarkStatus();
+      } catch (err) {}
     });
 
     webview.addEventListener('page-title-updated', (e) => {
-      try { titleElement.textContent = e.title; } catch (err) {}
+      try { 
+        titleElement.textContent = e.title;
+        currentPageTitle = e.title;
+        checkBookmarkStatus();
+      } catch (err) {}
     });
+
+    // Check if current page is bookmarked
+    async function checkBookmarkStatus() {
+      if (window.cardAPI && window.cardAPI.isBookmarked && currentPageUrl) {
+        try {
+          const isBookmarked = await window.cardAPI.isBookmarked(currentPageUrl);
+          if (isBookmarked) {
+            bookmarkBtn.classList.add('bookmarked');
+            bookmarkBtn.title = 'Remove Bookmark';
+          } else {
+            bookmarkBtn.classList.remove('bookmarked');
+            bookmarkBtn.title = 'Bookmark';
+          }
+        } catch (err) {
+          console.error('Error checking bookmark status:', err);
+        }
+      }
+    }
 
     // Intercept new-window events
     webview.addEventListener('new-window', (e) => {
@@ -414,6 +490,7 @@
         try {
           webview.loadURL(url);
           urlInput.value = url;
+          currentPageUrl = url;
         } catch (err) {
           console.error('Failed to load URL in webview:', err);
         }
@@ -427,6 +504,7 @@
         if (target) {
           webview.loadURL(target);
           urlInput.value = target;
+          currentPageUrl = target;
         }
       } catch (err) {
         console.error('Failed to load url into webview:', err);
@@ -480,18 +558,6 @@
         }
       }, 300);
     });
-
-    // Add exit animation keyframe
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes slideOut {
-        to {
-          transform: scale(0.8) translateY(20px);
-          opacity: 0;
-        }
-      }
-    `;
-    document.head.appendChild(style);
 
     backBtn.addEventListener('click', () => {
       try {
@@ -609,6 +675,126 @@
       }
     });
 
+    // Minimize button handler
+    minimizeBtn.addEventListener('click', async () => {
+      try {
+        await window.cardAPI.minimizeCard(cardId);
+      } catch (err) {
+        console.error('Error minimizing card:', err);
+      }
+    });
+
+    // Bookmark button handler
+    bookmarkBtn.addEventListener('click', async () => {
+      try {
+        const isBookmarked = await window.cardAPI.isBookmarked(currentPageUrl);
+
+        if (isBookmarked) {
+          // Already bookmarked - remove it directly
+          await window.cardAPI.toggleBookmark({
+            url: currentPageUrl,
+            title: currentPageTitle,
+            timestamp: Date.now()
+          });
+          await checkBookmarkStatus();
+        } else {
+          // Not bookmarked - show confirmation modal on this card
+          const folders = await window.cardAPI.getBookmarkFolders();
+          showBookmarkModal(folders);
+        }
+      } catch (err) {
+        console.error('Error toggling bookmark:', err);
+      }
+    });
+
+    // --- Bookmark confirmation modal (rendered on the card) ---
+    function showBookmarkModal(folders) {
+      // Build modal HTML
+      let folderPickerHTML = '';
+      if (folders.length >= 2) {
+        folderPickerHTML = `
+          <label style="color: rgba(255,255,255,0.7); font-size: 11px; display: block; margin-bottom: 6px;">Save to folder:</label>
+          <div id="bm-folder-options" style="display: flex; flex-direction: column; gap: 4px; max-height: 120px; overflow-y: auto; margin-bottom: 12px;"></div>
+        `;
+      }
+
+      const modal = document.createElement('div');
+      modal.id = 'bm-modal';
+      modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center;';
+      modal.innerHTML = `
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 12px; width: 280px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+          <h3 style="color: white; margin: 0 0 6px 0; font-size: 14px;">Add Bookmark</h3>
+          <p style="color: rgba(255,255,255,0.7); font-size: 11px; margin: 0 0 14px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${currentPageTitle || currentPageUrl}</p>
+          ${folderPickerHTML}
+          <div style="display: flex; gap: 8px; justify-content: flex-end;">
+            <button id="bm-cancel" style="padding: 6px 14px; font-size: 11px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: white; cursor: pointer;">Cancel</button>
+            <button id="bm-ok" style="padding: 6px 14px; font-size: 11px; background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: white; cursor: pointer;">Add</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      // Build folder options if 2+ folders
+      let selectedFolderId = folders.length > 0 ? folders[0].id : null;
+
+      if (folders.length >= 2) {
+        const optionsContainer = modal.querySelector('#bm-folder-options');
+        folders.forEach((folder, index) => {
+          const option = document.createElement('div');
+          option.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; cursor: pointer; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); transition: all 0.15s ease;';
+          option.innerHTML = `<span style="font-size: 13px;">📁</span><span style="color: white; font-size: 11px; flex: 1;">${folder.name}</span><span style="color: rgba(255,255,255,0.4); font-size: 10px;">${folder.count}</span>`;
+
+          // Highlight first folder by default
+          if (index === 0) {
+            option.style.background = 'rgba(255,255,255,0.18)';
+            option.style.borderColor = 'rgba(255,255,255,0.4)';
+          }
+
+          option.addEventListener('click', () => {
+            optionsContainer.querySelectorAll('div').forEach(el => {
+              el.style.background = 'rgba(255,255,255,0.08)';
+              el.style.borderColor = 'rgba(255,255,255,0.1)';
+            });
+            option.style.background = 'rgba(255,255,255,0.18)';
+            option.style.borderColor = 'rgba(255,255,255,0.4)';
+            selectedFolderId = folder.id;
+          });
+
+          optionsContainer.appendChild(option);
+        });
+      }
+
+      // Cancel
+      modal.querySelector('#bm-cancel').addEventListener('click', () => {
+        modal.remove();
+      });
+
+      // Add / OK
+      modal.querySelector('#bm-ok').addEventListener('click', async () => {
+        modal.remove();
+        try {
+          await window.cardAPI.saveBookmarkToFolder({
+            url: currentPageUrl,
+            title: currentPageTitle,
+            timestamp: Date.now()
+          }, selectedFolderId);
+          await checkBookmarkStatus();
+          showBookmarkToast();
+        } catch (err) {
+          console.error('Error saving bookmark:', err);
+        }
+      });
+    }
+
+    // Toast confirmation after saving
+    function showBookmarkToast() {
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 8px 18px; border-radius: 16px; font-size: 12px; z-index: 9999; box-shadow: 0 4px 16px rgba(0,0,0,0.4); white-space: nowrap;';
+      toast.textContent = '✓ Bookmark saved';
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2000);
+    }
+
     // URL input handler
     urlInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -620,15 +806,85 @@
           }
           try {
             webview.loadURL(targetUrl);
+            currentPageUrl = targetUrl;
           } catch (err) {
             window.cardAPI.navigateCard(cardId, targetUrl);
           }
         }
       }
     });
-   
 
+    // --- Password Manager: listen for credentials detected by main process ---
+    if (window.cardAPI && window.cardAPI.onPasswordDetected) {
+      window.cardAPI.onPasswordDetected(function(data) {
+        if (data && data.password) {
+          showPasswordPrompt(data.username || '', data.password, data.site || currentPageUrl);
+        }
+      });
+    }
 
+    function showPasswordPrompt(username, password, site) {
+      // Don't stack duplicates
+      const existing = document.getElementById('pwd-prompt');
+      if (existing) existing.remove();
+
+      const promptSite = site || currentPageUrl;
+
+      const prompt = document.createElement('div');
+      prompt.id = 'pwd-prompt';
+      prompt.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; z-index: 8888; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-bottom: 1px solid rgba(255,255,255,0.12); padding: 9px 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 3px 12px rgba(0,0,0,0.4);';
+
+      let hostname = promptSite;
+      try { hostname = new URL(promptSite).hostname; } catch(e) {}
+
+      prompt.innerHTML = `
+        <span style="font-size: 18px; flex-shrink: 0;">🔐</span>
+        <div style="flex: 1; min-width: 0;">
+          <div style="color: white; font-size: 11px; font-weight: 600;">Save password for <span style="color: #7edbff;">${hostname}</span>?</div>
+          <div style="color: rgba(255,255,255,0.45); font-size: 9.5px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${username || '(no username)'} &nbsp;•&nbsp; ••••••••</div>
+        </div>
+        <button id="pwd-save-btn" style="background: linear-gradient(135deg, #667eea, #764ba2); border: none; color: white; padding: 5px 12px; border-radius: 5px; font-size: 11px; cursor: pointer; font-weight: 600; flex-shrink: 0;">Save</button>
+        <button id="pwd-dismiss-btn" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.6); padding: 5px 8px; border-radius: 5px; font-size: 10px; cursor: pointer; flex-shrink: 0;">✕</button>
+      `;
+
+      // Insert prompt inside .card-window, right after titlebar
+      const cardWindow = document.querySelector('.card-window');
+      const titlebar = document.querySelector('.card-titlebar');
+      cardWindow.style.position = 'relative';
+      titlebar.after(prompt);
+
+      // Save
+      prompt.querySelector('#pwd-save-btn').addEventListener('click', async () => {
+        prompt.remove();
+        try {
+          await window.cardAPI.savePassword({
+            site: promptSite,
+            username: username,
+            password: password,
+            timestamp: Date.now()
+          });
+          // Show toast
+          const toast = document.createElement('div');
+          toast.style.cssText = 'position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 8px 18px; border-radius: 16px; font-size: 12px; z-index: 9999; box-shadow: 0 4px 16px rgba(0,0,0,0.4); white-space: nowrap;';
+          toast.textContent = '✓ Password saved';
+          document.body.appendChild(toast);
+          setTimeout(() => toast.remove(), 2000);
+        } catch(err) {
+          console.error('Error saving password:', err);
+        }
+      });
+
+      // Dismiss
+      prompt.querySelector('#pwd-dismiss-btn').addEventListener('click', () => {
+        prompt.remove();
+      });
+
+      // Auto-dismiss after 12s
+      setTimeout(() => { if (prompt.parentNode) prompt.remove(); }, 12000);
+    }
+
+    // Check bookmark status on load
+    setTimeout(checkBookmarkStatus, 1000);
   </script>
 </body>
 </html>
