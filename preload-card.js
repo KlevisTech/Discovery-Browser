@@ -54,6 +54,11 @@ contextBridge.exposeInMainWorld('cardAPI', {
     ipcRenderer.on('password-detected', (event, data) => callback(data));
   },
 
+  onVisualizerSetting: (callback) => {
+    ipcRenderer.on('visualizer-setting', (event, enabled) => callback(enabled));
+  },
+  getVisualizerSetting: () => ipcRenderer.invoke('get-visualizer-enabled'),
+
   // Get current window position
   getWindowPosition: () => {
     return {
@@ -72,6 +77,24 @@ contextBridge.exposeInMainWorld('cardAPI', {
     window.addEventListener('move', listener);
     return () => window.removeEventListener('move', listener);
   },
+
+  // Downloads (per card window)
+  onDownloadStarted: (callback) => {
+    ipcRenderer.on('download-started', (event, payload) => callback(payload));
+  },
+  onDownloadProgress: (callback) => {
+    ipcRenderer.on('download-progress', (event, payload) => callback(payload));
+  },
+  onDownloadDone: (callback) => {
+    ipcRenderer.on('download-done', (event, payload) => callback(payload));
+  },
+  showItemInFolder: (filePath) => ipcRenderer.invoke('show-item-in-folder', filePath),
+
+  // Forward web notifications from webview to main process
+  sendNotification: (payload) => ipcRenderer.send('web-notification', payload),
+
+  // Send custom events to main process
+  sendToMain: (channel, payload) => ipcRenderer.send(channel, payload),
 });
 
 // Receive requests from main to load a URL into this card's webview

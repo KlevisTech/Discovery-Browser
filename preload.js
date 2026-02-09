@@ -30,7 +30,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // External URL handler - for when links are opened from outside the app
   onOpenUrl: (callback) => {
-    ipcRenderer.on('open-external-url', (event, url) => callback(url));
+    console.log('[PRELOAD] onOpenUrl listener registered');
+    ipcRenderer.on('open-external-url', (event, url) => {
+      console.log('=== [PRELOAD DEBUG] ===');
+      console.log('[PRELOAD] Received open-external-url IPC');
+      console.log('[PRELOAD] URL:', url);
+      console.log('[PRELOAD] Calling callback...');
+      callback(url);
+      console.log('[PRELOAD] Callback completed');
+      console.log('=== [END PRELOAD DEBUG] ===\n');
+    });
   },
   
   // Bookmark management
@@ -77,4 +86,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Default browser setting
   setAsDefaultBrowser: () => ipcRenderer.invoke('set-as-default-browser-ui'),
+  isDefaultBrowser: () => ipcRenderer.invoke('is-default-browser-ui'),
+
+  // Downloads
+  onDownloadStarted: (callback) => {
+    ipcRenderer.on('download-started', (event, payload) => callback(payload));
+  },
+  onDownloadProgress: (callback) => {
+    ipcRenderer.on('download-progress', (event, payload) => callback(payload));
+  },
+  onDownloadDone: (callback) => {
+    ipcRenderer.on('download-done', (event, payload) => callback(payload));
+  },
+  showItemInFolder: (filePath) => ipcRenderer.invoke('show-item-in-folder', filePath),
+
+  // Notifications
+  onNotificationReceived: (callback) => {
+    ipcRenderer.on('notification-received', (event, payload) => callback(payload));
+  },
+
+  // Visualizer setting
+  setVisualizerEnabled: (enabled) => ipcRenderer.invoke('set-visualizer-enabled', enabled),
+  getVisualizerEnabled: () => ipcRenderer.invoke('get-visualizer-enabled'),
+
+  // Clear all user data
+  clearUserData: () => ipcRenderer.invoke('clear-user-data'),
 });

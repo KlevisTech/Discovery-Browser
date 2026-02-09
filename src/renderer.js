@@ -15,6 +15,64 @@ class DiscoveryBrowser {
     this.visitedTabs = new Map(); // url -> tabData
     this.maxTabs = 8;
     
+    // History management
+    this.history = []; // Array of {url, title, timestamp, favicon}
+    this.maxHistoryItems = 1000;
+
+    // Downloads
+    this.activeDownloads = new Map(); // id -> {receivedBytes,totalBytes,percent,filename,url,savePath,state}
+    this.downloadHistory = []; // newest first
+    this.maxDownloadHistoryItems = 200;
+    
+    // Notifications
+    this.notifications = [];
+    this.maxNotifications = 20;
+
+    // Search engine settings
+    this.searchEngines = [
+      {
+        key: 'google',
+        name: 'Google',
+        searchUrl: 'https://www.google.com/search?q={query}',
+        homeUrl: 'https://www.google.com',
+        favicon: 'https://www.google.com/favicon.ico',
+        placeholder: 'Search with Google',
+      },
+      {
+        key: 'bing',
+        name: 'Bing',
+        searchUrl: 'https://www.bing.com/search?q={query}',
+        homeUrl: 'https://www.bing.com',
+        favicon: 'https://www.bing.com/sa/simg/favicon-2x.ico',
+        placeholder: 'Search with Bing',
+      },
+      {
+        key: 'duckduckgo',
+        name: 'DuckDuckGo',
+        searchUrl: 'https://duckduckgo.com/?q={query}',
+        homeUrl: 'https://duckduckgo.com',
+        favicon: 'https://duckduckgo.com/favicon.ico',
+        placeholder: 'Search with DuckDuckGo',
+      },
+      {
+        key: 'yahoo',
+        name: 'Yahoo',
+        searchUrl: 'https://search.yahoo.com/search?p={query}',
+        homeUrl: 'https://search.yahoo.com',
+        favicon: 'https://search.yahoo.com/favicon.ico',
+        placeholder: 'Search with Yahoo',
+      },
+      {
+        key: 'brave',
+        name: 'Brave',
+        searchUrl: 'https://search.brave.com/search?q={query}',
+        homeUrl: 'https://search.brave.com',
+        favicon: 'https://search.brave.com/favicon.ico',
+        placeholder: 'Search with Brave',
+      },
+    ];
+    this.searchEngineKey = 'google';
+    
     // Layout constants
     this.headerBarHeight = 88;
     this.cardWidth = 650;
@@ -26,6 +84,10 @@ class DiscoveryBrowser {
     this.cardCountSpan = document.getElementById('card-count');
     this.tabsContainer = document.getElementById('tabs-container');
     this.tabCountSpan = document.getElementById('tab-count');
+    this.notificationList = document.getElementById('notification-list');
+    this.notificationsBtn = document.getElementById('notifications-btn');
+    this.notificationPanel = document.getElementById('notification-panel');
+    this.clearNotificationsBtn = document.getElementById('clear-notifications-btn');
     
     // Note: dock-content may not exist if we're using the new tab bar only
     if (!this.cardDock) {
@@ -42,6 +104,12 @@ class DiscoveryBrowser {
   async init() {
     // Setup event listeners
     const searchInput = document.getElementById('search-input');
+    const googleSearchInput = document.getElementById('google-search-input');
+    const googleSearchBtn = document.getElementById('google-search-btn');
+    this.searchEngineLabel = document.getElementById('search-engine-label');
+    this.searchEngineFavicon = document.getElementById('search-engine-favicon');
+    this.searchEngineSelect = document.getElementById('search-engine-select');
+    this.googleSearchInput = googleSearchInput;
     
     // Search input handler - create card on Enter key
     searchInput.addEventListener('keydown', (e) => {
@@ -55,7 +123,61 @@ class DiscoveryBrowser {
       }
     });
     
-    this.newCardBtn.addEventListener('click', () => this.createCard('https://www.google.com'));
+    this.newCardBtn.addEventListener('click', () => this.createCard(this.getSearchEngineHomeUrl()));
+
+    // Google search widget handlers
+    const runGoogleSearch = () => {
+      if (!googleSearchInput) return;
+      const query = (googleSearchInput.value || '').trim();
+      if (!query) return;
+      const searchUrl = this.buildSearchUrl(query);
+      this.createCard(searchUrl);
+      googleSearchInput.value = '';
+    };
+
+    if (googleSearchInput) {
+      googleSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          runGoogleSearch();
+        }
+      });
+    }
+
+    if (googleSearchBtn) {
+      googleSearchBtn.addEventListener('click', () => runGoogleSearch());
+    }
+
+    this.loadSearchEngine();
+    this.applySearchEngineToUI();
+    if (this.searchEngineSelect) {
+      this.populateSearchEngineSelect();
+      this.searchEngineSelect.value = this.searchEngineKey;
+      this.searchEngineSelect.addEventListener('change', () => {
+        const nextKey = this.searchEngineSelect.value;
+        this.setSearchEngine(nextKey);
+      });
+    }
+
+    // Clock widget
+    const clockTimeEl = document.getElementById('clock-time');
+    const clockDateEl = document.getElementById('clock-date');
+    const updateClock = () => {
+      if (!clockTimeEl || !clockDateEl) return;
+      const now = new Date();
+      const timeStr = new Intl.DateTimeFormat('en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(now);
+      const dateStr = new Intl.DateTimeFormat('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: '2-digit'
+      }).format(now);
+      clockTimeEl.textContent = timeStr;
+      clockDateEl.textContent = dateStr;
+    };
+    updateClock();
+    setInterval(updateClock, 1000);
     
     // Extensions and Settings panel elements
     this.extensionsBtn = document.getElementById('extensions-btn');
@@ -63,12 +185,16 @@ class DiscoveryBrowser {
     this.extensionsPanel = document.getElementById('extensions-panel');
     this.settingsPanel = document.getElementById('settings-panel');
     
-    this.installAddonBtn = document.getElementById('install-addon');
-    this.addonNameInput = document.getElementById('addon-name');
-    this.addonUrlInput = document.getElementById('addon-url');
-    this.addonsListEl = document.getElementById('addons-list');
-    this.searchAddonBtn = document.getElementById('search-addon');
+    this.discoverAddonsBtn = document.getElementById('discover-addons-btn');
+    this.extensionsSearchInput = document.getElementById('extensions-search-input');
+    this.addonsListEl = document.getElementById('installed-addons-grid');
+    this.noAddonsMsg = document.getElementById('no-addons-msg');
+    this.addonDiscoveryModal = document.getElementById('addon-discovery-modal');
+    this.addonSearchInput = document.getElementById('addon-search-input');
+    this.addonSearchBtn = document.getElementById('addon-search-btn');
     this.addonSearchResults = document.getElementById('addon-search-results');
+    this.closeDiscoveryModalBtn = document.getElementById('close-discovery-modal');
+    this.visualizerToggle = document.getElementById('visualizer-toggle');
 
     this.installedAddons = new Map();
     this.loadAddons();
@@ -80,6 +206,65 @@ class DiscoveryBrowser {
     if (this.settingsBtn) {
       this.settingsBtn.addEventListener('click', () => this.toggleSettings());
     }
+
+    if (this.notificationsBtn) {
+      this.notificationsBtn.addEventListener('click', () => this.toggleNotifications());
+    }
+
+    // Downloads UI (ring + history)
+    this.downloadRingBtn = document.getElementById('download-ring');
+    this.downloadRingFg = this.downloadRingBtn ? this.downloadRingBtn.querySelector('.download-ring__fg') : null;
+    this.downloadsListEl = document.getElementById('downloads-list');
+    this.loadDownloadHistory();
+    this.renderDownloadHistory();
+
+    // Notifications tray
+    this.loadNotifications();
+    if (this.notifications.length === 0) {
+      this.seedDefaultNotifications();
+    }
+    this.renderNotifications();
+
+    if (this.clearNotificationsBtn) {
+      this.clearNotificationsBtn.addEventListener('click', () => {
+        this.notifications = [];
+        this.saveNotifications();
+        this.renderNotifications();
+      });
+    }
+
+    const clearDownloadsBtn = document.getElementById('clear-downloads-btn');
+    if (clearDownloadsBtn) {
+      clearDownloadsBtn.addEventListener('click', () => {
+        this.downloadHistory = [];
+        this.saveDownloadHistory();
+        this.renderDownloadHistory();
+      });
+    }
+
+    // Clicking ring opens Downloads settings tab
+    if (this.downloadRingBtn) {
+      this.downloadRingBtn.addEventListener('click', () => {
+        // Open settings panel and switch to downloads tab
+        if (this.settingsPanel) {
+          this.settingsPanel.setAttribute('aria-hidden', 'false');
+          this.settingsPanel.style.display = 'block';
+        }
+        this.activateSettingsTab('downloads');
+      });
+    }
+
+    // Listen to download events from main process
+    if (window.electronAPI && window.electronAPI.onDownloadStarted) {
+      window.electronAPI.onDownloadStarted((payload) => this.onDownloadStarted(payload));
+      window.electronAPI.onDownloadProgress((payload) => this.onDownloadProgress(payload));
+      window.electronAPI.onDownloadDone((payload) => this.onDownloadDone(payload));
+    }
+
+    // Listen to web notifications
+    if (window.electronAPI && window.electronAPI.onNotificationReceived) {
+      window.electronAPI.onNotificationReceived((payload) => this.addNotificationFromWeb(payload));
+    }
     
     // New folder button
     const newFolderBtn = document.getElementById('new-folder-btn');
@@ -87,23 +272,57 @@ class DiscoveryBrowser {
       newFolderBtn.addEventListener('click', () => this.createNewFolder());
     }
     
-    if (this.installAddonBtn) {
-      this.installAddonBtn.addEventListener('click', () => this.installAddon());
-    }
-    
-    if (this.searchAddonBtn) {
-      this.searchAddonBtn.addEventListener('click', () => this.searchAddons());
+    if (this.discoverAddonsBtn) {
+      this.discoverAddonsBtn.addEventListener('click', () => {
+        const query = (this.extensionsSearchInput && this.extensionsSearchInput.value || '').trim();
+        this.openAddonDiscovery(query);
+      });
     }
 
-    // Allow Enter key to trigger search/install
-    if (this.addonNameInput) {
-      this.addonNameInput.addEventListener('keydown', (e) => {
+    if (this.extensionsSearchInput) {
+      this.extensionsSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const query = (this.extensionsSearchInput.value || '').trim();
+          this.openAddonDiscovery(query);
+        }
+      });
+    }
+
+    if (this.addonSearchBtn) {
+      this.addonSearchBtn.addEventListener('click', () => this.searchAddons());
+    }
+
+    if (this.addonSearchInput) {
+      this.addonSearchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') this.searchAddons();
       });
     }
-    if (this.addonUrlInput) {
-      this.addonUrlInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') this.installAddon();
+
+    if (this.closeDiscoveryModalBtn) {
+      this.closeDiscoveryModalBtn.addEventListener('click', () => this.closeAddonDiscovery());
+    }
+
+    if (this.addonDiscoveryModal) {
+      const overlay = this.addonDiscoveryModal.querySelector('.modal-overlay');
+      if (overlay) {
+        overlay.addEventListener('click', () => this.closeAddonDiscovery());
+      }
+    }
+
+    // Visualizer toggle
+    if (this.visualizerToggle) {
+      const saved = localStorage.getItem('visualizerEnabled');
+      const enabled = saved === null ? false : saved === 'true';
+      this.visualizerToggle.checked = enabled;
+      if (window.electronAPI && window.electronAPI.setVisualizerEnabled) {
+        window.electronAPI.setVisualizerEnabled(enabled);
+      }
+      this.visualizerToggle.addEventListener('change', () => {
+        const value = this.visualizerToggle.checked;
+        localStorage.setItem('visualizerEnabled', String(value));
+        if (window.electronAPI && window.electronAPI.setVisualizerEnabled) {
+          window.electronAPI.setVisualizerEnabled(value);
+        }
       });
     }
     
@@ -117,6 +336,16 @@ class DiscoveryBrowser {
     
     window.electronAPI.onCardUrlUpdated((cardId, url) => {
       this.updateCardUrl(cardId, url);
+    });
+
+    // Listen for page finish loading - add to history
+    window.electronAPI.onCardLoadingFinish((cardId, title, url) => {
+      const cardData = this.cards.get(cardId);
+      if (cardData) {
+        // Update card data
+        cardData.title = title || 'New Tab';
+        cardData.url = url;
+      }
     });
     
     // Load saved tabs from localStorage
@@ -194,6 +423,10 @@ class DiscoveryBrowser {
     this.passwords = []; // array of { site, username, password, timestamp }
     this.loadPasswords();
 
+    // History management
+    this.loadHistory();
+    console.log('[HISTORY] Loaded from localStorage:', this.history.length, 'items');
+
     // Card window saves a password — persist and re-render
     window.electronAPI.onSavePassword((passwordData) => {
       const existingIndex = this.passwords.findIndex(
@@ -209,37 +442,241 @@ class DiscoveryBrowser {
     });
 
     // Settings tab switching
+    const tabHistory = document.getElementById('settings-tab-history');
     const tabBookmarks = document.getElementById('settings-tab-bookmarks');
     const tabPasswords = document.getElementById('settings-tab-passwords');
+    const tabDownloads = document.getElementById('settings-tab-downloads');
+    const tabSearch = document.getElementById('settings-tab-search');
+    const tabDeleteData = document.getElementById('settings-tab-delete-data');
+    const paneHistory = document.getElementById('settings-history-tab');
     const paneBookmarks = document.getElementById('settings-bookmarks-tab');
     const panePasswords = document.getElementById('settings-passwords-tab');
+    const paneDownloads = document.getElementById('settings-downloads-tab');
+    const paneSearch = document.getElementById('settings-search-tab');
+    const paneDeleteData = document.getElementById('settings-delete-data-tab');
+    const deleteDataBtn = document.getElementById('delete-data-btn');
+    const defaultBrowserBlock = document.getElementById('default-browser-setting');
+    const setDefaultBrowserBtn = document.getElementById('set-default-browser-btn');
 
-    if (tabBookmarks && tabPasswords) {
-      tabBookmarks.addEventListener('click', () => {
-        tabBookmarks.style.background = 'rgba(255,255,255,0.2)';
-        tabBookmarks.style.color = 'white';
-        tabPasswords.style.background = 'transparent';
-        tabPasswords.style.color = 'rgba(255,255,255,0.6)';
-        paneBookmarks.style.display = 'block';
-        panePasswords.style.display = 'none';
+    // Default browser button: opens Windows Default Apps and tries to register protocols
+    if (setDefaultBrowserBtn && window.electronAPI && window.electronAPI.setAsDefaultBrowser) {
+      setDefaultBrowserBtn.addEventListener('click', async () => {
+        setDefaultBrowserBtn.disabled = true;
+        setDefaultBrowserBtn.textContent = 'Opening...';
+        try {
+          await window.electronAPI.setAsDefaultBrowser();
+          setDefaultBrowserBtn.textContent = 'Check Windows settings';
+          // After user visits Default Apps, re-check and hide if we're now default
+          if (window.electronAPI.isDefaultBrowser && defaultBrowserBlock) {
+            setTimeout(async () => {
+              try {
+                const isDefault = await window.electronAPI.isDefaultBrowser();
+                if (isDefault) {
+                  defaultBrowserBlock.style.display = 'none';
+                }
+              } catch (err) {
+                console.error('Failed to re-check default browser status:', err);
+              }
+            }, 3000);
+          }
+        } catch (e) {
+          console.error('Failed to trigger default browser setting:', e);
+          setDefaultBrowserBtn.textContent = 'Try again';
+        } finally {
+          setTimeout(() => {
+            setDefaultBrowserBtn.disabled = false;
+          }, 2000);
+        }
       });
+    }
+
+    // On load, hide the default-browser setting if we're already default
+    if (defaultBrowserBlock && window.electronAPI && window.electronAPI.isDefaultBrowser) {
+      window.electronAPI.isDefaultBrowser()
+        .then((isDefault) => {
+          if (isDefault) {
+            defaultBrowserBlock.style.display = 'none';
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to check default browser status:', err);
+        });
+    }
+
+    // Helper: activate a settings tab by name
+    this.activateSettingsTab = (tabName) => {
+      const setActive = (btn, active) => {
+        if (!btn) return;
+        btn.style.background = active ? 'rgba(255,255,255,0.2)' : 'transparent';
+        btn.style.color = active ? 'white' : 'rgba(255,255,255,0.6)';
+        btn.style.fontWeight = active ? '600' : 'normal';
+      };
+      const setPane = (pane, show) => {
+        if (!pane) return;
+        pane.style.display = show ? 'block' : 'none';
+      };
+
+      this.currentSettingsTab = tabName || null;
+
+      setActive(tabHistory, tabName === 'history');
+      setActive(tabBookmarks, tabName === 'bookmarks');
+      setActive(tabPasswords, tabName === 'passwords');
+      setActive(tabDownloads, tabName === 'downloads');
+      setActive(tabSearch, tabName === 'search');
+      setActive(tabDeleteData, tabName === 'delete-data');
+
+      setPane(paneHistory, tabName === 'history');
+      setPane(paneBookmarks, tabName === 'bookmarks');
+      setPane(panePasswords, tabName === 'passwords');
+      setPane(paneDownloads, tabName === 'downloads');
+      setPane(paneSearch, tabName === 'search');
+      setPane(paneDeleteData, tabName === 'delete-data');
+
+      if (tabName === 'history') this.renderHistory();
+      if (tabName === 'passwords') this.renderPasswords();
+      if (tabName === 'downloads') this.renderDownloadHistory();
+    };
+
+    const toggleSettingsTab = (tabName) => {
+      if (this.currentSettingsTab === tabName) {
+        this.activateSettingsTab(null);
+      } else {
+        this.activateSettingsTab(tabName);
+      }
+    };
+
+    if (tabHistory && tabBookmarks && tabPasswords && tabDownloads && tabSearch && tabDeleteData) {
+      tabHistory.addEventListener('click', () => {
+        toggleSettingsTab('history');
+      });
+      
+      tabBookmarks.addEventListener('click', () => {
+        toggleSettingsTab('bookmarks');
+      });
+      
       tabPasswords.addEventListener('click', () => {
-        tabPasswords.style.background = 'rgba(255,255,255,0.2)';
-        tabPasswords.style.color = 'white';
-        tabBookmarks.style.background = 'transparent';
-        tabBookmarks.style.color = 'rgba(255,255,255,0.6)';
-        panePasswords.style.display = 'block';
-        paneBookmarks.style.display = 'none';
-        this.renderPasswords();
+        toggleSettingsTab('passwords');
+      });
+
+      tabDownloads.addEventListener('click', () => {
+        toggleSettingsTab('downloads');
+      });
+
+      tabSearch.addEventListener('click', () => {
+        toggleSettingsTab('search');
+      });
+
+      tabDeleteData.addEventListener('click', () => {
+        toggleSettingsTab('delete-data');
+      });
+    }
+
+    if (deleteDataBtn) {
+      deleteDataBtn.addEventListener('click', () => {
+        this.clearAllUserData();
       });
     }
 
     // Listen for external URLs (when app is opened from outside)
+    console.log('[RENDERER] Setting up external URL listener...');
+    console.log('[RENDERER] electronAPI exists?', !!window.electronAPI);
+    console.log('[RENDERER] electronAPI.onOpenUrl exists?', !!(window.electronAPI && window.electronAPI.onOpenUrl));
+    
     if (window.electronAPI && window.electronAPI.onOpenUrl) {
+      console.log('[RENDERER] Registering onOpenUrl listener');
       window.electronAPI.onOpenUrl((url) => {
-        console.log('External URL opened:', url);
-        this.createCard(url);
+        console.log('=== [RENDERER DEBUG] ===');
+        console.log('[RENDERER-1] External URL callback fired');
+        console.log('[RENDERER-2] URL received:', url);
+        console.log('[RENDERER-3] URL type:', typeof url);
+        console.log('[RENDERER-4] URL valid?', !!(url && typeof url === 'string'));
+        
+        try {
+          if (!url || typeof url !== 'string') {
+            console.error('[RENDERER-ERROR] Invalid URL received:', url);
+            return;
+          }
+          
+          console.log('[RENDERER-5] Validation passed');
+          console.log('[RENDERER-6] this.createCard exists?', !!this.createCard);
+          console.log('[RENDERER-7] Calling this.createCard with URL:', url);
+          
+          const result = this.createCard(url);
+          
+          console.log('[RENDERER-8] createCard returned:', result);
+          console.log('[RENDERER-9] Successfully completed');
+        } catch (err) {
+          console.error('=== [RENDERER ERROR] ===');
+          console.error('[RENDERER-ERROR] Exception caught:', err);
+          console.error('[RENDERER-ERROR] Error message:', err.message);
+          console.error('[RENDERER-ERROR] Error stack:', err.stack);
+          console.error('=== [END ERROR] ===');
+        }
+        console.log('=== [END RENDERER DEBUG] ===\n');
       });
+      console.log('[RENDERER] onOpenUrl listener registered successfully');
+    } else {
+      console.error('[RENDERER-ERROR] electronAPI.onOpenUrl not available!');
+      console.error('[RENDERER-ERROR] electronAPI:', window.electronAPI);
+    }
+  }
+
+  getSearchEngine() {
+    return this.searchEngines.find(e => e.key === this.searchEngineKey) || this.searchEngines[0];
+  }
+
+  getSearchEngineHomeUrl() {
+    const engine = this.getSearchEngine();
+    return engine && engine.homeUrl ? engine.homeUrl : 'https://www.google.com';
+  }
+
+  buildSearchUrl(query) {
+    const engine = this.getSearchEngine();
+    const template = engine && engine.searchUrl ? engine.searchUrl : 'https://www.google.com/search?q={query}';
+    return template.replace('{query}', encodeURIComponent(query));
+  }
+
+  loadSearchEngine() {
+    try {
+      const saved = localStorage.getItem('searchEngineKey');
+      if (saved && this.searchEngines.some(e => e.key === saved)) {
+        this.searchEngineKey = saved;
+      }
+    } catch (e) {}
+  }
+
+  setSearchEngine(key) {
+    if (!this.searchEngines.some(e => e.key === key)) return;
+    this.searchEngineKey = key;
+    try {
+      localStorage.setItem('searchEngineKey', key);
+    } catch (e) {}
+    this.applySearchEngineToUI();
+  }
+
+  populateSearchEngineSelect() {
+    if (!this.searchEngineSelect) return;
+    this.searchEngineSelect.innerHTML = '';
+    this.searchEngines.forEach((engine) => {
+      const opt = document.createElement('option');
+      opt.value = engine.key;
+      opt.textContent = engine.name;
+      this.searchEngineSelect.appendChild(opt);
+    });
+  }
+
+  applySearchEngineToUI() {
+    const engine = this.getSearchEngine();
+    if (this.searchEngineLabel) this.searchEngineLabel.textContent = engine.name || 'Search';
+    if (this.searchEngineFavicon) {
+      this.searchEngineFavicon.src = engine.favicon || 'https://www.google.com/favicon.ico';
+      this.searchEngineFavicon.alt = engine.name || 'Search';
+    }
+    if (this.googleSearchInput) {
+      this.googleSearchInput.placeholder = engine.placeholder || 'Search the web';
+    }
+    if (this.searchEngineSelect) {
+      this.searchEngineSelect.value = engine.key;
     }
   }
 
@@ -257,7 +694,7 @@ class DiscoveryBrowser {
     // Check if it looks like a search query (has spaces or no dots)
     // If it has spaces, it's definitely a search query
     if (url.includes(' ')) {
-      return 'https://www.google.com/search?q=' + encodeURIComponent(url);
+      return this.buildSearchUrl(url);
     }
     
     // If it has a dot and no spaces, treat it as a URL
@@ -266,7 +703,7 @@ class DiscoveryBrowser {
     }
     
     // Single word without dots - treat as search query
-    return 'https://www.google.com/search?q=' + encodeURIComponent(url);
+    return this.buildSearchUrl(url);
   }
 
   // Extract domain name from URL for display
@@ -300,6 +737,9 @@ class DiscoveryBrowser {
     // First normalize the URL to ensure it has a protocol
     url = this.normalizeUrl(url);
     console.log('After normalizeUrl:', url);
+    
+    // ADD TO HISTORY HERE - same place as tabs!
+    this.addToHistory(url, title);
     
     // Normalize URL (remove trailing slash, fragments)
     let normalizedUrl = url;
@@ -551,15 +991,303 @@ class DiscoveryBrowser {
       this.extensionsPanel.setAttribute('aria-hidden', 'true');
       this.extensionsPanel.style.display = 'none';
     }
+
+    // Close notifications if open
+    if (this.notificationPanel) {
+      this.notificationPanel.setAttribute('aria-hidden', 'true');
+      this.notificationPanel.style.display = 'none';
+    }
     
     // Toggle settings
     this.settingsPanel.setAttribute('aria-hidden', String(!isHidden));
     this.settingsPanel.style.display = isHidden ? 'block' : 'none';
     
-    // Render bookmarks when opening settings
+    // Render history and bookmarks when opening settings
     if (isHidden) {
+      // History is the first tab by default
+      if (this.activateSettingsTab) {
+        this.activateSettingsTab('history');
+      } else {
+        this.renderHistory();
+      }
       this.renderBookmarks();
     }
+  }
+
+  toggleNotifications() {
+    if (!this.notificationPanel) return;
+    
+    const isHidden = this.notificationPanel.getAttribute('aria-hidden') === 'true';
+
+    // Close settings if open
+    if (this.settingsPanel) {
+      this.settingsPanel.setAttribute('aria-hidden', 'true');
+      this.settingsPanel.style.display = 'none';
+    }
+    // Close extensions if open
+    if (this.extensionsPanel) {
+      this.extensionsPanel.setAttribute('aria-hidden', 'true');
+      this.extensionsPanel.style.display = 'none';
+    }
+
+    this.notificationPanel.setAttribute('aria-hidden', String(!isHidden));
+    this.notificationPanel.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) this.renderNotifications();
+  }
+
+  // ------------------------
+  // Notifications Tray
+  // ------------------------
+
+  loadNotifications() {
+    try {
+      const saved = localStorage.getItem('notificationTray');
+      if (saved) this.notifications = JSON.parse(saved) || [];
+    } catch (e) {
+      this.notifications = [];
+    }
+  }
+
+  saveNotifications() {
+    try {
+      localStorage.setItem('notificationTray', JSON.stringify(this.notifications.slice(0, this.maxNotifications)));
+    } catch (e) {}
+  }
+
+  seedDefaultNotifications() {
+    const homeUrl = this.getSearchEngineHomeUrl();
+    const bookmarksUrl = this.buildSearchUrl('browser bookmarks');
+    const newsUrl = this.buildSearchUrl('today news');
+    this.notifications = [
+      { id: 'welcome', title: 'Welcome to Discovery', url: homeUrl, createdAt: Date.now() },
+      { id: 'tips', title: 'Try bookmarks', url: bookmarksUrl, createdAt: Date.now() },
+      { id: 'news', title: "Read today's news", url: newsUrl, createdAt: Date.now() }
+    ];
+    this.saveNotifications();
+  }
+
+  renderNotifications() {
+    if (!this.notificationList) return;
+    this.notificationList.innerHTML = '';
+
+    if (!this.notifications || this.notifications.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'notification-empty';
+      empty.textContent = 'No notifications';
+      this.notificationList.appendChild(empty);
+      return;
+    }
+
+    this.notifications.slice(0, this.maxNotifications).forEach((n) => {
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'notification-pill';
+      pill.title = n.title || 'Notification';
+
+      const dot = document.createElement('span');
+      dot.className = 'notification-pill__dot';
+
+      const label = document.createElement('span');
+      label.textContent = n.title || 'Notification';
+
+      pill.appendChild(dot);
+      pill.appendChild(label);
+
+      pill.addEventListener('click', () => {
+        if (n.url) {
+          this.createCard(n.url);
+        }
+      });
+
+      this.notificationList.appendChild(pill);
+    });
+  }
+
+  addNotification(title, url) {
+    if (!title || !url) return;
+    const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    this.notifications.unshift({ id, title, url, createdAt: Date.now() });
+    this.notifications = this.notifications.slice(0, this.maxNotifications);
+    this.saveNotifications();
+    this.renderNotifications();
+  }
+
+  addNotificationFromWeb(payload) {
+    if (!payload) return;
+    const title = payload.title || 'Notification';
+    const body = payload.body ? String(payload.body).trim() : '';
+    const url = payload.url || '';
+    const combinedTitle = body ? `${title}: ${body}` : title;
+    if (!url) return;
+    this.addNotification(combinedTitle, url);
+  }
+
+  // ------------------------
+  // Downloads: ring + history
+  // ------------------------
+
+  loadDownloadHistory() {
+    try {
+      const saved = localStorage.getItem('downloadHistory');
+      if (saved) this.downloadHistory = JSON.parse(saved) || [];
+    } catch (e) {
+      this.downloadHistory = [];
+    }
+  }
+
+  saveDownloadHistory() {
+    try {
+      localStorage.setItem('downloadHistory', JSON.stringify(this.downloadHistory.slice(0, this.maxDownloadHistoryItems)));
+    } catch (e) {}
+  }
+
+  formatBytes(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    let v = bytes;
+    while (v >= 1024 && i < units.length - 1) {
+      v /= 1024;
+      i++;
+    }
+    return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  }
+
+  updateDownloadRing() {
+    if (!this.downloadRingBtn) return;
+
+    const active = Array.from(this.activeDownloads.values()).filter(d => d && d.state !== 'completed');
+    if (active.length === 0) {
+      this.downloadRingBtn.style.display = 'none';
+      this.downloadRingBtn.setAttribute('aria-hidden', 'true');
+      this.downloadRingBtn.classList.remove('indeterminate');
+      return;
+    }
+
+    this.downloadRingBtn.style.display = 'inline-flex';
+    this.downloadRingBtn.setAttribute('aria-hidden', 'false');
+
+    let receivedSum = 0;
+    let totalSum = 0;
+    let hasTotal = true;
+    active.forEach(d => {
+      receivedSum += d.receivedBytes || 0;
+      if (d.totalBytes && d.totalBytes > 0) {
+        totalSum += d.totalBytes;
+      } else {
+        hasTotal = false;
+      }
+    });
+
+    if (!hasTotal || totalSum <= 0) {
+      this.downloadRingBtn.classList.add('indeterminate');
+      this.downloadRingBtn.title = 'Downloading...';
+      return;
+    }
+
+    this.downloadRingBtn.classList.remove('indeterminate');
+    const progress = Math.max(0, Math.min(1, receivedSum / totalSum));
+    const circumference = 97.4;
+    const offset = circumference * (1 - progress);
+    if (this.downloadRingFg) {
+      this.downloadRingFg.style.strokeDashoffset = String(offset);
+    }
+    this.downloadRingBtn.title = `Downloading... ${Math.round(progress * 100)}%`;
+  }
+
+  onDownloadStarted(payload) {
+    if (!payload || !payload.id) return;
+    this.activeDownloads.set(payload.id, {
+      ...payload,
+      state: payload.state || 'progressing',
+    });
+    this.updateDownloadRing();
+  }
+
+  onDownloadProgress(payload) {
+    if (!payload || !payload.id) return;
+    const prev = this.activeDownloads.get(payload.id) || {};
+    this.activeDownloads.set(payload.id, { ...prev, ...payload });
+    this.updateDownloadRing();
+  }
+
+  onDownloadDone(payload) {
+    if (!payload || !payload.id) return;
+    const prev = this.activeDownloads.get(payload.id) || {};
+    this.activeDownloads.delete(payload.id);
+    this.updateDownloadRing();
+
+    // Save to history (newest first)
+    const entry = {
+      id: payload.id,
+      filename: payload.filename || prev.filename || 'download',
+      url: payload.url || prev.url || '',
+      savePath: payload.savePath || prev.savePath || '',
+      receivedBytes: payload.receivedBytes ?? prev.receivedBytes ?? 0,
+      totalBytes: payload.totalBytes ?? prev.totalBytes ?? 0,
+      state: payload.state || 'completed',
+      timestamp: payload.endTime || Date.now(),
+    };
+    this.downloadHistory.unshift(entry);
+    this.downloadHistory = this.downloadHistory.slice(0, this.maxDownloadHistoryItems);
+    this.saveDownloadHistory();
+    this.renderDownloadHistory();
+  }
+
+  renderDownloadHistory() {
+    if (!this.downloadsListEl) return;
+
+    if (!this.downloadHistory || this.downloadHistory.length === 0) {
+      this.downloadsListEl.innerHTML = `<div class="tabs-empty" style="height:auto; padding: 12px;">No downloads yet</div>`;
+      return;
+    }
+
+    const rows = this.downloadHistory.slice(0, this.maxDownloadHistoryItems).map((d) => {
+      const sizeText = (d.totalBytes && d.totalBytes > 0)
+        ? `${this.formatBytes(d.receivedBytes)} / ${this.formatBytes(d.totalBytes)}`
+        : `${this.formatBytes(d.receivedBytes)}`;
+      const when = new Date(d.timestamp || Date.now()).toLocaleString();
+      const status = d.state || 'completed';
+      const pathText = d.savePath || '';
+      const safeName = (d.filename || 'download').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const safeUrl = (d.url || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const safePath = pathText.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const btn = d.savePath
+        ? `<button class="download-item__btn" data-action="show" data-path="${encodeURIComponent(d.savePath)}">Show</button>`
+        : '';
+
+      return `
+        <div class="download-item">
+          <div class="download-item__meta">
+            <div class="download-item__name">${safeName}</div>
+            <div class="download-item__sub">${status} • ${sizeText} • ${when}</div>
+            <div class="download-item__sub">${safePath || safeUrl}</div>
+          </div>
+          <div class="download-item__actions">
+            ${btn}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    this.downloadsListEl.innerHTML = rows;
+
+    // Wire action buttons
+    this.downloadsListEl.querySelectorAll('button[data-action="show"]').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const encoded = btn.getAttribute('data-path');
+        if (!encoded) return;
+        const filePath = decodeURIComponent(encoded);
+        try {
+          if (window.electronAPI && window.electronAPI.showItemInFolder) {
+            await window.electronAPI.showItemInFolder(filePath);
+          }
+        } catch (err) {
+          console.error('Failed to show item in folder:', err);
+        }
+      });
+    });
   }
 
   // Bookmark folder management methods
@@ -926,17 +1654,55 @@ class DiscoveryBrowser {
 
       item.innerHTML = `
         <div style="width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 13px;">🌐</div>
-        <div style="flex: 1; min-width: 0;">
-          <div style="color: white; font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${hostname}</div>
-          <div style="color: rgba(255,255,255,0.5); font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${entry.username}</div>
+        <div class="pwd-info" style="flex: 1; min-width: 0;">
+          <div class="pwd-site" style="color: white; font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${hostname}</div>
+          <div class="pwd-username" style="color: rgba(255,255,255,0.5); font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${entry.username}</div>
         </div>
-        <button class="pwd-reveal-btn" style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.8); padding: 3px 7px; border-radius: 4px; font-size: 10px; cursor: pointer;">👁</button>
-        <button class="pwd-delete-btn" style="background: rgba(255,80,80,0.5); border: none; color: white; padding: 3px 7px; border-radius: 4px; font-size: 10px; cursor: pointer;">✕</button>
+        <button class="pwd-copy-btn" style="background: rgba(100,200,100,0.5); border: 1px solid rgba(100,200,100,0.3); color: white; padding: 3px 7px; border-radius: 4px; font-size: 10px; cursor: pointer;" title="Copy password">📋</button>
+        <button class="pwd-edit-btn" style="background: rgba(100,150,255,0.5); border: 1px solid rgba(100,150,255,0.3); color: white; padding: 3px 7px; border-radius: 4px; font-size: 10px; cursor: pointer;" title="Edit">✎</button>
+        <button class="pwd-reveal-btn" style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.8); padding: 3px 7px; border-radius: 4px; font-size: 10px; cursor: pointer;" title="Show/hide password">👁</button>
+        <button class="pwd-delete-btn" style="background: rgba(255,80,80,0.5); border: none; color: white; padding: 3px 7px; border-radius: 4px; font-size: 10px; cursor: pointer;" title="Delete">✕</button>
       `;
 
       // Hover
       item.addEventListener('mouseenter', () => { item.style.background = 'rgba(255,255,255,0.1)'; });
       item.addEventListener('mouseleave', () => { item.style.background = 'rgba(255,255,255,0.06)'; });
+
+      // Copy password to clipboard
+      const copyBtn = item.querySelector('.pwd-copy-btn');
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(entry.password).then(() => {
+          const originalText = copyBtn.textContent;
+          copyBtn.textContent = '✓';
+          copyBtn.style.background = 'rgba(100,255,100,0.7)';
+          setTimeout(() => {
+            copyBtn.textContent = originalText;
+            copyBtn.style.background = 'rgba(100,200,100,0.5)';
+          }, 1500);
+        }).catch(err => {
+          console.error('Failed to copy password:', err);
+        });
+      });
+
+      copyBtn.addEventListener('mouseenter', () => {
+        copyBtn.style.background = 'rgba(100,200,100,0.7)';
+      });
+      copyBtn.addEventListener('mouseleave', () => {
+        copyBtn.style.background = 'rgba(100,200,100,0.5)';
+      });
+
+      // Edit password entry
+      const editBtn = item.querySelector('.pwd-edit-btn');
+      editBtn.addEventListener('click', () => {
+        this.showEditPasswordModal(entry);
+      });
+
+      editBtn.addEventListener('mouseenter', () => {
+        editBtn.style.background = 'rgba(100,150,255,0.7)';
+      });
+      editBtn.addEventListener('mouseleave', () => {
+        editBtn.style.background = 'rgba(100,150,255,0.5)';
+      });
 
       // Reveal toggle — shows password in a small tooltip-style box below
       const revealBtn = item.querySelector('.pwd-reveal-btn');
@@ -965,6 +1731,328 @@ class DiscoveryBrowser {
         this.passwords.splice(this.passwords.indexOf(entry), 1);
         this.savePasswords();
         this.renderPasswords();
+      });
+
+      deleteBtn.addEventListener('mouseenter', () => {
+        deleteBtn.style.background = 'rgba(255,67,67,0.8)';
+      });
+      deleteBtn.addEventListener('mouseleave', () => {
+        deleteBtn.style.background = 'rgba(255,80,80,0.5)';
+      });
+
+      container.appendChild(item);
+    });
+  }
+
+  showEditPasswordModal(entry) {
+    const modal = document.createElement('div');
+    modal.id = 'edit-pwd-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center;';
+    
+    let hostname = entry.site;
+    try { hostname = new URL(entry.site).hostname; } catch(e) {}
+    
+    modal.innerHTML = `
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 12px; width: 320px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+        <h3 style="color: white; margin: 0 0 14px 0; font-size: 14px;">Edit Password for ${hostname}</h3>
+        
+        <label style="color: rgba(255,255,255,0.8); font-size: 11px; display: block; margin-bottom: 4px;">Username</label>
+        <input type="text" id="edit-pwd-username" value="${entry.username}" style="width: 100%; padding: 8px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; background: rgba(255,255,255,0.1); color: white; font-size: 12px; margin-bottom: 12px;">
+        
+        <label style="color: rgba(255,255,255,0.8); font-size: 11px; display: block; margin-bottom: 4px;">Password</label>
+        <input type="text" id="edit-pwd-password" value="${entry.password}" style="width: 100%; padding: 8px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; background: rgba(255,255,255,0.1); color: white; font-size: 12px; margin-bottom: 16px;">
+        
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button id="edit-pwd-cancel" style="padding: 6px 12px; font-size: 11px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: white; cursor: pointer;">Cancel</button>
+          <button id="edit-pwd-save" style="padding: 6px 12px; font-size: 11px; background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; color: white; cursor: pointer;">Save</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const usernameInput = modal.querySelector('#edit-pwd-username');
+    const passwordInput = modal.querySelector('#edit-pwd-password');
+    const saveBtn = modal.querySelector('#edit-pwd-save');
+    const cancelBtn = modal.querySelector('#edit-pwd-cancel');
+    
+    // Focus username field
+    setTimeout(() => usernameInput.focus(), 100);
+    
+    // Save changes
+    saveBtn.addEventListener('click', () => {
+      entry.username = usernameInput.value.trim();
+      entry.password = passwordInput.value;
+      this.savePasswords();
+      this.renderPasswords();
+      modal.remove();
+    });
+    
+    // Cancel
+    cancelBtn.addEventListener('click', () => {
+      modal.remove();
+    });
+    
+    // Enter key saves
+    const enterHandler = (e) => {
+      if (e.key === 'Enter') {
+        entry.username = usernameInput.value.trim();
+        entry.password = passwordInput.value;
+        this.savePasswords();
+        this.renderPasswords();
+        modal.remove();
+      } else if (e.key === 'Escape') {
+        modal.remove();
+      }
+    };
+    usernameInput.addEventListener('keydown', enterHandler);
+    passwordInput.addEventListener('keydown', enterHandler);
+  }
+
+  // ========================
+  // History Management
+  // ========================
+
+  loadHistory() {
+    try {
+      const raw = localStorage.getItem('browsingHistory');
+      if (raw) {
+        this.history = JSON.parse(raw);
+      }
+    } catch (e) {
+      console.error('Error loading history:', e);
+      this.history = [];
+    }
+  }
+
+  saveHistory() {
+    try {
+      // Limit to max items
+      if (this.history.length > this.maxHistoryItems) {
+        this.history = this.history.slice(0, this.maxHistoryItems);
+      }
+      localStorage.setItem('browsingHistory', JSON.stringify(this.history));
+    } catch (e) {
+      console.error('Error saving history:', e);
+    }
+  }
+
+  addToHistory(url, title) {
+    console.log('[HISTORY] addToHistory called with:', { url, title });
+    
+    // Don't add file:// URLs or duplicates from last 5 entries
+    if (!url || url.startsWith('file://') || url.startsWith('about:')) {
+      console.log('[HISTORY] Skipped - file:// or about: URL');
+      return;
+    }
+    
+    const recentDuplicate = this.history.slice(0, 5).find(h => h.url === url);
+    if (recentDuplicate) {
+      console.log('[HISTORY] Skipped - duplicate in recent 5');
+      return;
+    }
+
+    const entry = {
+      url: url,
+      title: title || url,
+      timestamp: Date.now(),
+      favicon: this.getFaviconUrl(url)
+    };
+
+    console.log('[HISTORY] Adding entry:', entry);
+    this.history.unshift(entry); // Add to beginning
+    this.saveHistory();
+    console.log('[HISTORY] History saved. Total items:', this.history.length);
+  }
+
+  getFaviconUrl(url) {
+    try {
+      const urlObj = new URL(url);
+      return `${urlObj.protocol}//${urlObj.host}/favicon.ico`;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  clearHistory() {
+    if (confirm('Clear all browsing history? This cannot be undone.')) {
+      this.history = [];
+      this.saveHistory();
+      this.renderHistory();
+    }
+  }
+
+  clearAllUserData() {
+    const firstConfirm = confirm('Delete all app data? This will sign you out and cannot be undone.');
+    if (!firstConfirm) return;
+    const secondConfirm = confirm('Are you absolutely sure? This removes history, bookmarks, passwords, downloads, extensions, notifications, and tabs.');
+    if (!secondConfirm) return;
+
+    try {
+      if (window.electronAPI && window.electronAPI.clearUserData) {
+        window.electronAPI.clearUserData();
+      }
+    } catch (e) {
+      console.warn('Failed to clear session data:', e);
+    }
+
+    try {
+      localStorage.clear();
+    } catch (e) {
+      console.warn('Failed to clear localStorage:', e);
+    }
+
+    this.history = [];
+    this.visitedTabs = new Map();
+    this.passwords = [];
+    this.downloadHistory = [];
+    this.notifications = [];
+    this.installedAddons = new Map();
+    this.bookmarkFolders = new Map();
+    this.searchEngineKey = 'google';
+
+    try {
+      if (window.electronAPI && window.electronAPI.syncPasswords) {
+        window.electronAPI.syncPasswords([]);
+      }
+      if (window.electronAPI && window.electronAPI.updateAddons) {
+        window.electronAPI.updateAddons([]);
+      }
+      if (window.electronAPI && window.electronAPI.syncBookmarkFolders) {
+        window.electronAPI.syncBookmarkFolders([]);
+      }
+      if (window.electronAPI && window.electronAPI.setVisualizerEnabled) {
+        window.electronAPI.setVisualizerEnabled(false);
+      }
+      const vizToggle = document.getElementById('visualizer-toggle');
+      if (vizToggle) vizToggle.checked = false;
+    } catch (e) {
+      console.warn('Failed to sync cleared data:', e);
+    }
+
+    this.renderTabs();
+    this.renderHistory();
+    this.renderBookmarks();
+    this.renderPasswords();
+    this.renderDownloadHistory();
+    this.renderNotifications();
+    this.renderAddons();
+    this.applySearchEngineToUI();
+
+    alert('All local data has been deleted.');
+  }
+
+  renderHistory() {
+    console.log('[HISTORY] renderHistory called. Total items:', this.history.length);
+    const container = document.getElementById('history-list');
+    if (!container) {
+      console.log('[HISTORY] ERROR: history-list container not found!');
+      return;
+    }
+    container.innerHTML = '';
+
+    if (this.history.length === 0) {
+      console.log('[HISTORY] No history items to display');
+      container.innerHTML = `<div style="color: rgba(255,255,255,0.35); font-size: 11px; text-align: center; padding: 24px 0;">No browsing history</div>`;
+      return;
+    }
+
+    console.log('[HISTORY] Rendering', this.history.length, 'items');
+
+    // Group by date
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const groups = {
+      today: [],
+      yesterday: [],
+      older: []
+    };
+
+    this.history.forEach(entry => {
+      const entryDate = new Date(entry.timestamp);
+      entryDate.setHours(0, 0, 0, 0);
+      
+      if (entryDate.getTime() === today.getTime()) {
+        groups.today.push(entry);
+      } else if (entryDate.getTime() === yesterday.getTime()) {
+        groups.yesterday.push(entry);
+      } else {
+        groups.older.push(entry);
+      }
+    });
+
+    // Render groups
+    if (groups.today.length > 0) {
+      this.renderHistoryGroup(container, 'Today', groups.today);
+    }
+    if (groups.yesterday.length > 0) {
+      this.renderHistoryGroup(container, 'Yesterday', groups.yesterday);
+    }
+    if (groups.older.length > 0) {
+      this.renderHistoryGroup(container, 'Older', groups.older);
+    }
+
+    // Clear history button handler
+    const clearBtn = document.getElementById('clear-history-btn');
+    if (clearBtn) {
+      clearBtn.onclick = () => this.clearHistory();
+    }
+  }
+
+  renderHistoryGroup(container, label, entries) {
+    const groupHeader = document.createElement('div');
+    groupHeader.style.cssText = 'color: rgba(255,255,255,0.5); font-size: 10px; font-weight: 600; margin: 8px 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;';
+    groupHeader.textContent = label;
+    container.appendChild(groupHeader);
+
+    entries.forEach(entry => {
+      const item = document.createElement('div');
+      item.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; margin-bottom: 4px; cursor: pointer; transition: background 0.2s;';
+
+      const time = new Date(entry.timestamp);
+      const timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+      let hostname = entry.url;
+      try { hostname = new URL(entry.url).hostname; } catch(e) {}
+
+      item.innerHTML = `
+        <div style="width: 20px; height: 20px; border-radius: 4px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 11px;">🌐</div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="color: white; font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${entry.title}</div>
+          <div style="color: rgba(255,255,255,0.4); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${hostname}</div>
+        </div>
+        <div style="color: rgba(255,255,255,0.3); font-size: 9px; flex-shrink: 0;">${timeStr}</div>
+        <button class="history-delete-btn" style="background: rgba(255,80,80,0.4); border: none; color: white; padding: 3px 6px; border-radius: 4px; font-size: 9px; cursor: pointer; flex-shrink: 0;">✕</button>
+      `;
+
+      // Hover effects
+      item.addEventListener('mouseenter', () => { 
+        item.style.background = 'rgba(255,255,255,0.1)'; 
+      });
+      item.addEventListener('mouseleave', () => { 
+        item.style.background = 'rgba(255,255,255,0.05)'; 
+      });
+
+      // Click to visit
+      item.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('history-delete-btn')) {
+          this.createCard(entry.url);
+        }
+      });
+
+      // Delete individual entry
+      const deleteBtn = item.querySelector('.history-delete-btn');
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const index = this.history.indexOf(entry);
+        if (index > -1) {
+          this.history.splice(index, 1);
+          this.saveHistory();
+          this.renderHistory();
+        }
       });
 
       container.appendChild(item);
@@ -1008,27 +2096,34 @@ class DiscoveryBrowser {
   renderAddons() {
     if (!this.addonsListEl) return;
     this.addonsListEl.innerHTML = '';
-    for (const [name, meta] of this.installedAddons) {
-      const li = document.createElement('li');
-      li.className = 'addon-item';
+    const items = Array.from(this.installedAddons.values());
+    if (this.noAddonsMsg) {
+      this.noAddonsMsg.style.display = items.length ? 'none' : 'block';
+    }
+    items.forEach((meta) => {
+      const name = meta.name || meta.url || 'Addon';
       const enabled = meta.enabled !== false;
-      li.innerHTML = `
-        <div style="display:flex; gap:8px; align-items:center; flex:1">
-          <span class="addon-name">${name}</span>
-          <span class="addon-url">${meta.url || ''}</span>
+      const card = document.createElement('div');
+      card.className = 'addon-card';
+      card.innerHTML = `
+        <div class="addon-icon">${meta.icon || '🧩'}</div>
+        <div class="addon-info">
+          <h4>${name}</h4>
+          <p>${meta.description || meta.url || ''}</p>
+          <div class="addon-version">${enabled ? 'Enabled' : 'Disabled'}</div>
         </div>
-        <div style="display:flex; gap:8px; align-items:center">
-          <button class="addon-toggle ${enabled ? 'on' : 'off'}" data-addon="${name}">${enabled ? 'On' : 'Off'}</button>
-          <button class="uninstall-btn" data-addon="${name}">Remove</button>
+        <div class="addon-controls">
+          <button class="addon-toggle ${enabled ? 'enabled' : 'disabled'}" data-addon="${name}">${enabled ? 'On' : 'Off'}</button>
+          <button class="btn uninstall-btn" data-addon="${name}">Remove</button>
         </div>
       `;
-      const btn = li.querySelector('.uninstall-btn');
-      btn.addEventListener('click', () => {
+      const removeBtn = card.querySelector('.uninstall-btn');
+      removeBtn.addEventListener('click', () => {
         this.installedAddons.delete(name);
         this.saveAddons();
         this.renderAddons();
       });
-      const toggle = li.querySelector('.addon-toggle');
+      const toggle = card.querySelector('.addon-toggle');
       toggle.addEventListener('click', () => {
         const current = this.installedAddons.get(name) || {};
         current.enabled = !current.enabled;
@@ -1036,27 +2131,25 @@ class DiscoveryBrowser {
         this.saveAddons();
         this.renderAddons();
       });
-      this.addonsListEl.appendChild(li);
-    }
+      this.addonsListEl.appendChild(card);
+    });
   }
 
   installAddon() {
-    const name = (this.addonNameInput.value || '').trim();
-    const url = (this.addonUrlInput.value || '').trim();
+    const name = (this.addonSearchInput && this.addonSearchInput.value || '').trim();
     if (!name) return alert('Please provide an addon name');
-    // For now we only register the addon metadata; actual addon execution is out of scope
-    this.installedAddons.set(name, { name, url, installedAt: Date.now() });
+    this.installedAddons.set(name, { name, enabled: true, installedAt: Date.now() });
     this.saveAddons();
     this.renderAddons();
-    this.addonNameInput.value = '';
-    this.addonUrlInput.value = '';
   }
 
   // Search GitHub repositories for the addon name and render quick results
-  async searchAddons() {
-    const q = (this.addonNameInput.value || '').trim();
+  async searchAddons(query) {
+    const q = (query || (this.addonSearchInput && this.addonSearchInput.value) || '').trim();
     if (!q) return alert('Type an addon name to search (e.g., uBlock Origin)');
-    this.addonSearchResults.innerHTML = '<li class="addon-item">Searching…</li>';
+    if (this.addonSearchResults) {
+      this.addonSearchResults.innerHTML = '<div class="addon-search-result-card">Searching…</div>';
+    }
     try {
       const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&per_page=6`;
       const resp = await fetch(url);
@@ -1066,28 +2159,31 @@ class DiscoveryBrowser {
       this.renderSearchResults(items);
     } catch (err) {
       console.error('Addon search error', err);
-      this.addonSearchResults.innerHTML = `<li class="addon-item">Search error: ${err.message}</li>`;
+      if (this.addonSearchResults) {
+        this.addonSearchResults.innerHTML = `<div class="addon-search-result-card">Search error: ${err.message}</div>`;
+      }
     }
   }
 
   renderSearchResults(items) {
+    if (!this.addonSearchResults) return;
     this.addonSearchResults.innerHTML = '';
     if (!items.length) {
-      this.addonSearchResults.innerHTML = '<li class="addon-item">No results</li>';
+      this.addonSearchResults.innerHTML = '<div class="addon-search-result-card">No results</div>';
       return;
     }
     items.forEach(repo => {
-      const li = document.createElement('li');
-      li.className = 'addon-item';
+      const li = document.createElement('div');
+      li.className = 'addon-search-result-card';
       const name = repo.full_name;
       const desc = repo.description || '';
       li.innerHTML = `
-        <div style="flex:1">
-          <div style="font-weight:600">${name}</div>
-          <div style="font-size:12px; opacity:0.8">${desc}</div>
+        <div>
+          <h4>${name}</h4>
+          <p>${desc}</p>
         </div>
-        <div style="margin-left:8px; display:flex; gap:6px">
-          <button class="btn" data-install-repo="${encodeURIComponent(repo.html_url)}">Install</button>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button class="btn btn-primary" data-install-repo="${encodeURIComponent(repo.html_url)}">Install</button>
           <a class="btn" href="${repo.html_url}" target="_blank">Open</a>
         </div>
       `;
@@ -1102,17 +2198,51 @@ class DiscoveryBrowser {
     if (!repo || !repo.full_name) return;
     const name = repo.full_name;
     const url = repo.html_url;
-    this.installedAddons.set(name, { name, url, installedAt: Date.now() });
+    this.installedAddons.set(name, { name, url, description: repo.description || '', enabled: true, installedAt: Date.now() });
     this.saveAddons();
     this.renderAddons();
     alert('Installed addon: ' + name);
   }
 
-  async createCard(url = 'https://www.google.com') {
+  openAddonDiscovery(query = '') {
+    if (!this.addonDiscoveryModal) return;
+    this.addonDiscoveryModal.setAttribute('aria-hidden', 'false');
+    this.addonDiscoveryModal.style.display = 'flex';
+    if (this.addonSearchInput) {
+      this.addonSearchInput.value = query || '';
+      this.addonSearchInput.focus();
+    }
+    if (query) {
+      this.searchAddons(query);
+    } else if (this.addonSearchResults) {
+      this.addonSearchResults.innerHTML = '';
+    }
+  }
+
+  closeAddonDiscovery() {
+    if (!this.addonDiscoveryModal) return;
+    this.addonDiscoveryModal.setAttribute('aria-hidden', 'true');
+    this.addonDiscoveryModal.style.display = 'none';
+  }
+
+  async createCard(url) {
+    if (!url) {
+      url = this.getSearchEngineHomeUrl();
+    }
+    console.log('=== [CREATE-CARD DEBUG] ===');
+    console.log('[CREATE-1] createCard called');
+    console.log('[CREATE-2] Input URL:', url);
+    console.log('[CREATE-3] Input URL type:', typeof url);
+    
     // Normalize URL to ensure it has https:// prefix
+    const originalUrl = url;
     url = this.normalizeUrl(url);
-    console.log('createCard called with URL:', url);
+    console.log('[CREATE-4] Normalized URL:', url);
+    console.log('[CREATE-5] URL changed?', originalUrl !== url);
+    
     const cardId = this.nextCardId++;
+    console.log('[CREATE-6] Assigned cardId:', cardId);
+    console.log('[CREATE-7] Current card count:', this.cards.size);
     
     // Calculate centered position on screen
     let x = 300;
@@ -1121,6 +2251,7 @@ class DiscoveryBrowser {
     try {
       const screenWidth = window.screen.availWidth;
       const screenHeight = window.screen.availHeight;
+      console.log('[CREATE-8] Screen size:', screenWidth, 'x', screenHeight);
       
       x = Math.floor((screenWidth - 650) / 2);
       y = Math.floor((screenHeight - 500) / 2);
@@ -1130,8 +2261,9 @@ class DiscoveryBrowser {
         x += (cardCount * 25);
         y += (cardCount * 25);
       }
+      console.log('[CREATE-9] Calculated position:', x, y);
     } catch (e) {
-      console.warn('Could not calculate centered position:', e);
+      console.warn('[CREATE-ERROR] Could not calculate centered position:', e);
     }
 
     const cardData = {
@@ -1140,20 +2272,39 @@ class DiscoveryBrowser {
       title: this.extractDomainName(url),
       isActive: false,
     };
+    console.log('[CREATE-10] Card data created:', cardData);
 
     this.cards.set(cardId, cardData);
+    console.log('[CREATE-11] Card added to cards Map');
+    console.log('[CREATE-12] Cards Map size now:', this.cards.size);
 
     try {
+      console.log('[CREATE-13] Calling electronAPI.createCard...');
+      console.log('[CREATE-14] Parameters:', { cardId, url, position: { x, y } });
       // Add tab immediately when card is created
       this.addOrUpdateTab(url, cardData.title);
+      console.log('[CREATE-15] Tab added/updated');
       
-      await window.electronAPI.createCard(cardId, url, { x, y });
+      console.log('[CREATE-16] About to call window.electronAPI.createCard');
+      const result = await window.electronAPI.createCard(cardId, url, { x, y });
+      console.log('[CREATE-17] IPC call completed');
+      console.log('[CREATE-18] Result:', result);
+      console.log('[CREATE-19] Result.success:', result ? result.success : 'no result');
       
+      console.log('[CREATE-20] Adding card to dock');
       this.addCardToDock(cardData);
+      console.log('[CREATE-21] Updating card count');
       this.updateCardCount();
+      console.log('[CREATE-22] Card creation completed successfully');
+      console.log('=== [END CREATE-CARD DEBUG] ===\n');
     } catch (error) {
-      console.error('Error creating card:', error);
+      console.error('=== [CREATE-CARD ERROR] ===');
+      console.error('[CREATE-ERROR] Exception caught:', error);
+      console.error('[CREATE-ERROR] Error message:', error.message);
+      console.error('[CREATE-ERROR] Error stack:', error.stack);
+      console.error('[CREATE-ERROR] Cleaning up - removing card from Map');
       this.cards.delete(cardId);
+      console.error('=== [END ERROR] ===\n');
     }
   }
 

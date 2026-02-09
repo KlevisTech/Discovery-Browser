@@ -1,6 +1,7 @@
 // main.js
-const { app, BrowserWindow, ipcMain, session } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell, dialog, webContents } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 const { Menu, MenuItem } = require('electron');
 
@@ -9,6 +10,7 @@ app.commandLine.appendSwitch('disable-gpu-sandbox'); // Prevents GPU sandbox cra
 app.commandLine.appendSwitch('ignore-gpu-blocklist'); // Updated flag name (ignore-gpu-blacklist is deprecated)
 app.commandLine.appendSwitch('use-angle', 'd3d11'); // Use D3D11 ANGLE backend for Windows stability
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder'); // Hardware video decode
+
 
 // Disable unnecessary features
 app.commandLine.appendSwitch('disable-background-timer-throttling');
@@ -21,6 +23,106 @@ require('events').EventEmitter.defaultMaxListeners = 50;
 // Track which webContents have been initialized to prevent duplicate listeners
 const initializedWebContents = new WeakSet();
 
+const allowedSchemes = new Set([
+  'http:',
+  'https:',
+  'file:',
+  'data:',
+  'about:',
+  'blob:',
+  'javascript:',
+  'chrome:',
+  'devtools:',
+]);
+
+function getUrlProtocol(rawUrl) {
+  try {
+    return new URL(rawUrl).protocol;
+  } catch (e) {
+    const match = String(rawUrl || '').match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)/);
+    return match ? match[1] : '';
+  }
+}
+
+function isExternalAppUrl(rawUrl) {
+  const protocol = getUrlProtocol(rawUrl);
+  if (!protocol) return false;
+  return !allowedSchemes.has(protocol);
+}
+
+function deriveWebFallbackUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl);
+    const protocol = u.protocol;
+    if (protocol === 'zoommtg:' || protocol === 'zoomus:') {
+      if (u.hostname) {
+        return `https://${u.host}${u.pathname}${u.search}${u.hash}`;
+      }
+      return 'https://zoom.us';
+    }
+    if (protocol === 'spotify:') {
+      const path = String(rawUrl).replace(/^spotify:\/\//, '').replace(/^spotify:/, '').replace(/^\/+/, '');
+      if (path) {
+        return `https://open.spotify.com/${path}`;
+      }
+      return 'https://open.spotify.com';
+    }
+    if (u.hostname && u.hostname.includes('.')) {
+      return `https://${u.host}${u.pathname}${u.search}${u.hash}`;
+    }
+  } catch (e) {
+    const match = String(rawUrl || '').match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\/([^/?#]+)([^?#]*)(\?[^#]*)?(#.*)?$/);
+    if (match && match[2] && match[2].includes('.')) {
+      return `https://${match[2]}${match[3] || ''}${match[4] || ''}${match[5] || ''}`;
+    }
+  }
+  return null;
+}
+
+async function promptOpenExternalApp(contents, targetUrl) {
+  try {
+    const parentWin = BrowserWindow.fromWebContents(contents) || mainWindow;
+    const fallbackUrl = deriveWebFallbackUrl(targetUrl);
+    const protocol = getUrlProtocol(targetUrl) || 'app';
+    const detail = fallbackUrl
+      ? `If the app isn't installed, we'll open the web version instead.`
+      : `If the app isn't installed, nothing will open.`;
+
+    const result = await dialog.showMessageBox(parentWin, {
+      type: 'question',
+      buttons: ['Open App', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      message: 'Open in app?',
+      detail: `This link wants to open ${protocol} on your device.\n${detail}`,
+      noLink: true,
+    });
+
+    if (result.response !== 0) return true;
+
+    try {
+      const ok = await shell.openExternal(targetUrl, { activate: true });
+      if (!ok && fallbackUrl) {
+        openUrlInCard(fallbackUrl);
+      }
+    } catch (e) {
+      if (fallbackUrl) {
+        openUrlInCard(fallbackUrl);
+      }
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function handleExternalAppNavigation(event, contents, targetUrl) {
+  if (!targetUrl || !isExternalAppUrl(targetUrl)) return false;
+  if (event && event.preventDefault) event.preventDefault();
+  promptOpenExternalApp(contents, targetUrl);
+  return true;
+}
+
 // Function to create and show the context menu
 app.on('web-contents-created', (event, contents) => {
   // Prevent adding duplicate listeners to the same webContents
@@ -32,8 +134,109 @@ app.on('web-contents-created', (event, contents) => {
   // Set max listeners for this specific webContents to prevent warnings
   contents.setMaxListeners(20);
 
+  // Ensure all new windows/popups become card windows with the same layout
+  try {
+    contents.setWindowOpenHandler(({ url }) => {
+      if (isExternalAppUrl(url)) {
+        promptOpenExternalApp(contents, url);
+        return { action: 'deny' };
+      }
+      openUrlInCard(url);
+      return { action: 'deny' };
+    });
+  } catch (e) {}
+
   contents.on('context-menu', (e, props) => {
     const menu = new Menu();
+
+    // Spelling suggestions
+    if (props.misspelledWord && Array.isArray(props.dictionarySuggestions) && props.dictionarySuggestions.length > 0) {
+      props.dictionarySuggestions.slice(0, 8).forEach((suggestion) => {
+        menu.append(new MenuItem({
+          label: suggestion,
+          click: () => {
+            try {
+              contents.replaceMisspelling(suggestion);
+            } catch (err) {}
+          }
+        }));
+      });
+      menu.append(new MenuItem({ type: 'separator' }));
+      menu.append(new MenuItem({
+        label: 'Add to Dictionary',
+        click: () => {
+          try {
+            if (contents.session && contents.session.addWordToSpellCheckerDictionary) {
+              contents.session.addWordToSpellCheckerDictionary(props.misspelledWord);
+            }
+          } catch (err) {}
+        }
+      }));
+      menu.append(new MenuItem({ type: 'separator' }));
+    }
+
+    // Media download options (images / videos)
+    try {
+      const mediaType = props.mediaType || '';
+      const mediaURL = props.srcURL || props.mediaURL || '';
+      const isHttp = mediaURL && (mediaURL.startsWith('http://') || mediaURL.startsWith('https://'));
+
+      if (isHttp && mediaType === 'image') {
+        menu.append(new MenuItem({
+          label: 'Save Image As...',
+          click: async () => {
+            try {
+              const downloadsDir = app.getPath('downloads');
+              const baseName = path.basename(new URL(mediaURL).pathname) || 'image';
+              const defaultPath = path.join(downloadsDir, baseName);
+              const { canceled, filePath } = await dialog.showSaveDialog({
+                title: 'Save Image As',
+                defaultPath,
+              });
+              if (canceled || !filePath) return;
+              pendingDownloadSavePathByUrl.set(mediaURL, filePath);
+              contents.downloadURL(mediaURL);
+            } catch (err) {}
+          }
+        }));
+        menu.append(new MenuItem({
+          label: 'Download Image',
+          click: () => {
+            try { contents.downloadURL(mediaURL); } catch (err) {}
+          }
+        }));
+      }
+
+      if (isHttp && (mediaType === 'video' || mediaType === 'audio')) {
+        menu.append(new MenuItem({
+          label: mediaType === 'audio' ? 'Save Audio As...' : 'Save Video As...',
+          click: async () => {
+            try {
+              const downloadsDir = app.getPath('downloads');
+              const baseName = path.basename(new URL(mediaURL).pathname) || (mediaType === 'audio' ? 'audio' : 'video');
+              const defaultPath = path.join(downloadsDir, baseName);
+              const { canceled, filePath } = await dialog.showSaveDialog({
+                title: mediaType === 'audio' ? 'Save Audio As' : 'Save Video As',
+                defaultPath,
+              });
+              if (canceled || !filePath) return;
+              pendingDownloadSavePathByUrl.set(mediaURL, filePath);
+              contents.downloadURL(mediaURL);
+            } catch (err) {}
+          }
+        }));
+        menu.append(new MenuItem({
+          label: mediaType === 'audio' ? 'Download Audio' : 'Download Video',
+          click: () => {
+            try { contents.downloadURL(mediaURL); } catch (err) {}
+          }
+        }));
+      }
+
+      if (menu.items.length > 0) {
+        menu.append(new MenuItem({ type: 'separator' }));
+      }
+    } catch (err) {}
 
     // Add Copy if text is selected
     if (props.selectionText && props.selectionText.trim() !== '') {
@@ -68,6 +271,35 @@ app.on('web-contents-created', (event, contents) => {
     }
   });
 
+  // Block suspicious main-frame redirects without a recent user gesture
+  function shouldBlockNavigation(targetUrl) {
+    try {
+      if (!targetUrl || !targetUrl.startsWith('http')) return false;
+      if (blocklist.size === 0) return false;
+      if (!contents || contents.isDestroyed()) return false;
+      if (contents.getType && contents.getType() !== 'webview') return false;
+
+      const currentUrl = contents.getURL ? contents.getURL() : '';
+      if (!currentUrl || !currentUrl.startsWith('http')) return false;
+
+      let currentHost = '';
+      let targetHost = '';
+      try { currentHost = new URL(currentUrl).hostname; } catch (e) {}
+      try { targetHost = new URL(targetUrl).hostname; } catch (e) {}
+      if (!currentHost || !targetHost) return false;
+
+      if (currentHost === targetHost) return false;
+
+      const lastGesture = lastGestureByContentsId.get(contents.id) || 0;
+      const delta = Date.now() - lastGesture;
+      if (delta < 800) return false;
+
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // ─── Password detection for inner webviews inside card windows ───
   // Skip the main window and the card.html shell itself (those load file:// URLs).
   // Only target webviews that navigate to real http(s) sites.
@@ -77,21 +309,33 @@ app.on('web-contents-created', (event, contents) => {
   function safeExecuteJS(wc, script) {
     try {
       if (!wc || wc.isDestroyed()) return Promise.resolve(null);
-      // Check mainFrame in a try-catch as it can throw
+      let frame = null;
       try {
-        if (!wc.mainFrame) return Promise.resolve(null);
+        frame = wc.mainFrame;
       } catch (e) {
         return Promise.resolve(null);
       }
-      return wc.executeJavaScript(script).catch(() => null);
+      if (!frame || frame.isDestroyed && frame.isDestroyed()) return Promise.resolve(null);
+      try {
+        return frame.executeJavaScript(script, true).catch(() => null);
+      } catch (e) {
+        return Promise.resolve(null);
+      }
     } catch (e) {
       return Promise.resolve(null);
     }
   }
 
+  function stopPasswordDetection() {
+    if (pwdPollTimer) {
+      clearInterval(pwdPollTimer);
+      pwdPollTimer = null;
+    }
+  }
+
   function startPasswordDetection(webviewContents, pageUrl) {
     // Stop any previous poll on this webContents
-    if (pwdPollTimer) { clearInterval(pwdPollTimer); pwdPollTimer = null; }
+    stopPasswordDetection();
 
     // Early exit if webContents is already destroyed
     if (!webviewContents || webviewContents.isDestroyed()) return;
@@ -138,8 +382,17 @@ app.on('web-contents-created', (event, contents) => {
     pwdPollTimer = setInterval(() => {
       // Check if webContents is still valid
       if (!webviewContents || webviewContents.isDestroyed()) {
-        clearInterval(pwdPollTimer);
-        pwdPollTimer = null;
+        stopPasswordDetection();
+        return;
+      }
+      // Guard against disposed mainFrame
+      try {
+        if (!webviewContents.mainFrame || (webviewContents.mainFrame.isDestroyed && webviewContents.mainFrame.isDestroyed())) {
+          stopPasswordDetection();
+          return;
+        }
+      } catch (e) {
+        stopPasswordDetection();
         return;
       }
       
@@ -151,15 +404,20 @@ app.on('web-contents-created', (event, contents) => {
       `).then((result) => {
         if (!result || !result.password) return;
         // Find the card window that owns this webview.
-        // The webview's webContents lives inside a card BrowserWindow.
-        // We walk cardWindows and check if any of them are the ancestor.
+        // Prefer hostWebContents (webview -> embedder) to avoid missing the correct card.
         let targetWindow = null;
-        for (const [cardId, cardWin] of cardWindows) {
-          if (cardWin && !cardWin.isDestroyed()) {
-            // The inner webview's opener or parent is the card window.
-            // Since we can't directly link them, we send to ALL open card windows
-            // and let card.html filter by URL match.
-            targetWindow = cardWin;
+        try {
+          if (webviewContents && webviewContents.hostWebContents) {
+            targetWindow = BrowserWindow.fromWebContents(webviewContents.hostWebContents);
+          }
+        } catch (e) {}
+
+        // Fallback: last known card window (older Electron or edge cases)
+        if (!targetWindow || targetWindow.isDestroyed()) {
+          for (const [cardId, cardWin] of cardWindows) {
+            if (cardWin && !cardWin.isDestroyed()) {
+              targetWindow = cardWin;
+            }
           }
         }
         if (targetWindow && !targetWindow.isDestroyed()) {
@@ -179,13 +437,20 @@ app.on('web-contents-created', (event, contents) => {
 
   // Clean up timer when webContents is destroyed
   contents.on('destroyed', () => {
-    if (pwdPollTimer) {
-      clearInterval(pwdPollTimer);
-      pwdPollTimer = null;
-    }
+    stopPasswordDetection();
+  });
+  
+  contents.on('render-process-gone', () => {
+    stopPasswordDetection();
   });
 
   // Hook into navigation events on every webContents - use 'once' pattern where appropriate
+  contents.on('did-start-navigation', (event, url) => {
+    if (url && url.startsWith('http')) {
+      stopPasswordDetection();
+    }
+  });
+
   contents.on('did-navigate', (event, url) => {
     if (url && url.startsWith('http')) {
       // Small delay so the new page DOM is available
@@ -195,6 +460,22 @@ app.on('web-contents-created', (event, contents) => {
           startPasswordDetection(contents, url);
         }
       }, 1000);
+    }
+  });
+
+  contents.on('will-navigate', (event, url) => {
+    if (handleExternalAppNavigation(event, contents, url)) return;
+    if (event && event.isMainFrame && shouldBlockNavigation(url)) {
+      event.preventDefault();
+      console.log('[Addon] Blocked suspicious redirect:', url);
+    }
+  });
+
+  contents.on('will-redirect', (event, url) => {
+    if (handleExternalAppNavigation(event, contents, url)) return;
+    if (event && event.isMainFrame && shouldBlockNavigation(url)) {
+      event.preventDefault();
+      console.log('[Addon] Blocked suspicious redirect:', url);
     }
   });
 
@@ -240,6 +521,182 @@ if (require('electron').app.isPackaged) {
 // Keep references to main window and all card windows
 let mainWindow;
 const cardWindows = new Map(); // cardId -> BrowserWindow
+let nextDirectCardId = 100000;
+let startupUrlHandled = false;
+let suppressMainWindowOnStartup = false;
+
+function openUrlInCard(url) {
+  try {
+    handleExternalUrl(url);
+  } catch (e) {
+    // ignore
+  }
+}
+
+function handleExternalUrl(url) {
+  if (!url) return;
+  const canUseRenderer = mainWindow &&
+    !mainWindow.isDestroyed() &&
+    mainWindow.isVisible() &&
+    mainWindow.webContents &&
+    !mainWindow.webContents.isLoading();
+
+  if (canUseRenderer) {
+    try {
+      mainWindow.webContents.send('open-external-url', url);
+      return;
+    } catch (e) {}
+  }
+
+  // Cold-start or renderer not ready: open card directly
+  createCardWindow(nextDirectCardId++, url, {});
+}
+
+// ========================
+// Downloads
+// ========================
+
+const downloadIdByItem = new WeakMap();
+const downloadHandlerSessions = new WeakSet();
+const pendingDownloadSavePathByUrl = new Map();
+const lastGestureByContentsId = new Map();
+const lastScrollByContentsId = new Map();
+
+function ensureUniquePath(savePath) {
+  try {
+    if (!fs.existsSync(savePath)) return savePath;
+    const dir = path.dirname(savePath);
+    const ext = path.extname(savePath);
+    const base = path.basename(savePath, ext);
+    for (let i = 1; i < 1000; i++) {
+      const candidate = path.join(dir, `${base} (${i})${ext}`);
+      if (!fs.existsSync(candidate)) return candidate;
+    }
+  } catch (e) {}
+  return savePath;
+}
+
+function sendDownloadEvent(channel, payload, originatingWebContents) {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(channel, payload);
+    }
+  } catch (e) {}
+
+  // Also send to the specific BrowserWindow that initiated the download (e.g. card window)
+  try {
+    if (originatingWebContents) {
+      const win = BrowserWindow.fromWebContents(originatingWebContents);
+      if (win && !win.isDestroyed()) {
+        win.webContents.send(channel, payload);
+      }
+    }
+  } catch (e) {}
+}
+
+function setupDownloadHandlingForSession(sess) {
+  try {
+    if (!sess || downloadHandlerSessions.has(sess)) return;
+    downloadHandlerSessions.add(sess);
+
+    sess.on('will-download', (event, item, webContents) => {
+      try {
+        const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        downloadIdByItem.set(item, id);
+
+        const url = item.getURL();
+        const mime = item.getMimeType ? item.getMimeType() : '';
+        const suggested = item.getFilename ? item.getFilename() : 'download';
+        const downloadsDir = app.getPath('downloads');
+        let finalSavePath = null;
+        if (url && pendingDownloadSavePathByUrl.has(url)) {
+          finalSavePath = pendingDownloadSavePathByUrl.get(url);
+          pendingDownloadSavePathByUrl.delete(url);
+        } else {
+          const initialSavePath = path.join(downloadsDir, suggested);
+          finalSavePath = ensureUniquePath(initialSavePath);
+        }
+        if (finalSavePath) {
+          item.setSavePath(finalSavePath);
+        }
+
+        sendDownloadEvent('download-started', {
+          id,
+          url,
+          mime,
+          filename: path.basename(finalSavePath || suggested),
+          savePath: finalSavePath || '',
+          receivedBytes: 0,
+          totalBytes: item.getTotalBytes ? item.getTotalBytes() : 0,
+          percent: 0,
+          state: 'progressing',
+          startTime: Date.now(),
+        }, webContents);
+
+        item.on('updated', (e, state) => {
+          try {
+            const receivedBytes = item.getReceivedBytes ? item.getReceivedBytes() : 0;
+            const totalBytes = item.getTotalBytes ? item.getTotalBytes() : 0;
+            const percent = totalBytes > 0 ? Math.max(0, Math.min(1, receivedBytes / totalBytes)) : null;
+
+            sendDownloadEvent('download-progress', {
+              id,
+              url,
+              filename: item.getFilename ? item.getFilename() : path.basename(finalSavePath),
+              savePath: item.getSavePath ? item.getSavePath() : finalSavePath,
+              receivedBytes,
+              totalBytes,
+              percent,
+              state,
+            }, webContents);
+          } catch (err) {}
+        });
+
+        item.once('done', (e, state) => {
+          try {
+            const receivedBytes = item.getReceivedBytes ? item.getReceivedBytes() : 0;
+            const totalBytes = item.getTotalBytes ? item.getTotalBytes() : 0;
+            const percent = totalBytes > 0 ? Math.max(0, Math.min(1, receivedBytes / totalBytes)) : null;
+            const savePath = item.getSavePath ? item.getSavePath() : finalSavePath;
+
+            sendDownloadEvent('download-done', {
+              id,
+              url,
+              filename: item.getFilename ? item.getFilename() : path.basename(savePath),
+              savePath,
+              receivedBytes,
+              totalBytes,
+              percent,
+              state, // completed | cancelled | interrupted
+              endTime: Date.now(),
+            }, webContents);
+          } catch (err) {}
+        });
+      } catch (err) {
+        console.error('Error in will-download handler:', err);
+      }
+    });
+  } catch (e) {}
+}
+
+// User action helpers
+ipcMain.handle('show-item-in-folder', async (event, filePath) => {
+  try {
+    if (filePath) shell.showItemInFolder(filePath);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+// Web notifications from webviews -> forward to main window
+ipcMain.on('web-notification', (event, payload) => {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('notification-received', payload || {});
+    }
+  } catch (e) {}
+});
 
 // Global error handler
 process.on('uncaughtException', (error) => {
@@ -247,7 +704,15 @@ process.on('uncaughtException', (error) => {
 });
 
 // Handle app ready
-app.on('ready', createMainWindow);
+app.on('ready', () => {
+  const startupUrl = getUrlFromArgs(process.argv);
+  if (startupUrl) {
+    startupUrlHandled = true;
+    suppressMainWindowOnStartup = true;
+    createCardWindow(nextDirectCardId++, startupUrl, {});
+  }
+  createMainWindow({ showOnReady: !suppressMainWindowOnStartup });
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -258,16 +723,15 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (mainWindow === null) {
     createMainWindow();
+  } else if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+    mainWindow.show();
   }
 });
 
 // Handle protocol URLs when app is already running
 app.on('open-url', (event, url) => {
   event.preventDefault();
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    // Create a new card with the URL
-    mainWindow.webContents.send('open-external-url', url);
-  }
+  handleExternalUrl(url);
 });
 
 // Handle when launched with a URL (Windows)
@@ -277,23 +741,22 @@ if (!gotTheLock) {
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory) => {
     // Someone tried to run a second instance, focus our window and open the URL
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    const url = getUrlFromArgs(commandLine);
+    if (url) {
+      handleExternalUrl(url);
+    } else if (mainWindow && !mainWindow.isDestroyed()) {
+      if (!mainWindow.isVisible()) mainWindow.show();
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
-      
-      // Use the helper to find the URL in the command line
-      const url = getUrlFromArgs(commandLine);
-      if (url) {
-        mainWindow.webContents.send('open-external-url', url);
-      }
     }
   });
 }
 
-function createMainWindow() {
+function createMainWindow(options) {
+  const showOnReady = !options || options.showOnReady !== false;
   let windowX = 100;
   let windowY = 20;
-  const CARD_WIDTH = 650;
+  const CARD_WIDTH = 900;
   const CARD_HEIGHT = 500;
   
   try {
@@ -312,8 +775,8 @@ function createMainWindow() {
     height: CARD_HEIGHT,
     x: windowX,
     y: windowY,
-    minWidth: 400,
-    minHeight: 200,
+    minWidth: 900,
+    minHeight: 500,
     show: false, // Don't show until ready - prevents white flash
     backgroundColor: '#1a1a2e', // Match your theme
     webPreferences: {
@@ -323,7 +786,7 @@ function createMainWindow() {
       sandbox: true,
       // PERFORMANCE BOOSTS:
       enableWebSQL: false, // Disable deprecated WebSQL
-      spellcheck: false, // Disable spellcheck for speed
+      spellcheck: true, // Enable spellcheck for context menu suggestions
       enablePreferredSizeMode: true,
       backgroundThrottling: false, // Keep animations smooth
       offscreen: false,
@@ -332,16 +795,39 @@ function createMainWindow() {
 
   // Show window only when ready - prevents flash
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    if (showOnReady) {
+      mainWindow.show();
+    }
   });
 
   mainWindow.loadFile('src/index.html');
   setupAddonBlocking();
 
+  // Force any window.open/target=_blank to open as a card window
+  try {
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+      if (isExternalAppUrl(url)) {
+        promptOpenExternalApp(mainWindow.webContents, url);
+        return { action: 'deny' };
+      }
+      openUrlInCard(url);
+      return { action: 'deny' };
+    });
+  } catch (e) {}
+
+  // Enable downloads for both the main session and card partition session
+  try {
+    setupDownloadHandlingForSession(session.defaultSession);
+    const cardSession = session.fromPartition('persist:cards');
+    setupDownloadHandlingForSession(cardSession);
+  } catch (e) {
+    console.warn('Download handler setup failed:', e.message);
+  }
+
   mainWindow.webContents.on('did-finish-load', () => {
     const url = getUrlFromArgs(process.argv);
-    if (url) {
-      mainWindow.webContents.send('open-external-url', url);
+    if (url && !startupUrlHandled) {
+      handleExternalUrl(url);
     }
   });
 
@@ -361,6 +847,35 @@ function createMainWindow() {
 
 let activeAddons = [];
 let blocklist = new Set();
+let visualizerEnabled = false;
+const allowlistBySite = new Map([
+  ['instagram.com', new Set(['fbcdn.net'])],
+  ['facebook.com', new Set(['fbcdn.net'])],
+]);
+
+function getTopHostForContentsId(contentsId) {
+  try {
+    const wc = webContents.fromId(contentsId);
+    const curUrl = wc && wc.getURL ? wc.getURL() : '';
+    return curUrl ? new URL(curUrl).hostname : '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function isAllowlistedHost(hostname, topHost) {
+  if (!hostname || !topHost) return false;
+  for (const [siteHost, allowedSet] of allowlistBySite.entries()) {
+    if (topHost === siteHost || topHost.endsWith('.' + siteHost)) {
+      for (const allowed of allowedSet) {
+        if (hostname === allowed || hostname.endsWith('.' + allowed)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
 
 function applyAddons(addonsArray) {
   // Build a blocklist based on addon metadata heuristics
@@ -454,6 +969,30 @@ function setupAddonBlocking() {
   
   const requestHandler = (details, callback) => {
     try {
+      // Block main-frame redirects without recent user gesture (scroll popups)
+      if (blocklist.size > 0 && details.resourceType === 'mainFrame') {
+        const lastGesture = lastGestureByContentsId.get(details.webContentsId) || 0;
+        const lastScroll = lastScrollByContentsId.get(details.webContentsId) || 0;
+        const delta = Date.now() - lastGesture;
+        const scrollDelta = Date.now() - lastScroll;
+        let currentHost = '';
+        let targetHost = '';
+        try { currentHost = new URL(details.referrer || '').hostname; } catch (e) {}
+        if (!currentHost) {
+          try {
+            const wc = webContents.fromId(details.webContentsId);
+            const curUrl = wc && wc.getURL ? wc.getURL() : '';
+            if (curUrl) currentHost = new URL(curUrl).hostname;
+          } catch (e) {}
+        }
+        try { targetHost = new URL(details.url || '').hostname; } catch (e) {}
+        if (targetHost && currentHost && currentHost !== targetHost && delta > 800 && scrollDelta < 2000) {
+          blockCount++;
+          console.log(`[Block Redirect #${blockCount}] Blocked main-frame redirect to: ${targetHost}`);
+          return callback({ cancel: true });
+        }
+      }
+
       const reqUrl = details.url || '';
       let hostname = '';
       
@@ -469,6 +1008,13 @@ function setupAddonBlocking() {
         console.log(`[WebRequest] Sample: ${hostname} (blocklist size: ${blocklist.size})`);
       }
       
+      if (blocklist.size > 0) {
+        const topHost = getTopHostForContentsId(details.webContentsId);
+        if (isAllowlistedHost(hostname, topHost)) {
+          return callback({ cancel: false });
+        }
+      }
+
       if (blocklist.size > 0) {
         for (const blocked of blocklist) {
           if (!blocked) continue;
@@ -510,6 +1056,11 @@ function setupAddonBlocking() {
         } catch (e) {
           const match = location.match(/^https?:\/\/([^/?#]+)/);
           hostname = match ? match[1] : location;
+        }
+
+        const topHost = getTopHostForContentsId(details.webContentsId);
+        if (isAllowlistedHost(hostname, topHost)) {
+          return;
         }
         
         if (blocklist.size > 0) {
@@ -575,10 +1126,10 @@ function setupAddonBlocking() {
 // IPC Handlers for Card Windows
 // ========================
 
-// Enhanced create-card handler with beautiful animations
-ipcMain.handle('create-card', async (event, cardId, url, position) => {
+async function createCardWindow(cardId, url, position) {
+  position = position || {};
   try {
-    let targetUrl = url.trim();
+    let targetUrl = String(url || '').trim();
     if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
       if (targetUrl.includes('.') && !targetUrl.includes(' ')) {
         targetUrl = 'https://' + targetUrl;
@@ -609,7 +1160,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position) => {
 
     // Create floating card window with initial hidden state for animation
     const cardWindow = new BrowserWindow({
-      width: 650,
+      width: 900,
       height: 500,
       x: finalX,
       y: finalY,
@@ -627,7 +1178,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position) => {
         preload: path.join(__dirname, 'preload-card.js'),
         // PERFORMANCE OPTIMIZATIONS:
         enableWebSQL: false,
-        spellcheck: false,
+        spellcheck: true,
         backgroundThrottling: false,
         enablePreferredSizeMode: true,
         partition: 'persist:cards',
@@ -637,14 +1188,39 @@ ipcMain.handle('create-card', async (event, cardId, url, position) => {
     // Store reference before loading
     cardWindows.set(cardId, cardWindow);
 
-    // Load the card HTML
+    // Load the card HTML (fire-and-forget to keep UI snappy)
     const encodedUrl = Buffer.from(targetUrl).toString('base64');
-    const cardHtmlUrl = `file://${path.join(__dirname, 'src', 'card.html').replace(/\\/g, '/')}?cardId=${cardId}&url=${encodedUrl}`;
-    await cardWindow.webContents.loadURL(cardHtmlUrl);
+    const theme = (cardWindows.size % 2 === 0) ? 'alt' : 'primary';
+    const cardHtmlUrl = `file://${path.join(__dirname, 'src', 'card.html').replace(/\\/g, '/')}?cardId=${cardId}&url=${encodedUrl}&theme=${theme}`;
+    cardWindow.webContents.loadURL(cardHtmlUrl).catch((e) => {
+      console.error('Card loadURL failed:', e && e.message ? e.message : e);
+    });
+
+    // Force any window.open/target=_blank to open as a card window
+    try {
+      cardWindow.webContents.setWindowOpenHandler(({ url }) => {
+        if (isExternalAppUrl(url)) {
+          promptOpenExternalApp(cardWindow.webContents, url);
+          return { action: 'deny' };
+        }
+        openUrlInCard(url);
+        return { action: 'deny' };
+      });
+    } catch (e) {}
 
     // ULTRA-FAST animation (120ms instead of 180ms)
     cardWindow.setOpacity(0.3); // Start slightly visible to reduce flash
     cardWindow.show();
+    cardWindow.focus();
+    cardWindow.moveTop();
+    try {
+      cardWindow.setAlwaysOnTop(true, 'floating');
+      setTimeout(() => {
+        if (cardWindow && !cardWindow.isDestroyed()) {
+          cardWindow.setAlwaysOnTop(false);
+        }
+      }, 500);
+    } catch (e) {}
 
     const startTime = Date.now();
     const animationDuration = 120; // Super fast and snappy
@@ -665,9 +1241,9 @@ ipcMain.handle('create-card', async (event, cardId, url, position) => {
       const scale = 0.92 + (0.08 * easeProgress);
       
       // Calculate offset for scale effect
-      const scaledWidth = 650 * scale;
+      const scaledWidth = 900 * scale;
       const scaledHeight = 500 * scale;
-      const offsetX = (650 - scaledWidth) / 2;
+      const offsetX = (800 - scaledWidth) / 2;
       const offsetY = (500 - scaledHeight) / 2;
       
       // Apply transformations in single operation
@@ -692,7 +1268,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position) => {
           cardWindow.setBounds({
             x: finalX,
             y: finalY,
-            width: 650,
+          width: 900,
             height: 500
           });
         } catch (e) {
@@ -716,6 +1292,11 @@ ipcMain.handle('create-card', async (event, cardId, url, position) => {
         const currentUrl = cardWindow.webContents.getURL();
         mainWindow.webContents.send('card-loading-finish', cardId, pageTitle, currentUrl);
       }
+      try {
+        if (cardWindow && !cardWindow.isDestroyed()) {
+          cardWindow.webContents.send('visualizer-setting', visualizerEnabled);
+        }
+      } catch (e) {}
     });
 
     cardWindow.webContents.on('did-navigate', (event, url) => {
@@ -743,6 +1324,11 @@ ipcMain.handle('create-card', async (event, cardId, url, position) => {
     console.error('Error creating card:', error);
     return { success: false, error: error.message };
   }
+}
+
+// Enhanced create-card handler with beautiful animations
+ipcMain.handle('create-card', async (event, cardId, url, position) => {
+  return createCardWindow(cardId, url, position);
 });
 
 // Update card window position (for dragging)
@@ -1022,6 +1608,64 @@ ipcMain.handle('update-addons', async (event, addonsArray) => {
   }
 });
 
+ipcMain.handle('set-visualizer-enabled', async (event, enabled) => {
+  visualizerEnabled = !!enabled;
+  try {
+    for (const [, win] of cardWindows) {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('visualizer-setting', visualizerEnabled);
+      }
+    }
+  } catch (e) {}
+  return { success: true };
+});
+
+ipcMain.handle('get-visualizer-enabled', async () => {
+  return visualizerEnabled;
+});
+
+ipcMain.handle('clear-user-data', async () => {
+  try {
+    const defaultSession = session.defaultSession;
+    if (defaultSession) {
+      await defaultSession.clearCache();
+      await defaultSession.clearStorageData({
+        storages: ['cookies', 'localstorage', 'indexdb', 'serviceworkers', 'cache', 'cachestorage', 'filesystem'],
+      });
+    }
+    const cardSession = session.fromPartition('persist:cards');
+    if (cardSession) {
+      await cardSession.clearCache();
+      await cardSession.clearStorageData({
+        storages: ['cookies', 'localstorage', 'indexdb', 'serviceworkers', 'cache', 'cachestorage', 'filesystem'],
+      });
+    }
+    return true;
+  } catch (e) {
+    console.warn('Failed to clear user data:', e.message);
+    return false;
+  }
+});
+
+// Track user gestures from webviews to allow legitimate navigations
+ipcMain.on('webview-user-gesture', (event, payload) => {
+  try {
+    const id = payload && payload.id;
+    if (typeof id === 'number') {
+      lastGestureByContentsId.set(id, Date.now());
+    }
+  } catch (e) {}
+});
+
+ipcMain.on('webview-user-scroll', (event, payload) => {
+  try {
+    const id = payload && payload.id;
+    if (typeof id === 'number') {
+      lastScrollByContentsId.set(id, Date.now());
+    }
+  } catch (e) {}
+});
+
 // Add manual default browser setting method
 function openDefaultAppsSettings() {
   if (process.platform === 'win32') {
@@ -1044,5 +1688,26 @@ ipcMain.handle('set-as-default-browser-ui', async () => {
   } catch (error) {
     console.error('Error setting as default:', error);
     return { success: false, error: error.message };
+  }
+});
+
+// Check if app is already the default browser
+ipcMain.handle('is-default-browser-ui', async () => {
+  try {
+    // In dev mode Electron needs the same execPath/args used during registration,
+    // otherwise isDefaultProtocolClient() often reports false after restart.
+    const isDefaultFor = (scheme) => {
+      if (!app.isPackaged && process.defaultApp && process.argv.length >= 2) {
+        return app.isDefaultProtocolClient(scheme, process.execPath, [path.resolve(process.argv[1])]);
+      }
+      return app.isDefaultProtocolClient(scheme);
+    };
+
+    const isHttp = isDefaultFor('http');
+    const isHttps = isDefaultFor('https');
+    return isHttp && isHttps;
+  } catch (error) {
+    console.error('Error checking default browser status:', error);
+    return false;
   }
 });
