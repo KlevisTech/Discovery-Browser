@@ -1,9 +1,17 @@
 // preload.js - For main control panel window
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('electronAPI', {
+// Simple IPC invoke wrapper that inline scripts can use
+window.ipcInvoke = function(channel, ...args) {
+  return ipcRenderer.invoke(channel, ...args);
+};
+
+// Build the complete electronAPI object
+const electronAPI = {
+  // ========================
   // Card management
-  createCard: (cardId, url, position) => ipcRenderer.invoke('create-card', cardId, url, position),
+  // ========================
+  createCard: (cardId, url, position, themeKey) => ipcRenderer.invoke('create-card', cardId, url, position, themeKey),
   closeCard: (cardId) => ipcRenderer.invoke('close-card', cardId),
   
   // Card navigation
@@ -15,31 +23,38 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onCardClosed: (callback) => {
     ipcRenderer.on('card-closed', (event, cardId) => callback(cardId));
   },
+  
   onCardTitleUpdated: (callback) => {
     ipcRenderer.on('card-title-updated', (event, cardId, title) => callback(cardId, title));
   },
+  
   onCardUrlUpdated: (callback) => {
     ipcRenderer.on('card-url-updated', (event, cardId, url) => callback(cardId, url));
   },
+  
   onCardLoadingStart: (callback) => {
     ipcRenderer.on('card-loading-start', (event, cardId) => callback(cardId));
   },
+  
   onCardLoadingFinish: (callback) => {
     ipcRenderer.on('card-loading-finish', (event, cardId, title, url) => callback(cardId, title, url));
   },
   
   // External URL handler - for when links are opened from outside the app
   onOpenUrl: (callback) => {
-    console.log('[PRELOAD] onOpenUrl listener registered');
     ipcRenderer.on('open-external-url', (event, url) => {
-      console.log('=== [PRELOAD DEBUG] ===');
-      console.log('[PRELOAD] Received open-external-url IPC');
-      console.log('[PRELOAD] URL:', url);
-      console.log('[PRELOAD] Calling callback...');
       callback(url);
-      console.log('[PRELOAD] Callback completed');
-      console.log('=== [END PRELOAD DEBUG] ===\n');
     });
+  },
+
+  onAuthOpenedExternally: (callback) => {
+    ipcRenderer.on('auth-opened-externally', (event, payload) => callback(payload));
+  },
+  confirmAuthOpenExternal: (requestId) => {
+    return ipcRenderer.invoke('confirm-auth-open-external', requestId);
+  },
+  cancelAuthOpenExternal: (requestId) => {
+    return ipcRenderer.invoke('cancel-auth-open-external', requestId);
   },
   
   // Bookmark management
@@ -67,19 +82,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('save-bookmark-to-folder', (event, bookmarkData, folderId) => callback(bookmarkData, folderId));
   },
 
-  // Sync folders to main process so card windows can read them directly
   syncBookmarkFolders: (folders) => {
     ipcRenderer.invoke('sync-bookmark-folders', folders);
   },
 
-  // Password management
-  onSavePassword: (callback) => {
-    ipcRenderer.on('save-password', (event, passwordData) => callback(passwordData));
-  },
-
-  syncPasswords: (passwords) => {
-    ipcRenderer.invoke('sync-passwords', passwords);
-  },
+  // Password manager is disabled until secure OS-backed storage is implemented.
+  onSavePassword: () => {},
+  syncPasswords: async () => ({ success: false, disabled: true }),
   
   // Addon management
   updateAddons: (addons) => ipcRenderer.invoke('update-addons', addons),
@@ -105,10 +114,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('notification-received', (event, payload) => callback(payload));
   },
 
+  // Updates
+  getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
+  openUpdateDownload: () => ipcRenderer.invoke('open-update-download'),
+
   // Visualizer setting
   setVisualizerEnabled: (enabled) => ipcRenderer.invoke('set-visualizer-enabled', enabled),
   getVisualizerEnabled: () => ipcRenderer.invoke('get-visualizer-enabled'),
 
   // Clear all user data
   clearUserData: () => ipcRenderer.invoke('clear-user-data'),
-});
+
+  
+};
+// Expose to renderer process
+contextBridge.exposeInMainWorld('electronAPI', electronAPI);

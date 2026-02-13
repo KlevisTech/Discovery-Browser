@@ -1,21 +1,23 @@
 {
   "name": "discovery-browser",
   "version": "1.0.0",
-  "description": "A beautiful, unique card-style web browser built with Electron",
-  "main": "main.js",
+  "description": "A beautiful, unique card-style web browser built with Electron - now with Google OAuth support!",
   "author": "Discovery Team",
   "license": "MIT",
+  "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "dev": "electron .",
     "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:win:portable": "electron-builder --win portable",
-    "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux"
+    "build:win": "electron-builder --win --x64",
+    "build:mac": "electron-builder --mac --x64",
+    "build:linux": "electron-builder --linux --x64"
   },
-  "dependencies": {},
-  "devDependencies": {
+  "dependencies": {
     "electron": "^28.0.0",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
     "electron-builder": "^24.9.1"
   },
   "build": {
@@ -25,6 +27,7 @@
       "main.js",
       "preload.js",
       "preload-card.js",
+      "stealth-preload.js",
       "src/**/*",
       "assets/**/*",
       "package.json"

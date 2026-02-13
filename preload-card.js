@@ -30,8 +30,8 @@ contextBridge.exposeInMainWorld('cardAPI', {
     ipcRenderer.invoke('toggle-fullscreen', cardId, shouldBeFullscreen),
 
   // Minimize card
-  minimizeCard: (cardId) =>
-    ipcRenderer.invoke('minimize-card', cardId),
+  minimizeCard: (cardId, pageUrl, pageTitle, themeKey) =>
+    ipcRenderer.invoke('minimize-card', cardId, pageUrl, pageTitle, themeKey),
 
   // Bookmark management
   toggleBookmark: (bookmarkData) =>
@@ -46,13 +46,7 @@ contextBridge.exposeInMainWorld('cardAPI', {
   saveBookmarkToFolder: (bookmarkData, folderId) =>
     ipcRenderer.invoke('save-bookmark-to-folder', bookmarkData, folderId),
 
-  // Password management
-  savePassword: (passwordData) =>
-    ipcRenderer.invoke('save-password', passwordData),
-
-  onPasswordDetected: (callback) => {
-    ipcRenderer.on('password-detected', (event, data) => callback(data));
-  },
+  // Password manager is disabled until secure OS-backed storage is implemented.
 
   onVisualizerSetting: (callback) => {
     ipcRenderer.on('visualizer-setting', (event, enabled) => callback(enabled));
@@ -100,4 +94,8 @@ contextBridge.exposeInMainWorld('cardAPI', {
 // Receive requests from main to load a URL into this card's webview
 ipcRenderer.on('card-load-url', (event, url) => {
   window.dispatchEvent(new CustomEvent('card-load-url', { detail: url }));
+});
+
+ipcRenderer.on('card-restore-animate', () => {
+  window.dispatchEvent(new CustomEvent('card-restore-animate'));
 });

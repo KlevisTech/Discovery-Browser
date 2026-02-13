@@ -24,15 +24,37 @@
       background: transparent;
     }
 
-    /* Add initial animation state */
-    @keyframes slideIn {
-      from {
-        transform: scale(0.8) translateY(20px);
+    /* Spring open/close card motion */
+    @keyframes springPopIn {
+      0% {
+        transform: scale(0.28) translateY(34px);
         opacity: 0;
       }
-      to {
+      58% {
+        transform: scale(1.08) translateY(-6px);
+        opacity: 1;
+      }
+      78% {
+        transform: scale(0.96) translateY(2px);
+      }
+      100% {
         transform: scale(1) translateY(0);
         opacity: 1;
+      }
+    }
+
+    @keyframes springPopOut {
+      0% {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+      }
+      34% {
+        transform: scale(1.06) translateY(-4px);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(0.24) translateY(28px);
+        opacity: 0;
       }
     }
 
@@ -57,8 +79,12 @@
         0 0 0 1px rgba(255, 255, 255, 0.1) inset,
         0 50px 100px rgba(102, 126, 234, 0.3);
       overflow: hidden;
-      animation: slideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      animation: springPopIn 520ms cubic-bezier(0.19, 1.2, 0.32, 1) both;
       position: relative;
+      transform-origin: 50% 50%;
+      will-change: transform, opacity;
+      transform: translateZ(0);
+      backface-visibility: hidden;
     }
 
     /* Shimmer effect on card appearance */
@@ -80,6 +106,16 @@
       z-index: 1000;
     }
 
+    .card-window.is-minimizing {
+      animation: springPopOut 260ms cubic-bezier(0.4, 0.0, 1, 1) forwards;
+      pointer-events: none;
+    }
+
+    .card-window.is-restoring {
+      animation: springPopIn 460ms cubic-bezier(0.19, 1.2, 0.32, 1) both;
+      pointer-events: auto;
+    }
+
     .card-titlebar {
       height: 48px;
       background: linear-gradient(135deg, rgba(102, 126, 234, 0.4), rgba(240, 147, 251, 0.4));
@@ -89,7 +125,7 @@
       align-items: center;
       justify-content: space-between;
       padding: 0 12px;
-      cursor: grab;
+      cursor: default;
       user-select: none;
       -webkit-user-select: none;
       -webkit-app-region: drag;
@@ -98,13 +134,39 @@
       z-index: 10;
     }
 
+    .theme-sunset .card-titlebar,
     .theme-alt .card-titlebar {
       background: linear-gradient(135deg, rgba(255, 80, 150, 0.45), rgba(255, 70, 70, 0.45));
       border-bottom: 2px solid rgba(255, 255, 255, 0.22);
     }
 
+    .theme-ocean .card-titlebar {
+      background: linear-gradient(135deg, rgba(0, 198, 255, 0.42), rgba(0, 114, 255, 0.44));
+      border-bottom: 2px solid rgba(255, 255, 255, 0.22);
+    }
+
+    .theme-emerald .card-titlebar {
+      background: linear-gradient(135deg, rgba(17, 153, 142, 0.45), rgba(56, 239, 125, 0.42));
+      border-bottom: 2px solid rgba(255, 255, 255, 0.22);
+    }
+
+    .theme-amber .card-titlebar {
+      background: linear-gradient(135deg, rgba(255, 153, 102, 0.46), rgba(255, 94, 98, 0.42));
+      border-bottom: 2px solid rgba(255, 255, 255, 0.22);
+    }
+
+    .theme-midnight .card-titlebar {
+      background: linear-gradient(135deg, rgba(8, 8, 10, 0.78), rgba(34, 34, 40, 0.68));
+      border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .theme-cocoa .card-titlebar {
+      background: linear-gradient(135deg, rgba(110, 72, 44, 0.56), rgba(166, 123, 91, 0.52));
+      border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+    }
+
     .card-titlebar:active {
-      cursor: grabbing;
+      cursor: default;
     }
 
     .title-text {
@@ -322,6 +384,29 @@
       animation: contentFadeIn 0.6s ease 0.3s backwards;
     }
 
+    .security-load-notice {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      top: 12px;
+      z-index: 40;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 180, 120, 0.55);
+      background: linear-gradient(135deg, rgba(64, 24, 0, 0.92), rgba(38, 16, 0, 0.9));
+      color: rgba(255, 236, 214, 0.96);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.38);
+      font-size: 11px;
+      line-height: 1.45;
+      backdrop-filter: blur(4px);
+      display: none;
+      -webkit-app-region: no-drag;
+    }
+
+    .security-load-notice.active {
+      display: block;
+    }
+
     @keyframes contentFadeIn {
       from {
         opacity: 0;
@@ -434,6 +519,7 @@
       filter: drop-shadow(0 2px 6px rgba(102, 126, 234, 0.6));
     }
 
+    .theme-sunset .loading-wave,
     .theme-alt .loading-wave {
       background:
         radial-gradient(circle at 12% 50%, rgba(255, 120, 200, 0.85) 0%, rgba(255, 120, 200, 0.0) 55%) 0 0 / 120px 100%,
@@ -441,6 +527,51 @@
         radial-gradient(circle at 72% 50%, rgba(255, 170, 210, 0.85) 0%, rgba(255, 170, 210, 0.0) 55%) 0 0 / 160px 100%,
         linear-gradient(90deg, rgba(255,80,150,0.0), rgba(255,70,70,0.75), rgba(255,80,150,0.0)) 0 0 / 220px 100%;
       filter: drop-shadow(0 2px 6px rgba(255, 80, 150, 0.55));
+    }
+
+    .theme-ocean .loading-wave {
+      background:
+        radial-gradient(circle at 12% 50%, rgba(100, 230, 255, 0.86) 0%, rgba(100, 230, 255, 0.0) 55%) 0 0 / 120px 100%,
+        radial-gradient(circle at 45% 50%, rgba(80, 160, 255, 0.86) 0%, rgba(80, 160, 255, 0.0) 55%) 0 0 / 140px 100%,
+        radial-gradient(circle at 72% 50%, rgba(120, 210, 255, 0.86) 0%, rgba(120, 210, 255, 0.0) 55%) 0 0 / 160px 100%,
+        linear-gradient(90deg, rgba(0,198,255,0.0), rgba(0,114,255,0.78), rgba(0,198,255,0.0)) 0 0 / 220px 100%;
+      filter: drop-shadow(0 2px 6px rgba(0, 156, 255, 0.52));
+    }
+
+    .theme-emerald .loading-wave {
+      background:
+        radial-gradient(circle at 12% 50%, rgba(85, 250, 180, 0.84) 0%, rgba(85, 250, 180, 0.0) 55%) 0 0 / 120px 100%,
+        radial-gradient(circle at 45% 50%, rgba(40, 210, 170, 0.84) 0%, rgba(40, 210, 170, 0.0) 55%) 0 0 / 140px 100%,
+        radial-gradient(circle at 72% 50%, rgba(110, 255, 205, 0.84) 0%, rgba(110, 255, 205, 0.0) 55%) 0 0 / 160px 100%,
+        linear-gradient(90deg, rgba(17,153,142,0.0), rgba(56,239,125,0.78), rgba(17,153,142,0.0)) 0 0 / 220px 100%;
+      filter: drop-shadow(0 2px 6px rgba(56, 239, 125, 0.5));
+    }
+
+    .theme-amber .loading-wave {
+      background:
+        radial-gradient(circle at 12% 50%, rgba(255, 180, 110, 0.86) 0%, rgba(255, 180, 110, 0.0) 55%) 0 0 / 120px 100%,
+        radial-gradient(circle at 45% 50%, rgba(255, 125, 110, 0.86) 0%, rgba(255, 125, 110, 0.0) 55%) 0 0 / 140px 100%,
+        radial-gradient(circle at 72% 50%, rgba(255, 210, 150, 0.86) 0%, rgba(255, 210, 150, 0.0) 55%) 0 0 / 160px 100%,
+        linear-gradient(90deg, rgba(255,153,102,0.0), rgba(255,94,98,0.78), rgba(255,153,102,0.0)) 0 0 / 220px 100%;
+      filter: drop-shadow(0 2px 6px rgba(255, 130, 90, 0.5));
+    }
+
+    .theme-midnight .loading-wave {
+      background:
+        radial-gradient(circle at 12% 50%, rgba(160, 160, 170, 0.72) 0%, rgba(160, 160, 170, 0.0) 55%) 0 0 / 120px 100%,
+        radial-gradient(circle at 45% 50%, rgba(90, 90, 100, 0.78) 0%, rgba(90, 90, 100, 0.0) 55%) 0 0 / 140px 100%,
+        radial-gradient(circle at 72% 50%, rgba(130, 130, 140, 0.74) 0%, rgba(130, 130, 140, 0.0) 55%) 0 0 / 160px 100%,
+        linear-gradient(90deg, rgba(18,18,22,0.0), rgba(58,58,66,0.86), rgba(18,18,22,0.0)) 0 0 / 220px 100%;
+      filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.58));
+    }
+
+    .theme-cocoa .loading-wave {
+      background:
+        radial-gradient(circle at 12% 50%, rgba(196, 146, 106, 0.82) 0%, rgba(196, 146, 106, 0.0) 55%) 0 0 / 120px 100%,
+        radial-gradient(circle at 45% 50%, rgba(166, 109, 67, 0.84) 0%, rgba(166, 109, 67, 0.0) 55%) 0 0 / 140px 100%,
+        radial-gradient(circle at 72% 50%, rgba(230, 182, 136, 0.78) 0%, rgba(230, 182, 136, 0.0) 55%) 0 0 / 160px 100%,
+        linear-gradient(90deg, rgba(110,72,44,0.0), rgba(166,123,91,0.8), rgba(110,72,44,0.0)) 0 0 / 220px 100%;
+      filter: drop-shadow(0 2px 6px rgba(135, 86, 48, 0.52));
     }
 
     .loading-wave.active {
@@ -453,29 +584,49 @@
       100% { background-position: 240px 0, -280px 0, 320px 0, -220px 0; }
     }
 
-    .audio-visualizer {
+    .media-hover-control {
       position: absolute;
       left: 50%;
       top: 8px;
       transform: translateX(-50%);
-      height: 28px;
       display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      z-index: 20;
+      -webkit-app-region: no-drag;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.28s ease, transform 0.28s ease;
+    }
+
+    .media-hover-control.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .audio-visualizer {
+      height: 28px;
+      display: inline-flex;
       align-items: flex-end;
       gap: 3px;
       padding: 4px 8px;
       border-radius: 999px;
-      background: rgba(0, 0, 0, 0.75);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s ease, transform 0.2s ease;
+      background: rgba(0, 0, 0, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
+      cursor: pointer;
+      transition: transform 0.22s ease, background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
       -webkit-app-region: no-drag;
     }
 
-    .audio-visualizer.active {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
+    .audio-visualizer:hover,
+    .media-hover-control.panel-open .audio-visualizer {
+      transform: translateY(-1px);
+      background: rgba(10, 20, 30, 0.88);
+      border-color: rgba(124, 247, 255, 0.5);
+      box-shadow: 0 10px 22px rgba(10, 20, 30, 0.55);
     }
 
     .audio-visualizer span {
@@ -486,10 +637,74 @@
       animation: audioPulse 1.4s ease-in-out infinite;
       transform-origin: bottom;
       will-change: transform;
+      animation-play-state: paused;
+    }
+
+    .audio-visualizer.playing span {
+      animation-play-state: running;
     }
 
     .audio-visualizer span:nth-child(2) { animation-delay: -0.35s; }
     .audio-visualizer span:nth-child(3) { animation-delay: -0.7s; }
+
+    .media-hover-panel {
+      min-width: 220px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background:
+        linear-gradient(135deg, rgba(8, 14, 28, 0.93), rgba(16, 26, 42, 0.93));
+      border: 1px solid rgba(124, 247, 255, 0.22);
+      box-shadow: 0 18px 32px rgba(0, 0, 0, 0.46);
+      backdrop-filter: blur(8px);
+      opacity: 0;
+      transform: translateY(-5px) scale(0.98);
+      pointer-events: none;
+      transition: opacity 0.24s ease, transform 0.24s ease;
+    }
+
+    .media-hover-control.panel-open .media-hover-panel {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .media-control-btn {
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(245, 252, 255, 0.95);
+      border-radius: 8px;
+      font-size: 11px;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      padding: 6px 9px;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease;
+      -webkit-app-region: no-drag;
+    }
+
+    .media-control-btn:hover {
+      background: rgba(124, 247, 255, 0.2);
+      border-color: rgba(124, 247, 255, 0.55);
+    }
+
+    .media-volume-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: rgba(225, 242, 255, 0.86);
+      font-size: 11px;
+      letter-spacing: 0.2px;
+      text-transform: uppercase;
+    }
+
+    .media-volume-slider {
+      width: 92px;
+      accent-color: #7cf7ff;
+      cursor: pointer;
+    }
 
     @keyframes audioPulse {
       0%, 100% { transform: scaleY(0.4); opacity: 0.55; }
@@ -648,10 +863,20 @@
         </button>
       </div>
       <span class="title-text">New Tab</span>
-      <div class="audio-visualizer" id="audio-visualizer" aria-hidden="true">
-        <span></span>
-        <span></span>
-        <span></span>
+      <div class="media-hover-control" id="media-hover-control" aria-hidden="true">
+        <button class="audio-visualizer" id="audio-visualizer" type="button" aria-label="Media controls">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <div class="media-hover-panel" id="media-hover-panel" role="group" aria-label="Media controls">
+          <button class="media-control-btn" id="media-toggle-btn" type="button">Play</button>
+          <label class="media-volume-group" for="media-volume-slider">
+            Vol
+            <input class="media-volume-slider" id="media-volume-slider" type="range" min="0" max="100" value="100" />
+          </label>
+          <button class="media-control-btn" id="media-mute-btn" type="button">Mute</button>
+        </div>
       </div>
       <div class="card-controls">
         <div class="zoom-control" id="zoom-control">
@@ -677,7 +902,6 @@
             preload=""
             disablewebsecurity="false"
             enableremotemodule="false"
-            useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             enableblinkfeatures="LazyLoad,LazyImageLoading"
             disableblinkfeatures="AutoplayIgnoresWebAudio"
           ></webview>
@@ -696,7 +920,6 @@
             preload=""
             disablewebsecurity="false"
             enableremotemodule="false"
-            useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             enableblinkfeatures="LazyLoad,LazyImageLoading"
             disableblinkfeatures="AutoplayIgnoresWebAudio"
           ></webview>
@@ -711,7 +934,7 @@
     let cardId = params.get('cardId');
     cardId = parseInt(cardId, 10);
     const encodedUrl = params.get('url');
-    const theme = params.get('theme') || 'primary';
+    const theme = (params.get('theme') || 'primary').toLowerCase();
     let initialUrl = null;
     if (encodedUrl) {
       try {
@@ -724,10 +947,11 @@
     // Apply theme
     const cardWindowEl = document.querySelector('.card-window');
     if (cardWindowEl) {
-      if (theme === 'alt') {
-        cardWindowEl.classList.add('theme-alt');
-      } else {
-        cardWindowEl.classList.remove('theme-alt');
+      const allThemeClasses = ['theme-alt', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa'];
+      allThemeClasses.forEach((cls) => cardWindowEl.classList.remove(cls));
+      const normalizedTheme = theme === 'alt' ? 'sunset' : theme;
+      if (normalizedTheme !== 'primary') {
+        cardWindowEl.classList.add(`theme-${normalizedTheme}`);
       }
     }
 
@@ -753,9 +977,41 @@
     const splitGoBtn = document.getElementById('split-go-btn');
     const splitWebview = document.getElementById('split-webview');
     const titlebar = document.querySelector('.card-titlebar');
+    const cardContent = document.querySelector('.card-content');
     const loadingWave = document.getElementById('loading-wave');
+    const mediaHoverControl = document.getElementById('media-hover-control');
     const audioVisualizer = document.getElementById('audio-visualizer');
+    const mediaToggleBtn = document.getElementById('media-toggle-btn');
+    const mediaVolumeSlider = document.getElementById('media-volume-slider');
+    const mediaMuteBtn = document.getElementById('media-mute-btn');
     let visualizerEnabled = true;
+    let lastActiveMediaWebview = null;
+    let mediaSyncTimer = null;
+    let mediaPanelOpen = false;
+    let securityLoadNoticeEl = null;
+    let isMinimizingCard = false;
+    function waitForCardAnimationEnd(el, expectedName, fallbackMs) {
+      return new Promise((resolve) => {
+        if (!el) {
+          resolve();
+          return;
+        }
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          el.removeEventListener('animationend', onEnd);
+          resolve();
+        };
+        const onEnd = (evt) => {
+          if (!evt || evt.target !== el) return;
+          if (expectedName && evt.animationName !== expectedName) return;
+          finish();
+        };
+        el.addEventListener('animationend', onEnd, { once: false });
+        setTimeout(finish, fallbackMs);
+      });
+    }
     const cardDownloadRingBtn = document.getElementById('card-download-ring');
     const cardDownloadRingFg = cardDownloadRingBtn ? cardDownloadRingBtn.querySelector('.download-ring__fg') : null;
 
@@ -791,20 +1047,267 @@
       }
     }
 
+    function ensureSecurityLoadNotice() {
+      if (securityLoadNoticeEl) return securityLoadNoticeEl;
+      if (!cardContent) return null;
+      const el = document.createElement('div');
+      el.className = 'security-load-notice';
+      el.id = 'security-load-notice';
+      el.setAttribute('role', 'alert');
+      cardContent.appendChild(el);
+      securityLoadNoticeEl = el;
+      return el;
+    }
+
+    function hideSecurityLoadNotice() {
+      const el = ensureSecurityLoadNotice();
+      if (!el) return;
+      el.classList.remove('active');
+      el.textContent = '';
+    }
+
+    function showSecurityLoadNotice(message) {
+      const el = ensureSecurityLoadNotice();
+      if (!el) return;
+      el.textContent = message;
+      el.classList.add('active');
+    }
+
+    function isTlsOrCertificateFailure(errorCode, errorDescription) {
+      const code = Number(errorCode);
+      const desc = String(errorDescription || '').toUpperCase();
+      if (desc.includes('CERT') || desc.includes('SSL') || desc.includes('TLS')) return true;
+      const certCodes = new Set([-200, -201, -202, -203, -204, -205, -206, -207, -208, -210, -213, -501]);
+      return certCodes.has(code);
+    }
+
+    function getMediaTargets() {
+      const targets = [];
+      if (webview) targets.push(webview);
+      if (isSplitView && splitWebview) targets.push(splitWebview);
+      return targets;
+    }
+
+    async function runMediaScript(targetWebview, script) {
+      if (!targetWebview || typeof targetWebview.executeJavaScript !== 'function') return null;
+      try {
+        return await targetWebview.executeJavaScript(script, true);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function readMediaState(targetWebview) {
+      const script = `
+        (() => {
+          const media = Array.from(document.querySelectorAll('video, audio'));
+          if (!media.length) return { hasMedia: false, isPlaying: false, volume: 1, muted: false };
+          const active = media.find((m) => !m.paused && !m.ended) || media.find((m) => (m.currentSrc || m.src)) || media[0];
+          if (!active) return { hasMedia: false, isPlaying: false, volume: 1, muted: false };
+          const rawVolume = Number(active.volume);
+          const volume = Number.isFinite(rawVolume) ? Math.max(0, Math.min(1, rawVolume)) : 1;
+          return {
+            hasMedia: true,
+            isPlaying: !!(!active.paused && !active.ended),
+            volume,
+            muted: !!active.muted
+          };
+        })();
+      `;
+      return await runMediaScript(targetWebview, script);
+    }
+
+    function renderMediaControl(state) {
+      if (!mediaHoverControl || !audioVisualizer) return;
+
+      const isPlaying = !!(state && state.isPlaying);
+      const muted = !!(state && state.muted);
+      const sliderValue = Math.round(((state && Number.isFinite(state.volume) ? state.volume : 1) * 100));
+      const shouldShow = visualizerEnabled && isPlaying;
+
+      mediaHoverControl.classList.toggle('active', shouldShow);
+      mediaHoverControl.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+      audioVisualizer.classList.toggle('playing', shouldShow && isPlaying);
+      if (!shouldShow) {
+        setMediaPanelOpen(false);
+      }
+
+      if (mediaToggleBtn) {
+        mediaToggleBtn.textContent = isPlaying ? 'Pause' : 'Play';
+        mediaToggleBtn.disabled = !shouldShow;
+      }
+      if (mediaMuteBtn) {
+        mediaMuteBtn.textContent = muted ? 'Unmute' : 'Mute';
+        mediaMuteBtn.disabled = !shouldShow;
+      }
+      if (mediaVolumeSlider) {
+        mediaVolumeSlider.value = String(Math.max(0, Math.min(100, sliderValue)));
+        mediaVolumeSlider.disabled = !shouldShow;
+      }
+    }
+
+    function setMediaPanelOpen(isOpen) {
+      if (!mediaHoverControl) return;
+      const canOpen = mediaHoverControl.classList.contains('active');
+      mediaPanelOpen = !!isOpen && canOpen;
+      mediaHoverControl.classList.toggle('panel-open', mediaPanelOpen);
+    }
+
+    async function getBestMediaTarget() {
+      const targets = getMediaTargets();
+      if (lastActiveMediaWebview && targets.includes(lastActiveMediaWebview)) {
+        const state = await readMediaState(lastActiveMediaWebview);
+        if (state && state.hasMedia) {
+          return { target: lastActiveMediaWebview, state };
+        }
+      }
+
+      let fallback = null;
+      for (const target of targets) {
+        const state = await readMediaState(target);
+        if (!state || !state.hasMedia) continue;
+        if (state.isPlaying) {
+          lastActiveMediaWebview = target;
+          return { target, state };
+        }
+        if (!fallback) fallback = { target, state };
+      }
+      if (fallback) {
+        lastActiveMediaWebview = fallback.target;
+        return fallback;
+      }
+      return { target: null, state: { hasMedia: false, isPlaying: false, volume: 1, muted: false } };
+    }
+
+    async function syncMediaControlState() {
+      const result = await getBestMediaTarget();
+      renderMediaControl(result.state);
+      if (!result || !result.state || !result.state.isPlaying) {
+        stopMediaSyncLoop();
+      }
+    }
+
     function setAudioVisualizer(isActive) {
-      if (!audioVisualizer) return;
       if (!visualizerEnabled) {
-        audioVisualizer.classList.remove('active');
-        audioVisualizer.setAttribute('aria-hidden', 'true');
+        renderMediaControl({ hasMedia: false, isPlaying: false, volume: 1, muted: false });
         return;
       }
       if (isActive) {
-        audioVisualizer.classList.add('active');
-        audioVisualizer.setAttribute('aria-hidden', 'false');
+        syncMediaControlState();
       } else {
-        audioVisualizer.classList.remove('active');
-        audioVisualizer.setAttribute('aria-hidden', 'true');
+        renderMediaControl({ hasMedia: false, isPlaying: false, volume: 1, muted: false });
       }
+    }
+
+    function startMediaSyncLoop() {
+      if (mediaSyncTimer) return;
+      mediaSyncTimer = setInterval(() => {
+        syncMediaControlState();
+      }, 1200);
+    }
+
+    function stopMediaSyncLoop() {
+      if (!mediaSyncTimer) return;
+      clearInterval(mediaSyncTimer);
+      mediaSyncTimer = null;
+    }
+
+    async function controlMedia(action, value) {
+      const result = await getBestMediaTarget();
+      if (!result || !result.target) return;
+
+      const safeVolume = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
+      let script = '';
+      if (action === 'toggle') {
+        script = `
+          (() => {
+            const media = Array.from(document.querySelectorAll('video, audio'));
+            if (!media.length) return null;
+            const active = media.find((m) => !m.paused && !m.ended) || media.find((m) => (m.currentSrc || m.src)) || media[0];
+            if (!active) return null;
+            if (!active.paused && !active.ended) {
+              active.pause();
+            } else {
+              const p = active.play();
+              if (p && typeof p.catch === 'function') p.catch(() => {});
+            }
+            return true;
+          })();
+        `;
+      } else if (action === 'volume') {
+        script = `
+          (() => {
+            const media = Array.from(document.querySelectorAll('video, audio'));
+            if (!media.length) return null;
+            const active = media.find((m) => !m.paused && !m.ended) || media.find((m) => (m.currentSrc || m.src)) || media[0];
+            if (!active) return null;
+            active.volume = ${safeVolume};
+            if (active.volume > 0 && active.muted) active.muted = false;
+            return true;
+          })();
+        `;
+      } else if (action === 'mute') {
+        script = `
+          (() => {
+            const media = Array.from(document.querySelectorAll('video, audio'));
+            if (!media.length) return null;
+            const active = media.find((m) => !m.paused && !m.ended) || media.find((m) => (m.currentSrc || m.src)) || media[0];
+            if (!active) return null;
+            active.muted = !active.muted;
+            return true;
+          })();
+        `;
+      }
+
+      if (!script) return;
+      await runMediaScript(result.target, script);
+      setTimeout(() => {
+        syncMediaControlState();
+      }, 80);
+    }
+
+    if (audioVisualizer) {
+      audioVisualizer.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!mediaHoverControl || !mediaHoverControl.classList.contains('active')) return;
+        const nextOpen = !mediaPanelOpen;
+        setMediaPanelOpen(nextOpen);
+        if (nextOpen) {
+          syncMediaControlState();
+        }
+      });
+    }
+
+    document.addEventListener('pointerdown', (event) => {
+      if (!mediaPanelOpen || !mediaHoverControl) return;
+      if (mediaHoverControl.contains(event.target)) return;
+      setMediaPanelOpen(false);
+    });
+
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && mediaPanelOpen) {
+        setMediaPanelOpen(false);
+      }
+    });
+
+    if (mediaToggleBtn) {
+      mediaToggleBtn.addEventListener('click', () => {
+        controlMedia('toggle');
+      });
+    }
+
+    if (mediaVolumeSlider) {
+      mediaVolumeSlider.addEventListener('input', () => {
+        const value = Number(mediaVolumeSlider.value);
+        controlMedia('volume', value / 100);
+      });
+    }
+
+    if (mediaMuteBtn) {
+      mediaMuteBtn.addEventListener('click', () => {
+        controlMedia('mute');
+      });
     }
 
     function updateCardDownloadRing() {
@@ -1088,6 +1591,7 @@
     // Loading wave for render progress
     webview.addEventListener('did-start-navigation', (e) => {
       if (e && e.isMainFrame) {
+        hideSecurityLoadNotice();
         resetZoom(webview);
         setLoadingWave(true);
       }
@@ -1095,6 +1599,7 @@
 
     // Hide shortly after first paint/DOM is ready instead of waiting for full load
     webview.addEventListener('dom-ready', () => {
+      hideSecurityLoadNotice();
       resetZoom(webview);
       if (loadingWaveVisible) {
         setTimeout(() => setLoadingWave(false), 220);
@@ -1107,27 +1612,64 @@
       }
     });
 
-    webview.addEventListener('did-fail-load', () => {
+    webview.addEventListener('did-fail-load', (e) => {
       if (loadingWaveVisible) {
         setLoadingWave(false);
       }
+      if (e && e.isMainFrame && isTlsOrCertificateFailure(e.errorCode, e.errorDescription)) {
+        showSecurityLoadNotice('Secure connection blocked: this site presented an invalid TLS certificate. Check your device date/time, network, or try again later.');
+      }
     });
 
-    // Audio visualizer for any playing media in the webview
+    // Media visualizer and hover controls for active media in either webview.
     webview.addEventListener('media-started-playing', () => {
-      setAudioVisualizer(true);
+      lastActiveMediaWebview = webview;
+      startMediaSyncLoop();
+      syncMediaControlState();
     });
 
     webview.addEventListener('media-paused', () => {
-      setAudioVisualizer(false);
+      syncMediaControlState();
     });
+
+    if (splitWebview) {
+      splitWebview.addEventListener('did-start-navigation', (e) => {
+        if (e && e.isMainFrame) {
+          hideSecurityLoadNotice();
+        }
+      });
+
+      splitWebview.addEventListener('dom-ready', () => {
+        hideSecurityLoadNotice();
+      });
+
+      splitWebview.addEventListener('did-fail-load', (e) => {
+        if (e && e.isMainFrame && isTlsOrCertificateFailure(e.errorCode, e.errorDescription)) {
+          showSecurityLoadNotice('Secure connection blocked in split view: invalid TLS certificate detected.');
+        }
+      });
+
+      splitWebview.addEventListener('media-started-playing', () => {
+        lastActiveMediaWebview = splitWebview;
+        startMediaSyncLoop();
+        syncMediaControlState();
+      });
+
+      splitWebview.addEventListener('media-paused', () => {
+        syncMediaControlState();
+      });
+    }
 
     if (window.cardAPI && window.cardAPI.onVisualizerSetting) {
       window.cardAPI.onVisualizerSetting((enabled) => {
         visualizerEnabled = !!enabled;
         if (!visualizerEnabled) {
+          stopMediaSyncLoop();
           setAudioVisualizer(false);
+          return;
         }
+        startMediaSyncLoop();
+        syncMediaControlState();
       });
     }
 
@@ -1135,8 +1677,12 @@
       window.cardAPI.getVisualizerSetting().then((enabled) => {
         visualizerEnabled = !!enabled;
         if (!visualizerEnabled) {
+          stopMediaSyncLoop();
           setAudioVisualizer(false);
+          return;
         }
+        startMediaSyncLoop();
+        syncMediaControlState();
       }).catch(() => {});
     }
 
@@ -1182,13 +1728,6 @@
         }
       }
 
-      if (e.channel === 'password-detected') {
-        const data = (e.args && e.args[0]) ? e.args[0] : null;
-        if (data && data.password) {
-          showPasswordPrompt(data.username || '', data.password, data.site || currentPageUrl);
-        }
-      }
-
       if (e.channel === 'user-gesture') {
         try {
           if (window.cardAPI && window.cardAPI.sendToMain && webview && webview.getWebContentsId) {
@@ -1216,13 +1755,6 @@
           const payload = (e.args && e.args[0]) ? e.args[0] : null;
           if (payload && window.cardAPI && window.cardAPI.sendNotification) {
             window.cardAPI.sendNotification(payload);
-          }
-        }
-
-        if (e.channel === 'password-detected') {
-          const data = (e.args && e.args[0]) ? e.args[0] : null;
-          if (data && data.password) {
-            showPasswordPrompt(data.username || '', data.password, data.site || currentPageUrl);
           }
         }
 
@@ -1446,10 +1978,40 @@
     // Minimize button handler
     minimizeBtn.addEventListener('click', async () => {
       try {
-        await window.cardAPI.minimizeCard(cardId);
+        if (isMinimizingCard) return;
+        isMinimizingCard = true;
+        if (cardWindowEl) {
+          cardWindowEl.classList.remove('is-minimizing');
+          cardWindowEl.classList.remove('is-restoring');
+          // Restart animation if user rapidly clicks.
+          void cardWindowEl.offsetWidth;
+          cardWindowEl.classList.add('is-minimizing');
+        }
+        const currentUrlForBubble = (() => {
+          try {
+            if (webview && typeof webview.getURL === 'function') return webview.getURL();
+          } catch (e) {}
+          return urlInput && urlInput.value ? urlInput.value : '';
+        })();
+        const titleForBubble = currentPageTitle || (titleElement ? titleElement.textContent : '') || '';
+        await waitForCardAnimationEnd(cardWindowEl, 'springPopOut', 360);
+        await window.cardAPI.minimizeCard(cardId, currentUrlForBubble, titleForBubble, theme);
       } catch (err) {
         console.error('Error minimizing card:', err);
+        if (cardWindowEl) cardWindowEl.classList.remove('is-minimizing');
+        isMinimizingCard = false;
       }
+    });
+
+    window.addEventListener('card-restore-animate', () => {
+      try {
+        isMinimizingCard = false;
+        if (!cardWindowEl) return;
+        cardWindowEl.classList.remove('is-minimizing');
+        cardWindowEl.classList.remove('is-restoring');
+        void cardWindowEl.offsetWidth;
+        cardWindowEl.classList.add('is-restoring');
+      } catch (e) {}
     });
 
     // Zoom buttons
@@ -1620,76 +2182,7 @@
       }
     });
 
-    // --- Password Manager: listen for credentials detected by main process ---
-    if (window.cardAPI && window.cardAPI.onPasswordDetected) {
-      window.cardAPI.onPasswordDetected(function(data) {
-        if (data && data.password) {
-          showPasswordPrompt(data.username || '', data.password, data.site || currentPageUrl);
-        }
-      });
-    }
-
-    function showPasswordPrompt(username, password, site) {
-      // Don't stack duplicates
-      const existing = document.getElementById('pwd-prompt');
-      if (existing) {
-        existing.remove();
-      }
-
-      const promptSite = site || currentPageUrl;
-
-      const prompt = document.createElement('div');
-      prompt.id = 'pwd-prompt';
-      prompt.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; z-index: 8888; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-bottom: 1px solid rgba(255,255,255,0.12); padding: 9px 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 3px 12px rgba(0,0,0,0.4);';
-
-      let hostname = promptSite;
-      try { hostname = new URL(promptSite).hostname; } catch(e) {}
-
-      prompt.innerHTML = `
-        <span style="font-size: 18px; flex-shrink: 0;">🔐</span>
-        <div style="flex: 1; min-width: 0;">
-          <div style="color: white; font-size: 11px; font-weight: 600;">Save password for <span style="color: #7edbff;">${hostname}</span>?</div>
-          <div style="color: rgba(255,255,255,0.45); font-size: 9.5px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${username || '(no username)'} &nbsp;•&nbsp; ••••••••</div>
-        </div>
-        <button id="pwd-save-btn" style="background: linear-gradient(135deg, #667eea, #764ba2); border: none; color: white; padding: 5px 12px; border-radius: 5px; font-size: 11px; cursor: pointer; font-weight: 600; flex-shrink: 0;">Save</button>
-        <button id="pwd-dismiss-btn" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.6); padding: 5px 8px; border-radius: 5px; font-size: 10px; cursor: pointer; flex-shrink: 0;">✕</button>
-      `;
-
-      // Insert prompt inside .card-window, right after titlebar
-      const cardWindow = document.querySelector('.card-window');
-      const titlebar = document.querySelector('.card-titlebar');
-      cardWindow.style.position = 'relative';
-      titlebar.after(prompt);
-
-      // Save
-      prompt.querySelector('#pwd-save-btn').addEventListener('click', async () => {
-        prompt.remove();
-        try {
-          await window.cardAPI.savePassword({
-            site: promptSite,
-            username: username,
-            password: password,
-            timestamp: Date.now()
-          });
-          // Show toast
-          const toast = document.createElement('div');
-          toast.style.cssText = 'position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 8px 18px; border-radius: 16px; font-size: 12px; z-index: 9999; box-shadow: 0 4px 16px rgba(0,0,0,0.4); white-space: nowrap;';
-          toast.textContent = '✓ Password saved';
-          document.body.appendChild(toast);
-          setTimeout(() => toast.remove(), 2000);
-        } catch(err) {
-          console.error('Error saving password:', err);
-        }
-      });
-
-      // Dismiss
-      prompt.querySelector('#pwd-dismiss-btn').addEventListener('click', () => {
-        prompt.remove();
-      });
-
-      // Auto-dismiss after 12s
-      setTimeout(() => { if (prompt.parentNode) prompt.remove(); }, 12000);
-    }
+    // Password manager is disabled until secure OS-backed storage is implemented.
 
     // Check bookmark status on load
     setTimeout(checkBookmarkStatus, 1000);
@@ -1736,6 +2229,8 @@
     window.addEventListener('beforeunload', () => {
       cardDownloads.clear();
       ringDismissed = false;
+      stopMediaSyncLoop();
+      lastActiveMediaWebview = null;
       setAudioVisualizer(false);
     });
   </script>

@@ -189,6 +189,54 @@ html, body {
   overflow-y: auto;
 }
 
+/* Theme picker (Settings > Themes) */
+.theme-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.theme-option {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.theme-option:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.theme-option.is-selected {
+  border-color: rgba(150, 255, 210, 0.9);
+  box-shadow: 0 0 0 1px rgba(120, 240, 190, 0.8), 0 8px 20px rgba(0, 0, 0, 0.26);
+}
+
+.theme-option__preview {
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  margin-bottom: 7px;
+}
+
+.theme-option__name {
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.theme-option__desc {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
 .download-item {
   display: flex;
   align-items: center;
@@ -645,6 +693,19 @@ html, body {
   .clock-widget {
     width: 220px;
   }
+
+  .card-counter {
+    display: none;
+  }
+
+  .header-right {
+    gap: 10px;
+  }
+
+  .btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
 }
 
 /* ================================
@@ -715,6 +776,7 @@ html, body {
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
+
 
 /* Search Input Styling */
 .search-input {

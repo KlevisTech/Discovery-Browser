@@ -15,7 +15,7 @@
         <div class="header-left">          <div class="logo">            <img class="app-logo" src="../assets/discoverybrowser.jpeg" alt="Discovery Browser" />          </div><!-- Search/Address Bar -->
           <input type="text" id="search-input" class="search-input" placeholder="Enter web address or search..." />
           <!-- Notification dropdown trigger (placed right after the address bar) -->
-          <button class="btn" id="notifications-btn" title="Notifications">🔔</button>
+          <button class="btn" id="notifications-btn" title="Updates">🔔</button>
         </div>
         <div class="header-right">
           <div class="card-counter">
@@ -34,6 +34,8 @@
             <span class="download-ring__icon">⬇</span>
           </button>
           <button class="btn" id="settings-btn" title="Settings">⚙️</button>
+          
+          
         </div>
       </div>
     </header>
@@ -103,6 +105,7 @@
             <button id="settings-tab-bookmarks" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🔖 Bookmarks</button>
             <button id="settings-tab-passwords" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🔐 Passwords</button>
             <button id="settings-tab-downloads" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">⬇ Downloads</button>            <button id="settings-tab-search" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">Search</button>
+            <button id="settings-tab-themes" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">Themes</button>
             <button id='settings-tab-delete-data' style='flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;'>Delete Data</button>
           </div>
         </div>
@@ -144,7 +147,14 @@
           <h3 style="margin: 0 0 10px 0; color: white; font-size: 13px;">Search Engine</h3>
           <p style="margin: 0 0 10px 0; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.4;">Choose your default search engine.</p>
           <select id="search-engine-select" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: #000; font-size: 12px; outline: none;"></select>
-        </div><!-- Delete Data tab content (hidden by default) -->
+        </div>
+        <!-- Themes tab content (hidden by default) -->
+        <div id="settings-themes-tab" style="display: none;">
+          <h3 style="margin: 0 0 10px 0; color: white; font-size: 13px;">Card Header Theme</h3>
+          <p style="margin: 0 0 10px 0; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.4;">Pick one default theme for all site cards you open next.</p>
+          <div id="theme-options" class="theme-options"></div>
+        </div>
+        <!-- Delete Data tab content (hidden by default) -->
         <div id="settings-delete-data-tab" style="display: none;">
           <h3 style="margin: 0 0 10px 0; color: white; font-size: 13px;">Delete All Data</h3>
           <p style="margin: 0 0 12px 0; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.4;">
@@ -162,8 +172,8 @@
     <div id="notification-panel" class="settings-panel" aria-hidden="true">
       <div class="settings-content" style="padding: 12px; max-height: 280px; overflow-y: auto;">
         <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom:10px;">
-          <h3 style="margin: 0; color: white; font-size: 13px;">Notifications</h3>
-          <button id="clear-notifications-btn" class="btn btn-danger" style="padding: 4px 10px; font-size: 11px; background: rgba(255,80,80,0.5); border: none; color: white; border-radius: 6px; cursor: pointer;">Clear</button>
+          <h3 style="margin: 0; color: white; font-size: 13px;">Updates</h3>
+          <button id="clear-notifications-btn" class="btn btn-danger" style="padding: 4px 10px; font-size: 11px; background: rgba(255,80,80,0.5); border: none; color: white; border-radius: 6px; cursor: pointer;">Check now</button>
         </div>
         <div id="notification-list" class="notification-list"></div>
       </div>
@@ -213,6 +223,8 @@
   <script src="renderer.js"></script>
 </body>
 </html>
+
+
 
 
 
