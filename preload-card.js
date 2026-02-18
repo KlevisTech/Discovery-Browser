@@ -33,6 +33,10 @@ contextBridge.exposeInMainWorld('cardAPI', {
   minimizeCard: (cardId, pageUrl, pageTitle, themeKey) =>
     ipcRenderer.invoke('minimize-card', cardId, pageUrl, pageTitle, themeKey),
 
+  // Open URL as bubble (creates new card that starts minimized as bubble)
+  openUrlAsBubble: (url, meta) =>
+    ipcRenderer.invoke('open-url-as-bubble', url, meta),
+
   // Bookmark management
   toggleBookmark: (bookmarkData) =>
     ipcRenderer.invoke('toggle-bookmark', bookmarkData),
@@ -89,6 +93,7 @@ contextBridge.exposeInMainWorld('cardAPI', {
 
   // Send custom events to main process
   sendToMain: (channel, payload) => ipcRenderer.send(channel, payload),
+  getUserAgent: () => ipcRenderer.invoke('get-user-agent'),
 });
 
 // Receive requests from main to load a URL into this card's webview
@@ -98,4 +103,8 @@ ipcRenderer.on('card-load-url', (event, url) => {
 
 ipcRenderer.on('card-restore-animate', () => {
   window.dispatchEvent(new CustomEvent('card-restore-animate'));
+});
+
+ipcRenderer.on('cloudflare-challenge-banner', (event, payload) => {
+  window.dispatchEvent(new CustomEvent('cloudflare-challenge-banner', { detail: payload || {} }));
 });

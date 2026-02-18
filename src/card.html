@@ -636,7 +636,7 @@
       background: linear-gradient(180deg, #7cf7ff 0%, #7b8bff 50%, #ff6ff0 100%);
       animation: audioPulse 1.4s ease-in-out infinite;
       transform-origin: bottom;
-      will-change: transform;
+      will-change: auto; /* Changed from 'transform' to reduce GPU memory pressure */
       animation-play-state: paused;
     }
 
@@ -709,6 +709,13 @@
     @keyframes audioPulse {
       0%, 100% { transform: scaleY(0.4); opacity: 0.55; }
       50% { transform: scaleY(1); opacity: 1; }
+    }
+
+    /* Reduce animation overhead when visualizer is not visible */
+    @media (prefers-reduced-motion: reduce) {
+      .audio-visualizer span {
+        animation: none;
+      }
     }
 
     .split-container {
@@ -984,6 +991,7 @@
     const mediaToggleBtn = document.getElementById('media-toggle-btn');
     const mediaVolumeSlider = document.getElementById('media-volume-slider');
     const mediaMuteBtn = document.getElementById('media-mute-btn');
+    let challengeBannerEl = null;
     let visualizerEnabled = true;
     let lastActiveMediaWebview = null;
     let mediaSyncTimer = null;
@@ -1031,6 +1039,18 @@
     const ZOOM_STEP = 0.1;
     let zoomHideTimer = null;
 
+    const isCloudflareChallengeUrl = (rawUrl) => {
+      try {
+        const parsed = new URL(String(rawUrl || ''));
+        const host = parsed.hostname.toLowerCase();
+        if (host === 'challenges.cloudflare.com') return true;
+        if (parsed.pathname.includes('/cdn-cgi/challenge-platform/')) return true;
+      } catch (e) {}
+      return false;
+    };
+
+    let lastNonChallengeUrl = '';
+
     // Track downloads for this card window
     const cardDownloads = new Map(); // id -> {receivedBytes,totalBytes,percent,state,filename,savePath,...}
     let ringDismissed = false; // User can dismiss the ring after interacting
@@ -1057,6 +1077,46 @@
       cardContent.appendChild(el);
       securityLoadNoticeEl = el;
       return el;
+    }
+
+    function showChallengeBanner(targetUrl) {
+      if (!cardContent) return;
+      if (!challengeBannerEl) {
+        const banner = document.createElement('div');
+        banner.className = 'security-load-notice active';
+        banner.style.top = '12px';
+        banner.style.background = 'linear-gradient(135deg, rgba(12, 24, 40, 0.95), rgba(22, 36, 56, 0.95))';
+        banner.style.borderColor = 'rgba(120, 200, 255, 0.45)';
+        banner.innerHTML = `
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="font-weight:600; color: rgba(235, 245, 255, 0.95);">Security challenge detected</div>
+            <div style="flex:1;"></div>
+            <button id="challenge-open-external" style="padding:6px 10px; font-size:11px; border-radius:6px; border:1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.12); color: white; cursor: pointer;">Open In Browser</button>
+            <button id="challenge-dismiss" style="padding:6px 8px; font-size:11px; border-radius:6px; border:1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: white; cursor: pointer;">Dismiss</button>
+          </div>
+          <div style="margin-top:6px; font-size:11px; color: rgba(200, 220, 240, 0.85);">
+            Some security checks require Chrome, Edge, or Firefox to complete.
+          </div>
+        `;
+        cardContent.appendChild(banner);
+        challengeBannerEl = banner;
+      }
+
+      const openBtn = challengeBannerEl.querySelector('#challenge-open-external');
+      const dismissBtn = challengeBannerEl.querySelector('#challenge-dismiss');
+      if (openBtn) {
+        openBtn.onclick = () => {
+          if (window.cardAPI && window.cardAPI.sendToMain) {
+            window.cardAPI.sendToMain('open-external-challenge', { url: targetUrl });
+          }
+        };
+      }
+      if (dismissBtn) {
+        dismissBtn.onclick = () => {
+          if (challengeBannerEl) challengeBannerEl.remove();
+          challengeBannerEl = null;
+        };
+      }
     }
 
     function hideSecurityLoadNotice() {
@@ -1097,7 +1157,18 @@
       }
     }
 
+    // Cached media state to reduce DOM queries
+    let cachedMediaState = null;
+    let lastMediaStateTime = 0;
+    const MEDIA_STATE_CACHE_TTL = 500; // Cache for 500ms
+
     async function readMediaState(targetWebview) {
+      // Return cached state if still valid (reduces DOM queries during playback)
+      const now = Date.now();
+      if (cachedMediaState && (now - lastMediaStateTime) < MEDIA_STATE_CACHE_TTL) {
+        return cachedMediaState;
+      }
+
       const script = `
         (() => {
           const media = Array.from(document.querySelectorAll('video, audio'));
@@ -1114,7 +1185,10 @@
           };
         })();
       `;
-      return await runMediaScript(targetWebview, script);
+      const result = await runMediaScript(targetWebview, script);
+      cachedMediaState = result;
+      lastMediaStateTime = now;
+      return result;
     }
 
     function renderMediaControl(state) {
@@ -1203,7 +1277,7 @@
       if (mediaSyncTimer) return;
       mediaSyncTimer = setInterval(() => {
         syncMediaControlState();
-      }, 1200);
+      }, 2000); // Reduced frequency: 2000ms instead of 1200ms to reduce CPU overhead
     }
 
     function stopMediaSyncLoop() {
@@ -1486,11 +1560,42 @@
       }
     } catch (e) {}
 
+    // Force a Chrome-like UA for challenge compatibility (Cloudflare/Turnstile).
+    try {
+      if (window.cardAPI && window.cardAPI.getUserAgent) {
+        window.cardAPI.getUserAgent().then((ua) => {
+          if (ua) {
+            try { webview.setUserAgent(ua); } catch (e) {}
+            if (splitWebview) {
+              try { splitWebview.setUserAgent(ua); } catch (e) {}
+            }
+          }
+          if (pendingInitialUrl) {
+            applyInitialUrl(pendingInitialUrl);
+            pendingInitialUrl = null;
+          }
+        }).catch(() => {});
+      }
+    } catch (e) {}
+
+    // Defer initial navigation until UA is applied to avoid challenge scripts
+    // seeing the default Electron UA.
+    let pendingInitialUrl = initialUrl;
+    if (pendingInitialUrl) {
+      initialUrl = null;
+    }
+    const applyInitialUrl = (target) => {
+      if (!target || !webview) return;
+      try {
+        webview.src = target;
+        urlInput.value = target;
+        currentPageUrl = target;
+      } catch (e) {}
+    };
+
     // Load initial URL if provided
     if (initialUrl) {
-      webview.src = initialUrl;
-      urlInput.value = initialUrl;
-      currentPageUrl = initialUrl;
+      pendingInitialUrl = initialUrl;
     }
 
     // Update URL and title when webview navigates
@@ -1499,6 +1604,15 @@
         urlInput.value = e.url;
         currentPageUrl = e.url;
         checkBookmarkStatus();
+        if (!isCloudflareChallengeUrl(e.url)) {
+          lastNonChallengeUrl = e.url;
+        } else if (window.cardAPI && window.cardAPI.sendToMain) {
+          window.cardAPI.sendToMain('cloudflare-challenge', {
+            cardId,
+            challengeUrl: e.url,
+            targetUrl: lastNonChallengeUrl || ''
+          });
+        }
       } catch (err) {}
     });
 
@@ -1507,6 +1621,15 @@
         urlInput.value = e.url;
         currentPageUrl = e.url;
         checkBookmarkStatus();
+        if (!isCloudflareChallengeUrl(e.url)) {
+          lastNonChallengeUrl = e.url;
+        } else if (window.cardAPI && window.cardAPI.sendToMain) {
+          window.cardAPI.sendToMain('cloudflare-challenge', {
+            cardId,
+            challengeUrl: e.url,
+            targetUrl: lastNonChallengeUrl || ''
+          });
+        }
       } catch (err) {}
     });
 
@@ -1585,6 +1708,12 @@
         titleElement.textContent = e.title;
         currentPageTitle = e.title;
         checkBookmarkStatus();
+        if (window.cardAPI && window.cardAPI.sendToMain) {
+          window.cardAPI.sendToMain('webview-title-updated', {
+            cardId,
+            title: e.title || ''
+          });
+        }
       } catch (err) {}
     });
 
@@ -1747,6 +1876,31 @@
           }
         } catch (err) {}
       }
+    });
+
+    // Show security challenge banner from main process.
+    if (window.cardAPI && window.cardAPI.sendToMain) {
+      window.addEventListener('cloudflare-challenge-banner', (ev) => {
+        try {
+          const detail = ev && ev.detail ? ev.detail : {};
+          showChallengeBanner(detail.url || '');
+        } catch (e) {}
+      });
+    }
+
+    // Log console messages from the webview to help debug challenges.
+    webview.addEventListener('console-message', (e) => {
+      try {
+        if (window.cardAPI && window.cardAPI.sendToMain) {
+          window.cardAPI.sendToMain('webview-console-message', {
+            cardId,
+            level: e.level,
+            message: e.message,
+            line: e.line,
+            sourceId: e.sourceId
+          });
+        }
+      } catch (err) {}
     });
 
     if (splitWebview) {
@@ -2167,16 +2321,38 @@
 
     setSplitVisibility();
 
-    // URL input handler
+    // URL input handler - opens URL as a bubble for non-distracting background loading
     urlInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const targetUrl = normalizeUrl(urlInput.value);
         if (targetUrl) {
-          try {
-            webview.loadURL(targetUrl);
-            currentPageUrl = targetUrl;
-          } catch (err) {
-            window.cardAPI.navigateCard(cardId, targetUrl);
+          // Open as bubble instead of navigating current card
+          // This allows the user to continue browsing without distraction
+          if (window.cardAPI && window.cardAPI.openUrlAsBubble) {
+            window.cardAPI.openUrlAsBubble(targetUrl, {
+              title: targetUrl,
+              themeKey: theme || 'primary',
+            }).then(() => {
+              // Clear the input after launching as bubble
+              urlInput.value = '';
+            }).catch(err => {
+              console.error('Failed to open URL as bubble:', err);
+              // Fallback: navigate in current card
+              try {
+                webview.loadURL(targetUrl);
+                currentPageUrl = targetUrl;
+              } catch (fallbackErr) {
+                window.cardAPI.navigateCard(cardId, targetUrl);
+              }
+            });
+          } else {
+            // Fallback for older API: navigate in current card
+            try {
+              webview.loadURL(targetUrl);
+              currentPageUrl = targetUrl;
+            } catch (err) {
+              window.cardAPI.navigateCard(cardId, targetUrl);
+            }
           }
         }
       }

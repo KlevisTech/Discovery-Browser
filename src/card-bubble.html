@@ -28,7 +28,7 @@
         0 10px 24px var(--bubble-shadow, rgba(102, 126, 234, 0.45)),
         0 4px 10px rgba(0, 0, 0, 0.3),
         inset 0 1px 1px rgba(255, 255, 255, 0.4);
-      overflow: hidden;
+      overflow: visible;
       transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
     }
 
@@ -70,6 +70,9 @@
       left: 50%;
       top: 50%;
       transform: translate(-50%, -50%);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .bubble-btn:hover {
@@ -80,11 +83,58 @@
     .bubble-btn:active {
       transform: translate(-50%, -50%) scale(0.97);
     }
+
+    .bubble-letter {
+      display: inline-block;
+      line-height: 1;
+    }
+
+    /* Notification badge - positioned at top-right edge of bubble */
+    .notification-badge {
+      position: absolute;
+      top: -4px;
+      left: -4px;
+      min-width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      background: #ff3b30;
+      color: white;
+      font-size: 9px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+      box-shadow: 0 2px 6px rgba(255, 59, 48, 0.5);
+      border: 2px solid rgba(255, 255, 255, 0.9);
+      z-index: 2;
+      -webkit-app-region: no-drag;
+      opacity: 0;
+      transform: scale(0);
+      transition: opacity 200ms ease, transform 200ms ease;
+    }
+
+    .notification-badge.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .notification-badge.pulse {
+      animation: badge-pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes badge-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+    }
   </style>
 </head>
 <body>
   <div class="bubble-shell" title="Drag bubble to move">
-    <button id="restore-btn" class="bubble-btn" title="Restore Card">D</button>
+    <button id="restore-btn" class="bubble-btn" title="Restore Card">
+      <span id="bubble-letter" class="bubble-letter" aria-hidden="true">D</span>
+    </button>
+    <span id="notification-badge" class="notification-badge" aria-hidden="true">0</span>
   </div>
 
   <script>
@@ -95,6 +145,11 @@
     const theme = (params.get('theme') || 'primary').toLowerCase();
     const bubbleShell = document.querySelector('.bubble-shell');
     const restoreBtn = document.getElementById('restore-btn');
+    const bubbleLetter = document.getElementById('bubble-letter');
+    const notificationBadge = document.getElementById('notification-badge');
+    
+    // Track notification count
+    let notificationCount = 0;
 
     const themePalette = {
       primary: {
@@ -144,20 +199,53 @@
       bubbleShell.style.setProperty('--bubble-shadow', palette.shadow);
       bubbleShell.style.setProperty('--bubble-shadow-hover', palette.hoverShadow);
     }
-    if (label) {
-      restoreBtn.textContent = String(label).charAt(0).toUpperCase();
+    
+    // Always show the site's first letter on the button
+    if (label && bubbleLetter) {
+      bubbleLetter.textContent = String(label).charAt(0).toUpperCase();
     }
     if (title) {
       restoreBtn.title = `Restore: ${title}`;
     }
 
+    // Update notification badge
+    function updateNotificationBadge(count) {
+      notificationCount = count;
+      if (count > 0) {
+        notificationBadge.textContent = count > 99 ? '99+' : count;
+        notificationBadge.classList.add('visible', 'pulse');
+      } else {
+        notificationBadge.classList.remove('visible', 'pulse');
+      }
+    }
+
+    // Listen for notification updates from main process
+    if (window.cardBubbleAPI && window.cardBubbleAPI.onNotificationUpdate) {
+      window.cardBubbleAPI.onNotificationUpdate((count) => {
+        updateNotificationBadge(count);
+      });
+    }
+
+    // Clear notifications when restored
     restoreBtn.addEventListener('click', async () => {
       try {
+        // Clear notifications when opening the card
+        updateNotificationBadge(0);
+        
         if (window.cardBubbleAPI && window.cardBubbleAPI.restoreCard) {
           await window.cardBubbleAPI.restoreCard(cardId);
         }
       } catch (e) {
         // ignore
+      }
+    });
+
+    // Add context menu for closing bubble and card
+    bubbleShell.addEventListener('contextmenu', async (e) => {
+      e.preventDefault();
+      // Show context menu with close option
+      if (window.cardBubbleAPI && window.cardBubbleAPI.showContextMenu) {
+        await window.cardBubbleAPI.showContextMenu(cardId);
       }
     });
   </script>

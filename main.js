@@ -1,5 +1,6 @@
 ﻿// main.js
 const { app, BrowserWindow, ipcMain, session, shell, dialog } = require('electron');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -13,12 +14,34 @@ if (!app.isPackaged && process.env.DISCOVERY_DISABLE_GPU_SANDBOX === '1') {
 app.commandLine.appendSwitch('ignore-gpu-blocklist'); // Updated flag name (ignore-gpu-blacklist is deprecated)
 app.commandLine.appendSwitch('use-angle', 'd3d11'); // Use D3D11 ANGLE backend for Windows stability
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder'); // Hardware video decode
+// QUIC/HTTP3 can cause ERR_QUIC_PROTOCOL_ERROR in some environments.
+app.commandLine.appendSwitch('disable-quic');
+app.commandLine.appendSwitch('disable-http3');
+// Reduce automation fingerprints that can break bot challenges.
+app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
+// Avoid Private Access Token challenges that Electron can't complete.
+app.commandLine.appendSwitch('disable-features', 'PrivateStateTokens,PrivacyPass');
 
+// Network/DNS stability flags - help with slow DNS servers
+// Use system DNS resolver with extended timeout for slow DNS servers
+app.commandLine.appendSwitch('dns-resolver-timeout', '15000'); // Increase DNS timeout to 15 seconds
 
 // Disable unnecessary features
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+
+// Use a Chrome-like UA to improve compatibility with security challenges.
+const chromeVersion = process.versions && process.versions.chrome ? process.versions.chrome : '120.0.0.0';
+const CHROME_LIKE_UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+const chromeMajor = (() => {
+  const major = parseInt(String(chromeVersion).split('.')[0], 10);
+  return Number.isFinite(major) && major > 0 ? major : 120;
+})();
+const CH_UA = `"Not A(Brand";v="99", "Chromium";v="${chromeMajor}", "Google Chrome";v="${chromeMajor}"`;
+try {
+  app.userAgentFallback = CHROME_LIKE_UA;
+} catch (e) {}
 
 // Increase max listeners to prevent memory leak warnings
 require('events').EventEmitter.defaultMaxListeners = 50;
@@ -81,6 +104,217 @@ app.on('web-contents-created', (event, contents) => {
             if (targetSession && typeof targetSession.addWordToSpellCheckerDictionary === 'function') {
               targetSession.addWordToSpellCheckerDictionary(misspelledWord);
             }
+          } catch (e) {}
+        }
+      }));
+      menu.append(new MenuItem({ type: 'separator' }));
+      hasItems = true;
+    }
+
+    // Handle images - add Save Image and Copy Image URL options
+    if (props && props.mediaType === 'image' && props.srcURL) {
+      // Check if the image URL is downloadable (http/https)
+      const imageUrl = props.srcURL;
+      const isDownloadable = imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
+      
+      if (isDownloadable) {
+        menu.append(new MenuItem({
+          label: 'Save Image As...',
+          click: () => {
+            try {
+              // Trigger download for the image
+              const targetSession = contents.session || session.defaultSession;
+              if (targetSession) {
+                // Get filename from URL
+                let filename = 'image';
+                try {
+                  const urlPath = new URL(imageUrl).pathname;
+                  const pathParts = urlPath.split('/');
+                  filename = pathParts[pathParts.length - 1] || 'image';
+                  // Ensure it has an extension
+                  if (!filename.includes('.')) {
+                    filename += '.jpg';
+                  }
+                } catch (e) {
+                  filename = 'image.jpg';
+                }
+                
+                // Queue the download with Save As dialog
+                const downloadsDir = app.getPath('downloads');
+                const savePath = path.join(downloadsDir, filename);
+                queueSaveAsForWebContents(contents.id, imageUrl, savePath);
+                contents.downloadURL(imageUrl);
+              }
+            } catch (e) {
+              console.error('Error saving image:', e);
+            }
+          }
+        }));
+        hasItems = true;
+      }
+      
+      menu.append(new MenuItem({
+        label: 'Copy Image URL',
+        click: () => {
+          try {
+            contents.copyImageURLAt(props.x, props.y);
+          } catch (e) {
+            // Fallback: write URL to clipboard
+            const { clipboard } = require('electron');
+            clipboard.writeText(imageUrl);
+          }
+        }
+      }));
+      hasItems = true;
+      
+      menu.append(new MenuItem({
+        label: 'Copy Image',
+        click: () => {
+          try {
+            contents.copyImageAt(props.x, props.y);
+          } catch (e) {}
+        }
+      }));
+      hasItems = true;
+      
+      menu.append(new MenuItem({ type: 'separator' }));
+    }
+
+    // Handle videos - add Save Video option
+    if (props && props.mediaType === 'video' && props.srcURL) {
+      const videoUrl = props.srcURL;
+      const isDownloadable = videoUrl.startsWith('http://') || videoUrl.startsWith('https://');
+      
+      if (isDownloadable) {
+        menu.append(new MenuItem({
+          label: 'Save Video As...',
+          click: () => {
+            try {
+              // Get filename from URL
+              let filename = 'video';
+              try {
+                const urlPath = new URL(videoUrl).pathname;
+                const pathParts = urlPath.split('/');
+                filename = pathParts[pathParts.length - 1] || 'video';
+                // Ensure it has an extension
+                if (!filename.includes('.')) {
+                  filename += '.mp4';
+                }
+              } catch (e) {
+                filename = 'video.mp4';
+              }
+              
+              // Queue the download with Save As dialog
+              const downloadsDir = app.getPath('downloads');
+              const savePath = path.join(downloadsDir, filename);
+              queueSaveAsForWebContents(contents.id, videoUrl, savePath);
+              contents.downloadURL(videoUrl);
+            } catch (e) {
+              console.error('Error saving video:', e);
+            }
+          }
+        }));
+        hasItems = true;
+      }
+      
+      menu.append(new MenuItem({
+        label: 'Copy Video URL',
+        click: () => {
+          try {
+            const { clipboard } = require('electron');
+            clipboard.writeText(videoUrl);
+          } catch (e) {}
+        }
+      }));
+      hasItems = true;
+      
+      menu.append(new MenuItem({ type: 'separator' }));
+    }
+
+    // Handle audio - add Save Audio option
+    if (props && props.mediaType === 'audio' && props.srcURL) {
+      const audioUrl = props.srcURL;
+      const isDownloadable = audioUrl.startsWith('http://') || audioUrl.startsWith('https://');
+      
+      if (isDownloadable) {
+        menu.append(new MenuItem({
+          label: 'Save Audio As...',
+          click: () => {
+            try {
+              // Get filename from URL
+              let filename = 'audio';
+              try {
+                const urlPath = new URL(audioUrl).pathname;
+                const pathParts = urlPath.split('/');
+                filename = pathParts[pathParts.length - 1] || 'audio';
+                // Ensure it has an extension
+                if (!filename.includes('.')) {
+                  filename += '.mp3';
+                }
+              } catch (e) {
+                filename = 'audio.mp3';
+              }
+              
+              // Queue the download with Save As dialog
+              const downloadsDir = app.getPath('downloads');
+              const savePath = path.join(downloadsDir, filename);
+              queueSaveAsForWebContents(contents.id, audioUrl, savePath);
+              contents.downloadURL(audioUrl);
+            } catch (e) {
+              console.error('Error saving audio:', e);
+            }
+          }
+        }));
+        hasItems = true;
+      }
+      
+      menu.append(new MenuItem({
+        label: 'Copy Audio URL',
+        click: () => {
+          try {
+            const { clipboard } = require('electron');
+            clipboard.writeText(audioUrl);
+          } catch (e) {}
+        }
+      }));
+      hasItems = true;
+      
+      menu.append(new MenuItem({ type: 'separator' }));
+    }
+
+    // Handle links - add Save Link As option
+    if (props && props.linkURL && props.linkURL.startsWith('http')) {
+      menu.append(new MenuItem({
+        label: 'Save Link As...',
+        click: () => {
+          try {
+            const linkUrl = props.linkURL;
+            // Get filename from URL
+            let filename = 'download';
+            try {
+              const urlPath = new URL(linkUrl).pathname;
+              const pathParts = urlPath.split('/');
+              filename = pathParts[pathParts.length - 1] || 'download';
+            } catch (e) {
+              filename = 'download';
+            }
+            
+            // Queue the download with Save As dialog
+            const downloadsDir = app.getPath('downloads');
+            const savePath = path.join(downloadsDir, filename);
+            queueSaveAsForWebContents(contents.id, linkUrl, savePath);
+            contents.downloadURL(linkUrl);
+          } catch (e) {
+            console.error('Error saving link:', e);
+          }
+        }
+      }));
+      menu.append(new MenuItem({
+        label: 'Copy Link URL',
+        click: () => {
+          try {
+            const { clipboard } = require('electron');
+            clipboard.writeText(props.linkURL);
           } catch (e) {}
         }
       }));
@@ -165,7 +399,10 @@ if (require('electron').app.isPackaged) {
 let mainWindow;
 const cardWindows = new Map(); // cardId -> BrowserWindow
 const cardBubbles = new Map(); // cardId -> bubble BrowserWindow
+const bubbleNotifications = new Map(); // cardId -> notification count
+const bubbleNotificationSources = new Map(); // cardId -> 'api' | 'title'
 let visualizerEnabled = false;
+let currentCardTheme = 'primary'; // Store the user's preferred card theme
 const pendingAuthRedirects = new Map(); // requestId -> { authUrl, launchUrl, createdAt }
 const recentAuthRedirects = new Map(); // dedupeKey -> { ts, requestId }
 
@@ -201,14 +438,38 @@ function closeCardBubble(cardId) {
     if (!bubble.isDestroyed()) bubble.close();
   } catch (e) {}
   cardBubbles.delete(cardId);
+  bubbleNotifications.delete(cardId);
+  bubbleNotificationSources.delete(cardId);
+}
+
+// Update notification badge on bubble
+function updateBubbleNotification(cardId, count, source) {
+  bubbleNotifications.set(cardId, count);
+  if (source) {
+    bubbleNotificationSources.set(cardId, source);
+  } else {
+    bubbleNotificationSources.delete(cardId);
+  }
+  const bubble = cardBubbles.get(cardId);
+  if (bubble && !bubble.isDestroyed()) {
+    try {
+      bubble.webContents.send('bubble-notification-update', count);
+    } catch (e) {}
+  }
+}
+
+// Increment bubble notification count
+function incrementBubbleNotification(cardId) {
+  const currentCount = bubbleNotifications.get(cardId) || 0;
+  updateBubbleNotification(cardId, currentCount + 1, 'api');
+}
+
+// Clear bubble notifications
+function clearBubbleNotifications(cardId) {
+  updateBubbleNotification(cardId, 0);
 }
 
 function deriveBubbleLabel(pageTitle, pageUrl) {
-  const title = String(pageTitle || '').trim();
-  if (title) {
-    const ch = title.replace(/^[^a-zA-Z0-9]+/, '').charAt(0);
-    if (ch) return ch.toUpperCase();
-  }
   try {
     const parsed = new URL(String(pageUrl || ''));
     const host = String(parsed.hostname || '').replace(/^www\./i, '');
@@ -216,6 +477,25 @@ function deriveBubbleLabel(pageTitle, pageUrl) {
     if (ch) return ch.toUpperCase();
   } catch (e) {}
   return 'D';
+}
+
+function extractTitleNotificationCount(rawTitle) {
+  const title = String(rawTitle || '').trim();
+  if (!title) return null;
+  const patterns = [
+    /^\((\d{1,4})\)/,
+    /^\[(\d{1,4})\]/,
+    /^(\d{1,4})\s*[•\-:]/,
+    /(\d{1,4})\+?\s*$/
+  ];
+  for (const pattern of patterns) {
+    const match = title.match(pattern);
+    if (match && match[1]) {
+      const count = parseInt(match[1], 10);
+      if (Number.isFinite(count) && count >= 0) return count;
+    }
+  }
+  return null;
 }
 
 function createCardBubble(cardId, cardWindow, meta = {}) {
@@ -270,15 +550,29 @@ function createCardBubble(cardId, cardWindow, meta = {}) {
     }
 
     const bubbleTheme = String((meta && meta.themeKey) || 'primary').toLowerCase();
-    const bubbleUrl = `file://${path.join(__dirname, 'src', 'card-bubble.html').replace(/\\/g, '/')}?cardId=${encodeURIComponent(String(cardId))}&title=${encodeURIComponent(title)}&label=${encodeURIComponent(label)}&theme=${encodeURIComponent(bubbleTheme)}`;
-    bubbleWindow.loadURL(bubbleUrl).catch((err) => {
+    const bubblePath = path.join(__dirname, 'src', 'card-bubble.html');
+    // Use loadFile instead of loadURL to properly handle query parameters on Windows
+    bubbleWindow.loadFile(bubblePath, {
+      query: {
+        cardId: String(cardId),
+        title: title,
+        label: label,
+        theme: bubbleTheme
+      }
+    }).catch((err) => {
       console.error('Error loading card bubble:', err);
     });
     bubbleWindow.once('ready-to-show', () => {
       if (!bubbleWindow.isDestroyed()) bubbleWindow.show();
+      try {
+        const existingCount = bubbleNotifications.get(cardId) || 0;
+        bubbleWindow.webContents.send('bubble-notification-update', existingCount);
+      } catch (e) {}
     });
     bubbleWindow.on('closed', () => {
       cardBubbles.delete(cardId);
+      // Note: We no longer auto-close the card when bubble is closed.
+      // User can restore by clicking the bubble, or close via the card's own controls.
     });
 
     cardBubbles.set(cardId, bubbleWindow);
@@ -297,6 +591,9 @@ function restoreCardFromBubble(cardId) {
   }
 
   try {
+    // Clear notifications when restoring
+    clearBubbleNotifications(cardId);
+    
     if (cardWindow.isMinimized()) cardWindow.restore();
     cardWindow.show();
     cardWindow.focus();
@@ -568,7 +865,10 @@ function pickExternalLaunchUrl(authUrl, context = {}) {
 
 function launchBrowserExecutable(executablePath, url) {
   try {
-    if (!executablePath || !fs.existsSync(executablePath)) return false;
+    if (!executablePath || !fs.existsSync(executablePath)) {
+      try { console.warn('[External Browser] Not found:', executablePath); } catch (e) {}
+      return false;
+    }
     const proc = spawn(executablePath, [url], {
       detached: true,
       stdio: 'ignore',
@@ -577,8 +877,50 @@ function launchBrowserExecutable(executablePath, url) {
     proc.unref();
     return true;
   } catch (e) {
+    try { console.warn('[External Browser] Failed to launch', executablePath, e && e.message ? e.message : e); } catch (err) {}
     return false;
   }
+}
+
+function openExternalBrowserForChallenge(url) {
+  if (!url) return { opened: false, launchUrl: null };
+  const launchUrl = String(url).trim();
+  if (!launchUrl) return { opened: false, launchUrl: null };
+
+  if (process.platform === 'win32') {
+    const pf = process.env['ProgramFiles'] || 'C:\\Program Files';
+    const pfx86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+    const localAppData = process.env['LOCALAPPDATA'] || '';
+    const browserCandidates = [
+      path.join(pf, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(pfx86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      localAppData ? path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe') : '',
+      path.join(pfx86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+      path.join(pf, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+      path.join(pf, 'Mozilla Firefox', 'firefox.exe'),
+      path.join(pfx86, 'Mozilla Firefox', 'firefox.exe'),
+      localAppData ? path.join(localAppData, 'Mozilla Firefox', 'firefox.exe') : '',
+    ];
+    for (const candidate of browserCandidates) {
+      if (launchBrowserExecutable(candidate, launchUrl)) {
+        return { opened: true, launchUrl };
+      }
+    }
+  }
+
+  try {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Open In Browser',
+      message: 'A security challenge requires a full browser to complete.',
+      detail: 'Please open this page in Chrome, Edge, or Firefox and complete the verification.',
+      buttons: ['OK'],
+      defaultId: 0,
+      noLink: true,
+    });
+  } catch (e) {}
+
+  return { opened: false, launchUrl };
 }
 
 function openAuthInExternalBrowser(url, context = {}) {
@@ -593,6 +935,9 @@ function openAuthInExternalBrowser(url, context = {}) {
       path.join(pf, 'Google', 'Chrome', 'Application', 'chrome.exe'),
       path.join(pfx86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
       localAppData ? path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe') : '',
+      path.join(pf, 'Mozilla Firefox', 'firefox.exe'),
+      path.join(pfx86, 'Mozilla Firefox', 'firefox.exe'),
+      localAppData ? path.join(localAppData, 'Mozilla Firefox', 'firefox.exe') : '',
       path.join(pfx86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
       path.join(pf, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
     ];
@@ -603,12 +948,19 @@ function openAuthInExternalBrowser(url, context = {}) {
     }
   }
 
+  // Avoid shell.openExternal here because the app may be the default browser.
   try {
-    shell.openExternal(launchUrl);
-    return { opened: true, launchUrl };
-  } catch (e) {
-    return { opened: false, launchUrl: null };
-  }
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Open In Browser',
+      message: 'This sign-in requires Chrome, Edge, or Firefox.',
+      detail: 'No supported browser was found on this system.',
+      buttons: ['OK'],
+      defaultId: 0,
+      noLink: true,
+    });
+  } catch (e) {}
+  return { opened: false, launchUrl: null };
 }
 
 function notifyExternalAuthRedirect(authUrl, launchUrl, requestId) {
@@ -658,6 +1010,207 @@ function queueAuthRedirectExternally(authUrl, context = {}) {
   };
 }
 
+// Counter for generating unique card IDs for direct creation
+let directCardIdCounter = 100000;
+
+// Direct card creation function - creates card window immediately without renderer round-trip
+// This ensures instant visual feedback when external apps call the browser
+// Options: { showHidden: boolean, themeKey: string }
+function createCardDirectly(url, options = {}) {
+  try {
+    // Support both old signature (themeKey as string) and new options object
+    const opts = typeof options === 'string' ? { themeKey: options } : options;
+    const minimizeAfterShow = opts.minimizeAfterShow === true;
+    
+    const targetUrl = normalizeTypedNavigationTarget(url);
+    if (!targetUrl) {
+      return null;
+    }
+
+    if (isAuthSensitiveUrl(targetUrl)) {
+      queueAuthRedirectExternally(targetUrl);
+      return null;
+    }
+
+    // Use provided theme or fall back to current saved theme
+    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt']);
+    const effectiveTheme = opts.themeKey || currentCardTheme;
+    const normalizedTheme = allowedThemes.has(String(effectiveTheme || '').toLowerCase())
+      ? String(effectiveTheme || '').toLowerCase()
+      : 'primary';
+    const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
+
+    // Generate unique card ID
+    const cardId = ++directCardIdCounter;
+
+    // Calculate centered position
+    let finalX = 200;
+    let finalY = 150;
+    try {
+      const { screen } = require('electron');
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+      finalX = Math.floor((screenWidth - 650) / 2);
+      finalY = Math.floor((screenHeight - 500) / 2);
+      // Offset based on existing cards
+      const cardCount = cardWindows.size;
+      if (cardCount > 0) {
+        finalX += (cardCount * 25);
+        finalY += (cardCount * 25);
+      }
+    } catch (e) {}
+
+    // Create floating card window with visible background for instant display
+    const cardWindow = new BrowserWindow({
+      width: 800,
+      height: 500,
+      x: finalX,
+      y: finalY,
+      frame: false,
+      transparent: true,
+      resizable: true,
+      skipTaskbar: minimizeAfterShow, // Hide from taskbar when opening as bubble
+      show: true, // Always show initially
+      backgroundColor: '#00000000', // Transparent for rounded corners from HTML
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        webviewTag: true,
+        preload: path.join(__dirname, 'preload-card.js'),
+        enableWebSQL: false,
+        spellcheck: true,
+        backgroundThrottling: true,
+        enablePreferredSizeMode: true,
+        partition: 'persist:cards',
+      },
+    });
+
+    // Store reference before loading
+    cardWindows.set(cardId, cardWindow);
+
+    // If we need to minimize after show, do so after a brief delay
+    if (minimizeAfterShow) {
+      // Wait for the window to be ready, then minimize it
+      cardWindow.once('ready-to-show', () => {
+        if (cardWindow && !cardWindow.isDestroyed()) {
+          // Give it a moment to render, then minimize
+          setTimeout(() => {
+            if (cardWindow && !cardWindow.isDestroyed()) {
+              cardWindow.minimize();
+            }
+          }, 500);
+        }
+      });
+    }
+
+    // Load the actual card HTML directly without placeholder for faster startup
+    const encodedUrl = Buffer.from(targetUrl).toString('base64');
+    const cardHtmlPath = path.join(__dirname, 'src', 'card.html');
+    // Use loadFile instead of loadURL to properly handle query parameters on Windows
+    cardWindow.loadFile(cardHtmlPath, {
+      query: {
+        cardId: String(cardId),
+        url: encodedUrl,
+        theme: cardTheme
+      }
+    }).catch((err) => {
+      console.error('Error loading card HTML:', err);
+    });
+
+    // Force any window.open/target=_blank to open as a card window
+    try {
+      cardWindow.webContents.setWindowOpenHandler(({ url: openUrl, referrer }) => {
+        let sourceUrl = '';
+        try {
+          sourceUrl = cardWindow.webContents.getURL();
+        } catch (e) {}
+        openUrlInCard(openUrl, { sourceUrl, referrerUrl: referrer && referrer.url });
+        return { action: 'deny' };
+      });
+    } catch (e) {}
+
+    // Setup event listeners
+    cardWindow.webContents.on('did-start-loading', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('card-loading-start', cardId);
+      }
+    });
+
+    cardWindow.webContents.on('did-finish-load', () => {
+      if (mainWindow && !mainWindow.isDestroyed() && cardWindow && !cardWindow.isDestroyed()) {
+        const pageTitle = cardWindow.webContents.getTitle();
+        const currentUrl = cardWindow.webContents.getURL();
+        mainWindow.webContents.send('card-loading-finish', cardId, pageTitle, currentUrl);
+      }
+      try {
+        if (cardWindow && !cardWindow.isDestroyed() && cardWindow.webContents && !cardWindow.webContents.isDestroyed()) {
+          cardWindow.webContents.send('visualizer-setting', !!visualizerEnabled);
+        }
+      } catch (e) {}
+    });
+
+    cardWindow.webContents.on('did-navigate', (event, navUrl) => {
+      if (mainWindow && !mainWindow.isDestroyed() && cardWindow && !cardWindow.isDestroyed()) {
+        mainWindow.webContents.send('card-url-updated', cardId, navUrl);
+        mainWindow.webContents.send('card-title-updated', cardId, cardWindow.webContents.getTitle());
+      }
+    });
+
+    cardWindow.webContents.on('page-title-updated', (event, title) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('card-title-updated', cardId, title);
+      }
+      try {
+        if (cardBubbles.has(cardId)) {
+          const parsedCount = extractTitleNotificationCount(title);
+          if (parsedCount !== null) {
+            updateBubbleNotification(cardId, parsedCount, 'title');
+          } else if (bubbleNotificationSources.get(cardId) === 'title') {
+            updateBubbleNotification(cardId, 0, 'title');
+          }
+        }
+      } catch (e) {}
+    });
+
+    cardWindow.on('show', () => {
+      closeCardBubble(cardId);
+    });
+
+    cardWindow.on('closed', () => {
+      closeCardBubble(cardId);
+      cardWindows.delete(cardId);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('card-closed', cardId);
+      }
+    });
+
+    // Notify renderer about the new card so it can update its state
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        const parsedUrl = new URL(targetUrl);
+        const domain = parsedUrl.hostname || 'Loading...';
+        mainWindow.webContents.send('external-card-created', {
+          cardId,
+          url: targetUrl,
+          title: domain
+        });
+      } catch (e) {
+        mainWindow.webContents.send('external-card-created', {
+          cardId,
+          url: targetUrl,
+          title: 'Loading...'
+        });
+      }
+    }
+
+    return { cardId, cardWindow };
+  } catch (error) {
+    console.error('Error creating card directly:', error);
+    return null;
+  }
+}
+
 function openUrlInCard(url, context = {}) {
   try {
     if (!url) return;
@@ -669,11 +1222,114 @@ function openUrlInCard(url, context = {}) {
       queueAuthRedirectExternally(targetUrl, context);
       return;
     }
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('open-external-url', targetUrl);
-    }
+    
+    // Create card directly for instant visual feedback
+    // This bypasses the renderer round-trip for external URLs
+    createCardDirectly(targetUrl);
   } catch (e) {
     // ignore
+  }
+}
+
+// Open URL as a bubble (minimized card) - for non-distracting background loading
+function openUrlAsBubble(url, meta = {}) {
+  try {
+    if (!url) return null;
+    const targetUrl = String(url).trim();
+    if (!isHttpUrl(targetUrl)) {
+      return null;
+    }
+    if (isAuthSensitiveUrl(targetUrl)) {
+      // Auth URLs should still open externally, not as bubbles
+      queueAuthRedirectExternally(targetUrl, { sourceUrl: meta.sourceUrl });
+      return null;
+    }
+    
+    // Create the card window normally, then minimize it
+    const result = createCardDirectly(targetUrl, { minimizeAfterShow: true });
+    if (!result || !result.cardWindow) {
+      return null;
+    }
+    
+    const { cardId, cardWindow } = result;
+
+    const canShowBubble = () => {
+      try {
+        if (!cardWindow || cardWindow.isDestroyed()) return false;
+        if (cardWindow.isMinimized()) return true;
+        if (!cardWindow.isVisible()) return true;
+      } catch (e) {}
+      return false;
+    };
+    
+    // Create bubble for this card
+    const bubbleMeta = {
+      pageTitle: meta.title || '',
+      pageUrl: targetUrl,
+      themeKey: meta.themeKey || currentCardTheme,
+    };
+    
+    // Wait for the page to get a title, then create bubble
+    let bubbleCreated = false;
+    const createBubbleWithMeta = () => {
+      if (bubbleCreated) return;
+      bubbleCreated = true;
+
+      if (!canShowBubble()) {
+        return;
+      }
+      
+      try {
+        let title = '';
+        try {
+          title = String(cardWindow.webContents.getTitle() || '').trim();
+        } catch (e) {}
+        if (!title && meta.title) title = meta.title;
+        if (!title) title = `Card ${cardId}`;
+        
+        createCardBubble(cardId, cardWindow, {
+          ...bubbleMeta,
+          pageTitle: title,
+        });
+      } catch (e) {
+        console.error('Error creating bubble for URL:', e);
+      }
+    };
+    
+    // Create bubble immediately with placeholder, will update when page loads
+    createCardBubble(cardId, cardWindow, bubbleMeta);
+    
+    // Update bubble when page title changes
+    cardWindow.webContents.on('page-title-updated', (event, title) => {
+      if (!canShowBubble()) {
+        return;
+      }
+      if (!bubbleCreated) {
+        createBubbleWithMeta();
+      }
+      // Update existing bubble's title
+      const bubble = cardBubbles.get(cardId);
+      if (bubble && !bubble.isDestroyed()) {
+        // Recreate bubble with updated title
+        closeCardBubble(cardId);
+        createCardBubble(cardId, cardWindow, {
+          ...bubbleMeta,
+          pageTitle: title,
+        });
+      }
+    });
+    
+    // Also create bubble after finish load if not yet created
+    cardWindow.webContents.on('did-finish-load', () => {
+      if (!bubbleCreated && canShowBubble()) {
+        createBubbleWithMeta();
+      }
+    });
+    
+    return { cardId, cardWindow };
+  } catch (e) {
+    console.error('Error opening URL as bubble:', e);
+    return null;
   }
 }
 
@@ -683,6 +1339,32 @@ function openUrlInCard(url, context = {}) {
 
 const downloadIdByItem = new WeakMap();
 const downloadHandlerSessions = new WeakSet();
+
+// Map to store queued save-as paths for specific webContents and URLs
+const queuedSaveAsPaths = new Map(); // key: `${webContentsId}|${url}` -> savePath
+
+// Queue a save-as path for a specific webContents and URL
+function queueSaveAsForWebContents(webContentsId, url, savePath) {
+  if (!webContentsId || !url || !savePath) return;
+  const key = `${webContentsId}|${url}`;
+  queuedSaveAsPaths.set(key, savePath);
+  // Clean up after 30 seconds to prevent memory leaks
+  setTimeout(() => {
+    queuedSaveAsPaths.delete(key);
+  }, 30000);
+}
+
+// Consume a queued save-as path for a specific webContents and URL
+function consumeQueuedSaveAsPath(webContentsId, url) {
+  if (!webContentsId || !url) return null;
+  const key = `${webContentsId}|${url}`;
+  const savePath = queuedSaveAsPaths.get(key);
+  if (savePath) {
+    queuedSaveAsPaths.delete(key);
+    return savePath;
+  }
+  return null;
+}
 
 function ensureUniquePath(savePath) {
   try {
@@ -698,22 +1380,114 @@ function ensureUniquePath(savePath) {
   return savePath;
 }
 
+// Map MIME types to file extensions
+function extensionFromMime(mime) {
+  if (!mime) return '';
+  const mimeMap = {
+    'image/jpeg': '.jpg',
+    'image/jpg': '.jpg',
+    'image/png': '.png',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+    'image/svg+xml': '.svg',
+    'image/bmp': '.bmp',
+    'image/tiff': '.tiff',
+    'image/x-icon': '.ico',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+    'video/ogg': '.ogv',
+    'video/quicktime': '.mov',
+    'video/x-msvideo': '.avi',
+    'video/x-ms-wmv': '.wmv',
+    'video/x-matroska': '.mkv',
+    'audio/mpeg': '.mp3',
+    'audio/mp3': '.mp3',
+    'audio/wav': '.wav',
+    'audio/ogg': '.ogg',
+    'audio/aac': '.aac',
+    'audio/flac': '.flac',
+    'audio/x-m4a': '.m4a',
+    'application/pdf': '.pdf',
+    'application/zip': '.zip',
+    'application/x-zip-compressed': '.zip',
+    'application/json': '.json',
+    'application/xml': '.xml',
+    'text/html': '.html',
+    'text/css': '.css',
+    'text/javascript': '.js',
+    'text/plain': '.txt',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+    'application/vnd.ms-excel': '.xls',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+    'application/msword': '.doc',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+    'application/vnd.ms-powerpoint': '.ppt',
+  };
+  const lowerMime = String(mime).toLowerCase().split(';')[0].trim();
+  return mimeMap[lowerMime] || '';
+}
+
 function sendDownloadEvent(channel, payload, originatingWebContents) {
+  console.warn('[DownloadEvent] Sending to mainWindow:', !!mainWindow, mainWindow ? !mainWindow.isDestroyed() : 'N/A');
+  
+  // Send to main window - ensure it gets the event
   try {
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    if (!mainWindow) {
+      console.warn('[DownloadEvent] mainWindow is null');
+    } else if (mainWindow.isDestroyed()) {
+      console.warn('[DownloadEvent] mainWindow is destroyed');
+    } else if (!mainWindow.webContents) {
+      console.warn('[DownloadEvent] mainWindow.webContents is missing');
+    } else if (mainWindow.webContents.isDestroyed()) {
+      console.warn('[DownloadEvent] mainWindow.webContents is destroyed');
+    } else if (!mainWindow.webContents.isLoading()) {
+      // Only send if the page has loaded
       mainWindow.webContents.send(channel, payload);
+      console.warn('[DownloadEvent] Sent to mainWindow, channel:', channel);
+    } else {
+      // Page is still loading, try again after a short delay
+      console.warn('[DownloadEvent] mainWindow page is still loading, queuing event');
+      setTimeout(() => {
+        try {
+          if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+            mainWindow.webContents.send(channel, payload);
+            console.warn('[DownloadEvent] Sent to mainWindow after delay');
+          }
+        } catch (e) {}
+      }, 500);
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[DownloadEvent] Error sending to mainWindow:', e.message);
+  }
 
   // Also send to the specific BrowserWindow that initiated the download (e.g. card window)
   try {
     if (originatingWebContents) {
-      const win = BrowserWindow.fromWebContents(originatingWebContents);
+      let win = BrowserWindow.fromWebContents(originatingWebContents);
+      
+      // If webContents is a webview, BrowserWindow.fromWebContents returns null
+      // Use hostWebContents to get the parent window's webContents
+      if (!win) {
+        try {
+          const hostWebContents = originatingWebContents.hostWebContents;
+          if (hostWebContents) {
+            win = BrowserWindow.fromWebContents(hostWebContents);
+          }
+        } catch (e) {}
+      }
+      
       if (win && !win.isDestroyed()) {
         win.webContents.send(channel, payload);
+        console.warn('[DownloadEvent] Sent to originating window');
+      } else {
+        console.warn('[DownloadEvent] Originating window not available');
       }
+    } else {
+      console.warn('[DownloadEvent] No originatingWebContents');
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[DownloadEvent] Error sending to originating window:', e.message);
+  }
 }
 
 function setupDownloadHandlingForSession(sess) {
@@ -775,13 +1549,14 @@ function setupDownloadHandlingForSession(sess) {
         });
 
         item.once('done', (e, state) => {
+          console.warn('[Download] Done event fired, state:', state, 'webContents:', webContents ? 'exists' : 'none');
           try {
             const receivedBytes = item.getReceivedBytes ? item.getReceivedBytes() : 0;
             const totalBytes = item.getTotalBytes ? item.getTotalBytes() : 0;
             const percent = totalBytes > 0 ? Math.max(0, Math.min(1, receivedBytes / totalBytes)) : null;
             const savePath = item.getSavePath ? item.getSavePath() : finalSavePath;
 
-            sendDownloadEvent('download-done', {
+            const entry = {
               id,
               url,
               filename: item.getFilename ? item.getFilename() : path.basename(savePath),
@@ -791,8 +1566,13 @@ function setupDownloadHandlingForSession(sess) {
               percent,
               state, // completed | cancelled | interrupted
               endTime: Date.now(),
-            }, webContents);
-          } catch (err) {}
+            };
+
+            recordDownloadHistory(entry);
+            sendDownloadEvent('download-done', entry, webContents);
+          } catch (err) {
+            console.error('[Download] Error in done handler:', err);
+          }
         });
       } catch (err) {
         console.error('Error in will-download handler:', err);
@@ -821,12 +1601,39 @@ ipcMain.handle('set-visualizer-enabled', async (event, enabled) => {
   }
 });
 
+ipcMain.handle('get-download-history', async () => {
+  try {
+    loadDownloadHistoryFromDisk();
+    return { success: true, items: downloadHistory.slice(0, 200) };
+  } catch (e) {
+    return { success: false, items: [] };
+  }
+});
+
 ipcMain.handle('get-visualizer-enabled', async () => {
   try {
     return visualizerEnabled;
   } catch (e) {
     return false;
   }
+});
+
+// Card theme management - store user's preferred theme for external URL cards
+ipcMain.handle('set-card-theme', async (event, themeKey) => {
+  try {
+    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt']);
+    if (allowedThemes.has(String(themeKey || '').toLowerCase())) {
+      currentCardTheme = String(themeKey || '').toLowerCase();
+      if (currentCardTheme === 'alt') currentCardTheme = 'sunset';
+    }
+    return { success: true, theme: currentCardTheme };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('get-card-theme', async () => {
+  return currentCardTheme;
 });
 
 // Global error handler
@@ -856,10 +1663,8 @@ app.on('activate', () => {
 // Handle protocol URLs when app is already running
 app.on('open-url', (event, url) => {
   event.preventDefault();
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    // Create a new card with the URL
-    mainWindow.webContents.send('open-external-url', url);
-  }
+  // Create card directly for instant visual feedback
+  createCardDirectly(url);
 });
 
 // Handle when launched with a URL (Windows)
@@ -873,8 +1678,8 @@ if (!gotTheLock) {
       // Use the helper to find the URL in the command line.
       const url = getUrlFromArgs(commandLine);
       if (url) {
-        // URL-first: open the site card without forcing dashboard focus first.
-        mainWindow.webContents.send('open-external-url', url);
+        // Create card directly for instant visual feedback
+        createCardDirectly(url);
         return;
       }
 
@@ -961,7 +1766,9 @@ function createMainWindow() {
 
   mainWindow.webContents.on('did-finish-load', () => {
     if (pendingStartupUrl) {
-      mainWindow.webContents.send('open-external-url', pendingStartupUrl);
+      // Create card directly for instant visual feedback
+      createCardDirectly(pendingStartupUrl);
+      pendingStartupUrl = null;
     }
   });
 
@@ -984,6 +1791,72 @@ let blocklist = new Set();
 let blockExactHosts = new Set();
 let blockSuffixHosts = [];
 let blockSubstringPatterns = [];
+const downloadHistory = []; // newest first
+const DOWNLOAD_HISTORY_FILENAME = 'download-history.json';
+let downloadHistoryLoaded = false;
+let downloadPersistTimer = null;
+
+function getDownloadHistoryFilePath() {
+  try {
+    return path.join(app.getPath('userData'), DOWNLOAD_HISTORY_FILENAME);
+  } catch (e) {
+    return '';
+  }
+}
+
+function loadDownloadHistoryFromDisk() {
+  if (downloadHistoryLoaded) return;
+  downloadHistoryLoaded = true;
+  const filePath = getDownloadHistoryFilePath();
+  if (!filePath || !fs.existsSync(filePath)) return;
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const items = Array.isArray(parsed && parsed.items) ? parsed.items : [];
+    downloadHistory.length = 0;
+    items.forEach((it) => {
+      if (it && it.id) downloadHistory.push(it);
+    });
+  } catch (e) {
+    console.warn('Failed to load download history:', e.message || e);
+  }
+}
+
+function saveDownloadHistoryToDisk() {
+  const filePath = getDownloadHistoryFilePath();
+  if (!filePath) return;
+  try {
+    const payload = { version: 1, updatedAt: Date.now(), items: downloadHistory.slice(0, 200) };
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('Failed to persist download history:', e.message || e);
+  }
+}
+
+function scheduleDownloadHistoryPersist() {
+  if (downloadPersistTimer) clearTimeout(downloadPersistTimer);
+  // Persist immediately for new downloads to ensure renderer can fetch latest history
+  saveDownloadHistoryToDisk();
+}
+
+function recordDownloadHistory(entry) {
+  if (!entry || !entry.id) return;
+  loadDownloadHistoryFromDisk();
+  downloadHistory.unshift(entry);
+  if (downloadHistory.length > 200) {
+    downloadHistory.length = 200;
+  }
+  try {
+    console.warn('[Downloads] Recorded', {
+      id: entry.id,
+      filename: entry.filename,
+      savePath: entry.savePath,
+      state: entry.state,
+    });
+  } catch (e) {}
+  scheduleDownloadHistoryPersist();
+}
 const SOCIAL_ALLOWLIST_HOSTS = new Set([
   'facebook.com',
   'fb.com',
@@ -995,11 +1868,31 @@ const SOCIAL_ALLOWLIST_HOSTS = new Set([
   'threads.net',
 ]);
 
+const SECURITY_CHALLENGE_ALLOWLIST_HOSTS = new Set([
+  'challenges.cloudflare.com',
+  'cloudflare.com',
+  'cloudflareinsights.com',
+  'cloudflareaccess.com',
+  'hcaptcha.com',
+  'recaptcha.net',
+  'gstatic.com',
+]);
+
 function isSocialAllowlistedHost(hostname) {
   const host = String(hostname || '').toLowerCase();
   if (!host) return false;
   if (SOCIAL_ALLOWLIST_HOSTS.has(host)) return true;
   for (const allowed of SOCIAL_ALLOWLIST_HOSTS) {
+    if (host.endsWith('.' + allowed)) return true;
+  }
+  return false;
+}
+
+function isSecurityAllowlistedHost(hostname) {
+  const host = String(hostname || '').toLowerCase();
+  if (!host) return false;
+  if (SECURITY_CHALLENGE_ALLOWLIST_HOSTS.has(host)) return true;
+  for (const allowed of SECURITY_CHALLENGE_ALLOWLIST_HOSTS) {
     if (host.endsWith('.' + allowed)) return true;
   }
   return false;
@@ -1105,6 +1998,9 @@ function setupAddonBlocking() {
     console.warn('Session not available for addon blocking');
     return;
   }
+
+  // Ensure sessions use the Chrome-like UA for better challenge compatibility.
+  try { session.defaultSession.setUserAgent(CHROME_LIKE_UA); } catch (e) {}
   
   const requestHandler = (details, callback) => {
     try {
@@ -1138,6 +2034,9 @@ function setupAddonBlocking() {
         if (isSocialAllowlistedHost(host)) {
           return callback({ cancel: false });
         }
+        if (isSecurityAllowlistedHost(host)) {
+          return callback({ cancel: false });
+        }
 
         if (blockExactHosts.has(host)) {
           return callback({ cancel: true });
@@ -1162,20 +2061,72 @@ function setupAddonBlocking() {
     return callback({ cancel: false });
   };
   
+  const headerHandler = (details, callback) => {
+    try {
+      const url = details && details.url ? String(details.url) : '';
+      const host = url ? new URL(url).hostname : '';
+      if (isSecurityAllowlistedHost(host)) {
+        const headers = Object.assign({}, details.requestHeaders);
+        headers['User-Agent'] = CHROME_LIKE_UA;
+        headers['sec-ch-ua'] = CH_UA;
+        headers['sec-ch-ua-mobile'] = '?0';
+        headers['sec-ch-ua-platform'] = '"Windows"';
+        callback({ requestHeaders: headers });
+        return;
+      }
+    } catch (e) {}
+    callback({ requestHeaders: details.requestHeaders });
+  };
+
+  const shouldLogChallenge = (details) => {
+    try {
+      const url = details && details.url ? String(details.url) : '';
+      if (!url) return false;
+      const host = new URL(url).hostname;
+      return isSecurityAllowlistedHost(host);
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const logChallengeRequest = (tag, details, extra = {}) => {
+    try {
+      if (!shouldLogChallenge(details)) return;
+      const url = details && details.url ? String(details.url) : '';
+      const status = details && typeof details.statusCode === 'number' ? details.statusCode : '';
+      const err = details && details.error ? details.error : '';
+      console.warn(`[Challenge] ${tag}`, {
+        url,
+        status,
+        error: err,
+        resourceType: details && details.resourceType,
+        fromCache: details && details.fromCache,
+        ...extra,
+      });
+    } catch (e) {}
+  };
+
   // Redirect handler kept minimal to avoid extra work in navigation hot path.
   const redirectHandler = (details) => {
     return;
   };
   
   session.defaultSession.webRequest.onBeforeRequest(requestHandler);
+  session.defaultSession.webRequest.onBeforeSendHeaders(headerHandler);
   session.defaultSession.webRequest.onBeforeRedirect(redirectHandler);
+  session.defaultSession.webRequest.onCompleted((details) => logChallengeRequest('completed', details));
+  session.defaultSession.webRequest.onErrorOccurred((details) => logChallengeRequest('error', details));
   configurePermissionHandlersForSession(session.defaultSession);
   
   const cardPartition = 'persist:cards';
   const cardSession = session.fromPartition(cardPartition);
   if (cardSession && cardSession.webRequest) {
+    try { cardSession.setUserAgent(CHROME_LIKE_UA); } catch (e) {}
     cardSession.webRequest.onBeforeRequest(requestHandler);
+    cardSession.webRequest.onBeforeSendHeaders(headerHandler);
     cardSession.webRequest.onBeforeRedirect(redirectHandler);
+    cardSession.webRequest.onCompleted((details) => logChallengeRequest('completed', details));
+    cardSession.webRequest.onErrorOccurred((details) => logChallengeRequest('error', details));
     
     configurePermissionHandlersForSession(cardSession);
   }
@@ -1183,8 +2134,12 @@ function setupAddonBlocking() {
   const defaultPartition = 'persist:webview';
   const webviewSession = session.fromPartition(defaultPartition);
   if (webviewSession && webviewSession.webRequest) {
+    try { webviewSession.setUserAgent(CHROME_LIKE_UA); } catch (e) {}
     webviewSession.webRequest.onBeforeRequest(requestHandler);
+    webviewSession.webRequest.onBeforeSendHeaders(headerHandler);
     webviewSession.webRequest.onBeforeRedirect(redirectHandler);
+    webviewSession.webRequest.onCompleted((details) => logChallengeRequest('completed', details));
+    webviewSession.webRequest.onErrorOccurred((details) => logChallengeRequest('error', details));
     configurePermissionHandlersForSession(webviewSession);
   }
 }
@@ -1239,7 +2194,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       }
     }
 
-    // Create floating card window with initial hidden state for animation
+    // Create floating card window with visible background for instant display
     const cardWindow = new BrowserWindow({
       width: 800,
       height: 500,
@@ -1249,8 +2204,8 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       transparent: true, // Enable transparency for smooth animations
       resizable: true,
       skipTaskbar: false,
-      show: false, // Show immediately after creation for faster perceived startup
-      backgroundColor: '#00000000', // Fully transparent background
+      show: true, // Show immediately for instant visual feedback
+      backgroundColor: '#00000000', // Transparent for rounded corners from HTML
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -1282,15 +2237,18 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       });
     } catch (e) {}
 
-    // Show window shell immediately; load card content asynchronously.
-    cardWindow.setOpacity(1);
-    cardWindow.show();
-
-    // Load the card HTML without blocking window display.
+    // Load the actual card HTML directly without placeholder for faster startup
     const encodedUrl = Buffer.from(targetUrl).toString('base64');
-    const cardHtmlUrl = `file://${path.join(__dirname, 'src', 'card.html').replace(/\\/g, '/')}?cardId=${cardId}&url=${encodedUrl}&theme=${encodeURIComponent(cardTheme)}`;
-    cardWindow.webContents.loadURL(cardHtmlUrl).catch((loadErr) => {
-      console.error('Error loading card HTML:', loadErr);
+    const cardHtmlPath = path.join(__dirname, 'src', 'card.html');
+    // Use loadFile instead of loadURL to properly handle query parameters on Windows
+    cardWindow.loadFile(cardHtmlPath, {
+      query: {
+        cardId: String(cardId),
+        url: encodedUrl,
+        theme: cardTheme
+      }
+    }).catch((err) => {
+      console.error('Error loading card HTML:', err);
     });
 
     // Setup event listeners with guards for destroyed windows
@@ -1538,6 +2496,150 @@ ipcMain.handle('restore-card-from-bubble', async (event, cardId) => {
   }
 });
 
+// Close bubble and associated card window
+ipcMain.handle('close-bubble-and-card', async (event, cardId) => {
+  try {
+    // First close the card window if it exists
+    const cardWindow = cardWindows.get(cardId);
+    if (cardWindow && !cardWindow.isDestroyed()) {
+      try {
+        cardWindow.close();
+      } catch (e) {}
+    }
+    // Then close the bubble
+    closeCardBubble(cardId);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Show context menu for bubble
+ipcMain.handle('show-bubble-context-menu', async (event, cardId) => {
+  const { Menu } = require('electron');
+  const menu = new Menu();
+  
+  menu.append(new MenuItem({
+    label: 'Close Card',
+    click: async () => {
+      // Close both card and bubble
+      const cardWindow = cardWindows.get(cardId);
+      if (cardWindow && !cardWindow.isDestroyed()) {
+        try { cardWindow.close(); } catch (e) {}
+      }
+      closeCardBubble(cardId);
+    }
+  }));
+  
+  menu.popup({ window: BrowserWindow.fromWebContents(event.sender) });
+});
+
+// Open URL as a bubble (minimized card window)
+ipcMain.handle('open-url-as-bubble', async (event, url, meta = {}) => {
+  try {
+    const result = openUrlAsBubble(url, meta);
+    if (!result) {
+      return { success: false, error: 'Failed to create bubble' };
+    }
+    return { success: true, cardId: result.cardId };
+  } catch (error) {
+    console.error('Error opening URL as bubble:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-user-agent', async () => {
+  return CHROME_LIKE_UA;
+});
+
+// Title updates from embedded webview inside card window
+ipcMain.on('webview-title-updated', (event, payload) => {
+  try {
+    const cardId = payload && typeof payload.cardId === 'number' ? payload.cardId : Number(payload && payload.cardId);
+    const title = payload && payload.title ? String(payload.title) : '';
+    if (!cardId || !title) return;
+    if (!cardBubbles.has(cardId)) return;
+    const parsedCount = extractTitleNotificationCount(title);
+    if (parsedCount !== null) {
+      updateBubbleNotification(cardId, parsedCount, 'title');
+    } else if (bubbleNotificationSources.get(cardId) === 'title') {
+      updateBubbleNotification(cardId, 0, 'title');
+    }
+  } catch (e) {}
+});
+
+ipcMain.on('webview-console-message', (event, payload) => {
+  try {
+    const msg = payload && payload.message ? String(payload.message) : '';
+    if (!msg) return;
+    if (!/turnstile|cloudflare|captcha|challenge/i.test(msg)) return;
+    console.warn('[Webview Console]', {
+      cardId: payload.cardId,
+      level: payload.level,
+      message: msg,
+      line: payload.line,
+      sourceId: payload.sourceId,
+    });
+  } catch (e) {}
+});
+
+const recentChallengeRedirects = new Map(); // cardId -> timestamp
+
+ipcMain.on('cloudflare-challenge', (event, payload) => {
+  try {
+    const cardId = payload && typeof payload.cardId === 'number' ? payload.cardId : Number(payload && payload.cardId);
+    const now = Date.now();
+    const last = recentChallengeRedirects.get(cardId) || 0;
+    if (now - last < 4000) return;
+    recentChallengeRedirects.set(cardId, now);
+    const targetUrl = String(payload && (payload.targetUrl || payload.challengeUrl) || '').trim();
+    if (!targetUrl) return;
+    const cardWindow = cardWindows.get(cardId);
+    if (cardWindow && !cardWindow.isDestroyed()) {
+      cardWindow.webContents.send('cloudflare-challenge-banner', { url: targetUrl });
+    }
+  } catch (e) {}
+});
+
+ipcMain.on('open-external-challenge', (event, payload) => {
+  try {
+    const targetUrl = String(payload && payload.url || '').trim();
+    if (!targetUrl) return;
+    openExternalBrowserForChallenge(targetUrl);
+  } catch (e) {}
+});
+
+// Handle web notifications from card windows - increment bubble notification count
+ipcMain.on('web-notification', (event, payload) => {
+  try {
+    // Find the cardId for this webContents
+    const webContentsId = event.sender.id;
+    for (const [cardId, cardWindow] of cardWindows) {
+      if (cardWindow && !cardWindow.isDestroyed() && cardWindow.webContents) {
+        if (cardWindow.webContents.id === webContentsId) {
+          // Check if this card has a bubble (is minimized)
+          if (cardBubbles.has(cardId)) {
+            incrementBubbleNotification(cardId);
+          }
+          break;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error handling web notification:', e);
+  }
+});
+
+// Clear bubble notifications when card is restored
+ipcMain.handle('clear-bubble-notifications', async (event, cardId) => {
+  try {
+    clearBubbleNotifications(cardId);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('confirm-auth-open-external', async (event, requestId) => {
   try {
     if (!requestId || !pendingAuthRedirects.has(requestId)) {
@@ -1691,7 +2793,7 @@ function getConfiguredUpdateUrl() {
 }
 
 function getConfiguredUpdateCheckUrl() {
-  const fallback = 'https://discovery-web-fvtn.onrender.com';
+  const fallback = 'https://discovery-browser.onrender.com';
   const candidate = String(process.env.DISCOVERY_UPDATE_CHECK_URL || fallback).trim();
   if (!isHttpUrl(candidate)) return fallback;
   return candidate;
@@ -1849,4 +2951,3 @@ ipcMain.handle('is-default-browser-ui', async () => {
     return false;
   }
 });
-

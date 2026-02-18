@@ -33,6 +33,33 @@ try {
   ({ ipcRenderer } = require('electron'));
 } catch (e) {}
 
+// Reduce automation fingerprints for bot challenges.
+try {
+  if (Object.getOwnPropertyDescriptor(Navigator.prototype, 'webdriver')) {
+    Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => undefined });
+  } else if (typeof navigator !== 'undefined') {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+  }
+} catch (e) {}
+
+// Additional lightweight fingerprint hardening for common bot checks.
+try {
+  if (typeof window !== 'undefined' && !window.chrome) {
+    window.chrome = { runtime: {} };
+  }
+} catch (e) {}
+
+try {
+  if (typeof navigator !== 'undefined') {
+    if (navigator.languages && navigator.languages.length === 0) {
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+    }
+    if (navigator.plugins && navigator.plugins.length === 0) {
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+    }
+  }
+} catch (e) {}
+
 try {
   const NativeNotification = window.Notification;
 

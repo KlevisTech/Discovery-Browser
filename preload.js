@@ -47,6 +47,13 @@ const electronAPI = {
     });
   },
 
+  // External card created handler - for when cards are created directly from main process
+  onExternalCardCreated: (callback) => {
+    ipcRenderer.on('external-card-created', (event, cardData) => {
+      callback(cardData);
+    });
+  },
+
   onAuthOpenedExternally: (callback) => {
     ipcRenderer.on('auth-opened-externally', (event, payload) => callback(payload));
   },
@@ -99,15 +106,25 @@ const electronAPI = {
 
   // Downloads
   onDownloadStarted: (callback) => {
-    ipcRenderer.on('download-started', (event, payload) => callback(payload));
+    ipcRenderer.on('download-started', (event, payload) => {
+      console.warn('[Preload] download-started received');
+      callback(payload);
+    });
   },
   onDownloadProgress: (callback) => {
-    ipcRenderer.on('download-progress', (event, payload) => callback(payload));
+    ipcRenderer.on('download-progress', (event, payload) => {
+      console.warn('[Preload] download-progress received');
+      callback(payload);
+    });
   },
   onDownloadDone: (callback) => {
-    ipcRenderer.on('download-done', (event, payload) => callback(payload));
+    ipcRenderer.on('download-done', (event, payload) => {
+      console.warn('[Preload] download-done received', payload);
+      callback(payload);
+    });
   },
   showItemInFolder: (filePath) => ipcRenderer.invoke('show-item-in-folder', filePath),
+  getDownloadHistory: () => ipcRenderer.invoke('get-download-history'),
 
   // Notifications
   onNotificationReceived: (callback) => {
@@ -121,6 +138,10 @@ const electronAPI = {
   // Visualizer setting
   setVisualizerEnabled: (enabled) => ipcRenderer.invoke('set-visualizer-enabled', enabled),
   getVisualizerEnabled: () => ipcRenderer.invoke('get-visualizer-enabled'),
+
+  // Card theme management
+  setCardTheme: (themeKey) => ipcRenderer.invoke('set-card-theme', themeKey),
+  getCardTheme: () => ipcRenderer.invoke('get-card-theme'),
 
   // Clear all user data
   clearUserData: () => ipcRenderer.invoke('clear-user-data'),

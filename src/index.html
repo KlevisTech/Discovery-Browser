@@ -15,7 +15,10 @@
         <div class="header-left">          <div class="logo">            <img class="app-logo" src="../assets/discoverybrowser.jpeg" alt="Discovery Browser" />          </div><!-- Search/Address Bar -->
           <input type="text" id="search-input" class="search-input" placeholder="Enter web address or search..." />
           <!-- Notification dropdown trigger (placed right after the address bar) -->
-          <button class="btn" id="notifications-btn" title="Updates">🔔</button>
+          <div class="notifications-btn-wrap">
+            <button class="btn" id="notifications-btn" title="Updates">🔔</button>
+            <span id="notifications-badge" class="notification-badge" aria-hidden="true" style="display:none;">0</span>
+          </div>
         </div>
         <div class="header-right">
           <div class="card-counter">
@@ -24,7 +27,11 @@
           <button class="btn btn-primary" id="new-card-btn">
             + New
           </button>
-          <button class="btn" id="extensions-btn" title="Extensions">🧩</button>
+          <button class="btn" id="extensions-btn" title="Extensions">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+              <path fill="currentColor" d="M7 2h2v5h2V2h2v5a5 5 0 0 1 4 4.9v1.1h3v2h-3v1a5 5 0 0 1-4 4.9V22h-2v-3H9v3H7v-3.1a5 5 0 0 1-4-4.9v-1H0v-2h3v-1.1A5 5 0 0 1 7 7V2Zm0 7a3 3 0 0 0-3 3v1.1h10V12a3 3 0 0 0-3-3H7Z"/>
+            </svg>
+          </button>
           <!-- Download progress ring (hidden unless downloading) -->
           <button class="download-ring" id="download-ring" title="Downloading..." aria-hidden="true" style="display:none;">
             <svg viewBox="0 0 36 36" class="download-ring__svg" aria-hidden="true">
@@ -103,10 +110,10 @@
           <div style="display: flex; gap: 4px; min-width: max-content;">
             <button id="settings-tab-history" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: rgba(255,255,255,0.2); border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: 600; white-space: nowrap;">📜 History</button>
             <button id="settings-tab-bookmarks" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🔖 Bookmarks</button>
-            <button id="settings-tab-passwords" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🔐 Passwords</button>
-            <button id="settings-tab-downloads" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">⬇ Downloads</button>            <button id="settings-tab-search" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">Search</button>
-            <button id="settings-tab-themes" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">Themes</button>
-            <button id='settings-tab-delete-data' style='flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;'>Delete Data</button>
+            <button id="settings-tab-downloads" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">⬇ Downloads</button>
+            <button id="settings-tab-search" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🔍 Search</button>
+            <button id="settings-tab-themes" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🎨 Themes</button>
+            <button id='settings-tab-delete-data' style='flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;'>🗑️ Delete Data</button>
           </div>
         </div>
 
@@ -126,12 +133,6 @@
             <button id="new-folder-btn" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">+ New Folder</button>
           </div>
           <div id="bookmarks-folders-list" class="bookmarks-folders-list"></div>
-        </div>
-
-        <!-- Passwords tab content (hidden by default) -->
-        <div id="settings-passwords-tab" style="display: none;">
-          <h3 style="margin: 0 0 10px 0; color: white; font-size: 13px;">Saved Passwords</h3>
-          <div id="passwords-list"></div>
         </div>
 
         <!-- Downloads tab content (hidden by default) -->
@@ -223,9 +224,6 @@
   <script src="renderer.js"></script>
 </body>
 </html>
-
-
-
 
 
 
