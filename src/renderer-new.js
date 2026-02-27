@@ -68,6 +68,35 @@ class DiscoveryBrowser {
       }
     });
 
+    // Close settings panel when clicking outside
+    document.addEventListener('click', (e) => {
+      if (this.settingsPanel) {
+        const isSettingsOpen = this.settingsPanel.getAttribute('aria-hidden') !== 'true' &&
+          this.settingsPanel.style.display !== 'none';
+        if (isSettingsOpen && !this.settingsPanel.contains(e.target) &&
+          !e.target.closest('#settings-btn') && !e.target.closest('.settings-btn')) {
+          this.settingsPanel.setAttribute('aria-hidden', 'true');
+          this.settingsPanel.style.display = 'none';
+        }
+      }
+
+      // Close addon discovery modal if clicking outside
+      if (this.discoveryModal) {
+        const isModalOpen = this.discoveryModal.getAttribute('aria-hidden') !== 'true' &&
+          this.discoveryModal.style.display !== 'none';
+        if (isModalOpen) {
+          const modalContent = this.discoveryModal.querySelector('.addon-modal-content');
+          const isClickInside = modalContent && modalContent.contains(e.target);
+          const isClickOnCloseBtn = e.target.closest('#close-discovery-modal');
+          const isClickOnDiscoverBtn = e.target.closest('#discover-addons-btn');
+
+          if (!isClickInside && !isClickOnCloseBtn && !isClickOnDiscoverBtn) {
+            this.closeDiscoveryModal();
+          }
+        }
+      }
+    });
+
     // Setup card events
     window.electronAPI.onCardClosed((cardId) => this.removeCard(cardId));
     window.electronAPI.onCardTitleUpdated((cardId, title) => this.updateCardTitle(cardId, title));
@@ -85,10 +114,10 @@ class DiscoveryBrowser {
     // Listen for URLs coming from outside the app (Python, Clicks, etc.)
     window.electronAPI.onOpenUrl((url) => {
       console.log("Opening external URL in new card:", url);
-      
+
       // Generate a unique ID (matching your existing card logic)
-      const cardId = Date.now(); 
-      
+      const cardId = Date.now();
+
       // Use your existing logic to create a card
       // This usually involves calling the createCard IPC you already have
       window.electronAPI.createCard(cardId, url, { x: null, y: null })

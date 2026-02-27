@@ -1,8 +1,8 @@
 {
   "name": "discovery-browser",
   "version": "1.0.0",
-  "description": "A beautiful, unique card-style web browser built with Electron - now with Google OAuth support!",
-  "author": "Discovery Team",
+  "description": "A beautiful, unique card-style web browser built with Electron",
+  "author": "Modern Tech",
   "license": "MIT",
   "main": "main.js",
   "scripts": {
@@ -14,10 +14,10 @@
     "build:linux": "electron-builder --linux --x64"
   },
   "dependencies": {
-    "electron": "^28.0.0",
     "express": "^4.21.2"
   },
   "devDependencies": {
+    "electron": "^28.0.0",
     "electron-builder": "^24.9.1"
   },
   "build": {
@@ -27,7 +27,9 @@
       "main.js",
       "preload.js",
       "preload-card.js",
-      "stealth-preload.js",
+      "preload-card-bubble.js",
+      "preload-card-overlay.js",
+      "preload-webview.js",
       "src/**/*",
       "assets/**/*",
       "package.json"
@@ -35,23 +37,30 @@
     "protocols": [
       {
         "name": "HTTP",
-        "schemes": ["http"],
+        "schemes": [
+          "http"
+        ],
         "role": "Viewer"
       },
       {
-        "name": "HTTPS", 
-        "schemes": ["https"],
+        "name": "HTTPS",
+        "schemes": [
+          "https"
+        ],
         "role": "Viewer"
       }
     ],
     "win": {
+      "icon": "assets/discoverybrowser.ico",
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
-      "publisherName": "Discovery Team",
+      "publisherName": "Modern Tech",
       "fileAssociations": [
         {
           "ext": "html",
@@ -61,13 +70,15 @@
         },
         {
           "ext": "htm",
-          "name": "HTM Document", 
+          "name": "HTM Document",
           "description": "HTM Document",
           "role": "Viewer"
         }
       ]
     },
     "nsis": {
+      "installerIcon": "assets/discoverybrowser.ico",
+      "uninstallerIcon": "assets/discoverybrowser.ico",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,

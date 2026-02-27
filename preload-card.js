@@ -4,21 +4,21 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Expose safe IPC methods for card windows via contextBridge
 contextBridge.exposeInMainWorld('cardAPI', {
   // Navigation controls
-  cardGoBack: (cardId) => 
+  cardGoBack: (cardId) =>
     ipcRenderer.invoke('card-go-back', cardId),
-  
-  cardGoForward: (cardId) => 
+
+  cardGoForward: (cardId) =>
     ipcRenderer.invoke('card-go-forward', cardId),
-  
-  cardReload: (cardId) => 
+
+  cardReload: (cardId) =>
     ipcRenderer.invoke('card-reload', cardId),
 
   // Navigation
-  navigateCard: (cardId, url) => 
+  navigateCard: (cardId, url) =>
     ipcRenderer.invoke('navigate-card', cardId, url),
-  
+
   // Close card
-  closeCard: (cardId) => 
+  closeCard: (cardId) =>
     ipcRenderer.invoke('close-card', cardId),
 
   // Resize card
@@ -57,6 +57,9 @@ contextBridge.exposeInMainWorld('cardAPI', {
   },
   getVisualizerSetting: () => ipcRenderer.invoke('get-visualizer-enabled'),
 
+  // Get card launch size mode (normal, wide, fullscreen)
+  getCardLaunchSizeMode: () => ipcRenderer.invoke('get-card-launch-size-mode'),
+
   // Get current window position
   getWindowPosition: () => {
     return {
@@ -66,7 +69,7 @@ contextBridge.exposeInMainWorld('cardAPI', {
   },
 
   // Update window position
-  updateWindowPosition: (x, y, cardId) => 
+  updateWindowPosition: (x, y, cardId) =>
     ipcRenderer.invoke('update-card-position', cardId, x, y),
 
   // Listen for window events
@@ -107,4 +110,9 @@ ipcRenderer.on('card-restore-animate', () => {
 
 ipcRenderer.on('cloudflare-challenge-banner', (event, payload) => {
   window.dispatchEvent(new CustomEvent('cloudflare-challenge-banner', { detail: payload || {} }));
+});
+
+// Listen for load failures from main process
+ipcRenderer.on('card-load-failed', (event, payload) => {
+  window.dispatchEvent(new CustomEvent('card-load-failed', { detail: payload }));
 });

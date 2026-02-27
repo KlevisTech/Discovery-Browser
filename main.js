@@ -5,6 +5,106 @@ const path = require('path');
 const fs = require('fs');
 
 const { Menu, MenuItem } = require('electron');
+const APP_ICON_PATH = path.join(__dirname, 'assets', 'discoverybrowser.ico');
+const WINDOW_HANG_RECOVERY_COOLDOWN_MS = 20000;
+const WINDOW_HANG_FORCE_RELOAD_MS = 8000;
+const hangRecoveryAttachedWindows = new WeakSet();
+const hangRecoveryWindowState = new WeakMap();
+
+function triggerWindowHangRecovery(win, windowLabel, reason) {
+  if (!win || win.isDestroyed()) return;
+  const wc = win.webContents;
+  if (!wc || wc.isDestroyed()) return;
+
+  const state = hangRecoveryWindowState.get(win);
+  if (!state) return;
+
+  const now = Date.now();
+  if ((now - state.lastRecoveryAt) < WINDOW_HANG_RECOVERY_COOLDOWN_MS) return;
+
+  state.lastRecoveryAt = now;
+  state.waitingForResponsive = true;
+  console.warn(`[HangRecovery] ${windowLabel} became unresponsive (${reason}). Attempting reload.`);
+
+  try {
+    if (wc.isLoadingMainFrame()) wc.stop();
+  } catch (e) { }
+
+  try {
+    wc.reloadIgnoringCache();
+  } catch (e) {
+    try { wc.reload(); } catch (reloadErr) { }
+  }
+
+  if (state.forceReloadTimer) {
+    clearTimeout(state.forceReloadTimer);
+    state.forceReloadTimer = null;
+  }
+
+  state.forceReloadTimer = setTimeout(() => {
+    if (!state.waitingForResponsive) return;
+    if (!win || win.isDestroyed()) return;
+    if (!win.webContents || win.webContents.isDestroyed()) return;
+
+    console.warn(`[HangRecovery] ${windowLabel} still unresponsive. Forcing renderer restart.`);
+    try {
+      if (typeof win.webContents.forcefullyCrashRenderer === 'function') {
+        win.webContents.forcefullyCrashRenderer();
+      }
+    } catch (e) { }
+
+    try {
+      win.webContents.reloadIgnoringCache();
+    } catch (e) {
+      try { win.webContents.reload(); } catch (reloadErr) { }
+    }
+  }, WINDOW_HANG_FORCE_RELOAD_MS);
+}
+
+function attachWindowHangRecovery(win, windowLabel) {
+  if (!win || win.isDestroyed()) return;
+  if (hangRecoveryAttachedWindows.has(win)) return;
+  hangRecoveryAttachedWindows.add(win);
+
+  const state = {
+    lastRecoveryAt: 0,
+    waitingForResponsive: false,
+    forceReloadTimer: null,
+  };
+  hangRecoveryWindowState.set(win, state);
+
+  const clearForceTimer = () => {
+    if (!state.forceReloadTimer) return;
+    clearTimeout(state.forceReloadTimer);
+    state.forceReloadTimer = null;
+  };
+
+  win.on('unresponsive', () => {
+    triggerWindowHangRecovery(win, windowLabel, 'window-event');
+  });
+
+  win.on('responsive', () => {
+    state.waitingForResponsive = false;
+    clearForceTimer();
+    console.log(`[HangRecovery] ${windowLabel} recovered.`);
+  });
+
+  try {
+    win.webContents.on('render-process-gone', (event, details) => {
+      const reason = details && details.reason ? String(details.reason) : 'unknown';
+      if (reason === 'unresponsive' || reason === 'crashed' || reason === 'abnormal') {
+        triggerWindowHangRecovery(win, windowLabel, `render-process-gone:${reason}`);
+      }
+    });
+  } catch (e) { }
+
+  win.on('closed', () => {
+    state.waitingForResponsive = false;
+    clearForceTimer();
+    hangRecoveryWindowState.delete(win);
+    hangRecoveryAttachedWindows.delete(win);
+  });
+}
 
 // GPU stability flags
 // Keep GPU sandbox enabled by default. Allow disabling only in development for troubleshooting.
@@ -41,7 +141,10 @@ const chromeMajor = (() => {
 const CH_UA = `"Not A(Brand";v="99", "Chromium";v="${chromeMajor}", "Google Chrome";v="${chromeMajor}"`;
 try {
   app.userAgentFallback = CHROME_LIKE_UA;
-} catch (e) {}
+} catch (e) { }
+if (process.platform === 'win32') {
+  try { app.setAppUserModelId('com.discovery.browser'); } catch (e) { }
+}
 
 // Increase max listeners to prevent memory leak warnings
 require('events').EventEmitter.defaultMaxListeners = 50;
@@ -66,7 +169,7 @@ app.on('web-contents-created', (event, contents) => {
       openUrlInCard(url);
       return { action: 'deny' };
     });
-  } catch (e) {}
+  } catch (e) { }
 
   contents.on('context-menu', (e, props) => {
     const menu = new Menu();
@@ -83,7 +186,7 @@ app.on('web-contents-created', (event, contents) => {
           menu.append(new MenuItem({
             label: word,
             click: () => {
-              try { contents.replaceMisspelling(word); } catch (e) {}
+              try { contents.replaceMisspelling(word); } catch (e) { }
             }
           }));
           hasItems = true;
@@ -104,7 +207,7 @@ app.on('web-contents-created', (event, contents) => {
             if (targetSession && typeof targetSession.addWordToSpellCheckerDictionary === 'function') {
               targetSession.addWordToSpellCheckerDictionary(misspelledWord);
             }
-          } catch (e) {}
+          } catch (e) { }
         }
       }));
       menu.append(new MenuItem({ type: 'separator' }));
@@ -116,7 +219,7 @@ app.on('web-contents-created', (event, contents) => {
       // Check if the image URL is downloadable (http/https)
       const imageUrl = props.srcURL;
       const isDownloadable = imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
-      
+
       if (isDownloadable) {
         menu.append(new MenuItem({
           label: 'Save Image As...',
@@ -138,7 +241,7 @@ app.on('web-contents-created', (event, contents) => {
                 } catch (e) {
                   filename = 'image.jpg';
                 }
-                
+
                 // Queue the download with Save As dialog
                 const downloadsDir = app.getPath('downloads');
                 const savePath = path.join(downloadsDir, filename);
@@ -152,7 +255,7 @@ app.on('web-contents-created', (event, contents) => {
         }));
         hasItems = true;
       }
-      
+
       menu.append(new MenuItem({
         label: 'Copy Image URL',
         click: () => {
@@ -166,17 +269,17 @@ app.on('web-contents-created', (event, contents) => {
         }
       }));
       hasItems = true;
-      
+
       menu.append(new MenuItem({
         label: 'Copy Image',
         click: () => {
           try {
             contents.copyImageAt(props.x, props.y);
-          } catch (e) {}
+          } catch (e) { }
         }
       }));
       hasItems = true;
-      
+
       menu.append(new MenuItem({ type: 'separator' }));
     }
 
@@ -184,7 +287,7 @@ app.on('web-contents-created', (event, contents) => {
     if (props && props.mediaType === 'video' && props.srcURL) {
       const videoUrl = props.srcURL;
       const isDownloadable = videoUrl.startsWith('http://') || videoUrl.startsWith('https://');
-      
+
       if (isDownloadable) {
         menu.append(new MenuItem({
           label: 'Save Video As...',
@@ -203,7 +306,7 @@ app.on('web-contents-created', (event, contents) => {
               } catch (e) {
                 filename = 'video.mp4';
               }
-              
+
               // Queue the download with Save As dialog
               const downloadsDir = app.getPath('downloads');
               const savePath = path.join(downloadsDir, filename);
@@ -216,18 +319,18 @@ app.on('web-contents-created', (event, contents) => {
         }));
         hasItems = true;
       }
-      
+
       menu.append(new MenuItem({
         label: 'Copy Video URL',
         click: () => {
           try {
             const { clipboard } = require('electron');
             clipboard.writeText(videoUrl);
-          } catch (e) {}
+          } catch (e) { }
         }
       }));
       hasItems = true;
-      
+
       menu.append(new MenuItem({ type: 'separator' }));
     }
 
@@ -235,7 +338,7 @@ app.on('web-contents-created', (event, contents) => {
     if (props && props.mediaType === 'audio' && props.srcURL) {
       const audioUrl = props.srcURL;
       const isDownloadable = audioUrl.startsWith('http://') || audioUrl.startsWith('https://');
-      
+
       if (isDownloadable) {
         menu.append(new MenuItem({
           label: 'Save Audio As...',
@@ -254,7 +357,7 @@ app.on('web-contents-created', (event, contents) => {
               } catch (e) {
                 filename = 'audio.mp3';
               }
-              
+
               // Queue the download with Save As dialog
               const downloadsDir = app.getPath('downloads');
               const savePath = path.join(downloadsDir, filename);
@@ -267,18 +370,18 @@ app.on('web-contents-created', (event, contents) => {
         }));
         hasItems = true;
       }
-      
+
       menu.append(new MenuItem({
         label: 'Copy Audio URL',
         click: () => {
           try {
             const { clipboard } = require('electron');
             clipboard.writeText(audioUrl);
-          } catch (e) {}
+          } catch (e) { }
         }
       }));
       hasItems = true;
-      
+
       menu.append(new MenuItem({ type: 'separator' }));
     }
 
@@ -298,7 +401,7 @@ app.on('web-contents-created', (event, contents) => {
             } catch (e) {
               filename = 'download';
             }
-            
+
             // Queue the download with Save As dialog
             const downloadsDir = app.getPath('downloads');
             const savePath = path.join(downloadsDir, filename);
@@ -315,7 +418,7 @@ app.on('web-contents-created', (event, contents) => {
           try {
             const { clipboard } = require('electron');
             clipboard.writeText(props.linkURL);
-          } catch (e) {}
+          } catch (e) { }
         }
       }));
       menu.append(new MenuItem({ type: 'separator' }));
@@ -367,13 +470,13 @@ app.on('web-contents-created', (event, contents) => {
 app.on('certificate-error', (event, webContentsRef, url, error, certificate, callback) => {
   try {
     event.preventDefault();
-  } catch (e) {}
+  } catch (e) { }
   try {
     callback(false);
-  } catch (e) {}
+  } catch (e) { }
   try {
     console.warn('[TLS] Blocked certificate error', { url, error });
-  } catch (e) {}
+  } catch (e) { }
 });
 
 // Helper function to extract URL from command line arguments
@@ -403,8 +506,33 @@ const bubbleNotifications = new Map(); // cardId -> notification count
 const bubbleNotificationSources = new Map(); // cardId -> 'api' | 'title'
 let visualizerEnabled = false;
 let currentCardTheme = 'primary'; // Store the user's preferred card theme
+let currentCardLaunchSizeMode = 'normal'; // Store user's preferred launch size for new cards
 const pendingAuthRedirects = new Map(); // requestId -> { authUrl, launchUrl, createdAt }
 const recentAuthRedirects = new Map(); // dedupeKey -> { ts, requestId }
+
+const CARD_LAUNCH_MODE_NORMAL = 'normal';
+const CARD_LAUNCH_MODE_WIDE = 'wide';
+const CARD_LAUNCH_MODE_FULLSCREEN = 'fullscreen';
+const CARD_LAUNCH_VERTICAL_OFFSET = 36;
+const CARD_LAUNCH_SIZE_MODES = new Set([
+  CARD_LAUNCH_MODE_NORMAL,
+  CARD_LAUNCH_MODE_WIDE,
+  CARD_LAUNCH_MODE_FULLSCREEN,
+]);
+
+function normalizeCardLaunchSizeMode(mode) {
+  const candidate = String(mode || '').trim().toLowerCase();
+  if (CARD_LAUNCH_SIZE_MODES.has(candidate)) return candidate;
+  return CARD_LAUNCH_MODE_NORMAL;
+}
+
+function getLaunchWindowSizeByMode(mode) {
+  const normalized = normalizeCardLaunchSizeMode(mode);
+  if (normalized === CARD_LAUNCH_MODE_WIDE) {
+    return { width: 1100, height: 600 };
+  }
+  return { width: 800, height: 500 };
+}
 
 const AUTH_EXTERNAL_HOSTS = new Set([
   'accounts.google.com',
@@ -436,7 +564,7 @@ function closeCardBubble(cardId) {
   if (!bubble) return;
   try {
     if (!bubble.isDestroyed()) bubble.close();
-  } catch (e) {}
+  } catch (e) { }
   cardBubbles.delete(cardId);
   bubbleNotifications.delete(cardId);
   bubbleNotificationSources.delete(cardId);
@@ -454,7 +582,7 @@ function updateBubbleNotification(cardId, count, source) {
   if (bubble && !bubble.isDestroyed()) {
     try {
       bubble.webContents.send('bubble-notification-update', count);
-    } catch (e) {}
+    } catch (e) { }
   }
 }
 
@@ -475,7 +603,7 @@ function deriveBubbleLabel(pageTitle, pageUrl) {
     const host = String(parsed.hostname || '').replace(/^www\./i, '');
     const ch = host.replace(/^[^a-zA-Z0-9]+/, '').charAt(0);
     if (ch) return ch.toUpperCase();
-  } catch (e) {}
+  } catch (e) { }
   return 'D';
 }
 
@@ -515,7 +643,7 @@ function createCardBubble(cardId, cardWindow, meta = {}) {
     let title = '';
     try {
       title = String(cardWindow.webContents.getTitle() || '').trim();
-    } catch (e) {}
+    } catch (e) { }
     if (!title && meta && meta.pageTitle) title = String(meta.pageTitle);
     if (!title) title = `Card ${cardId}`;
     const label = deriveBubbleLabel(meta && meta.pageTitle, meta && meta.pageUrl);
@@ -525,6 +653,7 @@ function createCardBubble(cardId, cardWindow, meta = {}) {
       height: bubbleSize,
       x: startX,
       y: startY,
+      icon: APP_ICON_PATH,
       frame: false,
       transparent: true,
       resizable: false,
@@ -542,6 +671,7 @@ function createCardBubble(cardId, cardWindow, meta = {}) {
         sandbox: true,
       },
     });
+    attachWindowHangRecovery(bubbleWindow, `card-bubble-${cardId}`);
 
     try {
       bubbleWindow.setAlwaysOnTop(true, 'floating');
@@ -567,7 +697,7 @@ function createCardBubble(cardId, cardWindow, meta = {}) {
       try {
         const existingCount = bubbleNotifications.get(cardId) || 0;
         bubbleWindow.webContents.send('bubble-notification-update', existingCount);
-      } catch (e) {}
+      } catch (e) { }
     });
     bubbleWindow.on('closed', () => {
       cardBubbles.delete(cardId);
@@ -593,7 +723,7 @@ function restoreCardFromBubble(cardId) {
   try {
     // Clear notifications when restoring
     clearBubbleNotifications(cardId);
-    
+
     if (cardWindow.isMinimized()) cardWindow.restore();
     cardWindow.show();
     cardWindow.focus();
@@ -601,7 +731,7 @@ function restoreCardFromBubble(cardId) {
       if (cardWindow.webContents && !cardWindow.webContents.isDestroyed()) {
         cardWindow.webContents.send('card-restore-animate');
       }
-    } catch (e) {}
+    } catch (e) { }
   } catch (e) {
     return { success: false, error: e.message };
   } finally {
@@ -617,7 +747,7 @@ function broadcastVisualizerSetting(enabled) {
       if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
         win.webContents.send('visualizer-setting', !!enabled);
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 }
 
@@ -866,7 +996,7 @@ function pickExternalLaunchUrl(authUrl, context = {}) {
 function launchBrowserExecutable(executablePath, url) {
   try {
     if (!executablePath || !fs.existsSync(executablePath)) {
-      try { console.warn('[External Browser] Not found:', executablePath); } catch (e) {}
+      try { console.warn('[External Browser] Not found:', executablePath); } catch (e) { }
       return false;
     }
     const proc = spawn(executablePath, [url], {
@@ -877,7 +1007,7 @@ function launchBrowserExecutable(executablePath, url) {
     proc.unref();
     return true;
   } catch (e) {
-    try { console.warn('[External Browser] Failed to launch', executablePath, e && e.message ? e.message : e); } catch (err) {}
+    try { console.warn('[External Browser] Failed to launch', executablePath, e && e.message ? e.message : e); } catch (err) { }
     return false;
   }
 }
@@ -918,7 +1048,7 @@ function openExternalBrowserForChallenge(url) {
       defaultId: 0,
       noLink: true,
     });
-  } catch (e) {}
+  } catch (e) { }
 
   return { opened: false, launchUrl };
 }
@@ -959,7 +1089,7 @@ function openAuthInExternalBrowser(url, context = {}) {
       defaultId: 0,
       noLink: true,
     });
-  } catch (e) {}
+  } catch (e) { }
   return { opened: false, launchUrl: null };
 }
 
@@ -1012,16 +1142,98 @@ function queueAuthRedirectExternally(authUrl, context = {}) {
 
 // Counter for generating unique card IDs for direct creation
 let directCardIdCounter = 100000;
+let prewarmedCardWindow = null;
+let prewarmInProgress = false;
+let prewarmTimer = null;
+
+function cleanupPrewarmedCardWindow() {
+  if (prewarmTimer) {
+    clearTimeout(prewarmTimer);
+    prewarmTimer = null;
+  }
+  if (prewarmedCardWindow && !prewarmedCardWindow.isDestroyed()) {
+    try {
+      prewarmedCardWindow.destroy();
+    } catch (e) { }
+  }
+  prewarmedCardWindow = null;
+  prewarmInProgress = false;
+}
+
+function scheduleCardPrewarm(delayMs = 1200) {
+  if (prewarmTimer) return;
+  prewarmTimer = setTimeout(() => {
+    prewarmTimer = null;
+    ensurePrewarmedCardWindow();
+  }, delayMs);
+}
+
+function ensurePrewarmedCardWindow() {
+  if (prewarmedCardWindow && !prewarmedCardWindow.isDestroyed()) return;
+  if (prewarmInProgress) return;
+  prewarmInProgress = true;
+  try {
+    const prewarmMode = currentCardLaunchSizeMode === CARD_LAUNCH_MODE_FULLSCREEN
+      ? CARD_LAUNCH_MODE_NORMAL
+      : currentCardLaunchSizeMode;
+    const prewarmSize = getLaunchWindowSizeByMode(prewarmMode);
+    const cardHtmlPath = path.join(__dirname, 'src', 'card.html');
+    const win = new BrowserWindow({
+      width: prewarmSize.width,
+      height: prewarmSize.height,
+      icon: APP_ICON_PATH,
+      frame: false,
+      transparent: true,
+      resizable: true,
+      skipTaskbar: true,
+      show: false,
+      backgroundColor: '#00000000',
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        webviewTag: true,
+        preload: path.join(__dirname, 'preload-card.js'),
+        enableWebSQL: false,
+        spellcheck: true,
+        backgroundThrottling: false,
+        enablePreferredSizeMode: true,
+        partition: 'persist:cards',
+      },
+    });
+    attachWindowHangRecovery(win, 'prewarmed-card');
+    prewarmedCardWindow = win;
+    win.loadFile(cardHtmlPath, {
+      query: {
+        cardId: '0',
+        url: '',
+        theme: currentCardTheme,
+      }
+    }).catch(() => { });
+    win.on('closed', () => {
+      if (prewarmedCardWindow === win) {
+        prewarmedCardWindow = null;
+      }
+    });
+  } catch (e) {
+    prewarmedCardWindow = null;
+  } finally {
+    prewarmInProgress = false;
+  }
+}
 
 // Direct card creation function - creates card window immediately without renderer round-trip
 // This ensures instant visual feedback when external apps call the browser
-// Options: { showHidden: boolean, themeKey: string }
+// Options: { showHidden: boolean, themeKey: string, launchSizeMode: 'normal'|'wide'|'fullscreen' }
 function createCardDirectly(url, options = {}) {
   try {
     // Support both old signature (themeKey as string) and new options object
     const opts = typeof options === 'string' ? { themeKey: options } : options;
     const minimizeAfterShow = opts.minimizeAfterShow === true;
-    
+    const requestedLaunchMode = normalizeCardLaunchSizeMode(opts.launchSizeMode || currentCardLaunchSizeMode);
+    const launchMode = minimizeAfterShow ? CARD_LAUNCH_MODE_NORMAL : requestedLaunchMode;
+    const launchSize = getLaunchWindowSizeByMode(launchMode);
+
     const targetUrl = normalizeTypedNavigationTarget(url);
     if (!targetUrl) {
       return null;
@@ -1050,58 +1262,112 @@ function createCardDirectly(url, options = {}) {
       const { screen } = require('electron');
       const primaryDisplay = screen.getPrimaryDisplay();
       const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-      finalX = Math.floor((screenWidth - 650) / 2);
-      finalY = Math.floor((screenHeight - 500) / 2);
+      finalX = Math.floor((screenWidth - launchSize.width) / 2);
+      finalY = Math.floor((screenHeight - launchSize.height) / 2) + CARD_LAUNCH_VERTICAL_OFFSET;
       // Offset based on existing cards
       const cardCount = cardWindows.size;
       if (cardCount > 0) {
         finalX += (cardCount * 25);
         finalY += (cardCount * 25);
       }
-    } catch (e) {}
+    } catch (e) { }
+
+    let cardWindow = null;
+    if (prewarmedCardWindow && !prewarmedCardWindow.isDestroyed()) {
+      cardWindow = prewarmedCardWindow;
+      prewarmedCardWindow = null;
+      try {
+        cardWindow.setSkipTaskbar(minimizeAfterShow);
+        try { cardWindow.setFullScreen(false); } catch (e) { }
+        cardWindow.setBounds({
+          x: finalX,
+          y: finalY,
+          width: launchSize.width,
+          height: launchSize.height,
+        });
+        cardWindow.show();
+      } catch (e) { }
+      scheduleCardPrewarm(1500);
+    }
 
     // Create floating card window with visible background for instant display
-    const cardWindow = new BrowserWindow({
-      width: 800,
-      height: 500,
-      x: finalX,
-      y: finalY,
-      frame: false,
-      transparent: true,
-      resizable: true,
-      skipTaskbar: minimizeAfterShow, // Hide from taskbar when opening as bubble
-      show: true, // Always show initially
-      backgroundColor: '#00000000', // Transparent for rounded corners from HTML
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        sandbox: true,
-        webviewTag: true,
-        preload: path.join(__dirname, 'preload-card.js'),
-        enableWebSQL: false,
-        spellcheck: true,
-        backgroundThrottling: true,
-        enablePreferredSizeMode: true,
-        partition: 'persist:cards',
-      },
-    });
+    if (!cardWindow) {
+      cardWindow = new BrowserWindow({
+        width: launchSize.width,
+        height: launchSize.height,
+        x: finalX,
+        y: finalY,
+        icon: APP_ICON_PATH,
+        frame: false,
+        transparent: true,
+        resizable: true,
+        skipTaskbar: minimizeAfterShow, // Hide from taskbar when opening as bubble
+        show: true, // Always show initially
+        backgroundColor: '#00000000', // Transparent for rounded corners from HTML
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: true,
+          webviewTag: true,
+          preload: path.join(__dirname, 'preload-card.js'),
+          enableWebSQL: false,
+          spellcheck: true,
+          backgroundThrottling: false,
+          enablePreferredSizeMode: true,
+          partition: 'persist:cards',
+        },
+      });
+    }
+    attachWindowHangRecovery(cardWindow, `direct-card-${cardId}`);
+
+    if (launchMode === CARD_LAUNCH_MODE_FULLSCREEN && !minimizeAfterShow) {
+      const applyFullscreen = () => {
+        try {
+          if (cardWindow && !cardWindow.isDestroyed()) {
+            cardWindow.setFullScreen(true);
+          }
+        } catch (e) { }
+      };
+      cardWindow.once('ready-to-show', applyFullscreen);
+      setTimeout(applyFullscreen, 120);
+    }
 
     // Store reference before loading
     cardWindows.set(cardId, cardWindow);
 
+    // Add network error handlers at main process level
+    cardWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      console.log('[Card] did-fail-load:', errorCode, errorDescription);
+      // Forward to renderer for display
+      if (isMainFrame) {
+        cardWindow.webContents.send('card-load-failed', { errorCode, errorDescription: errorDescription || '' });
+      }
+    });
+
+    cardWindow.webContents.on('render-process-gone', (event, details) => {
+      console.log('[Card] render-process-gone:', details.reason);
+      if (details.reason === 'crashed' || details.reason === 'abnormal') {
+        cardWindow.webContents.send('card-load-failed', { errorCode: -1, errorDescription: details.reason });
+      }
+    });
+
     // If we need to minimize after show, do so after a brief delay
     if (minimizeAfterShow) {
-      // Wait for the window to be ready, then minimize it
-      cardWindow.once('ready-to-show', () => {
-        if (cardWindow && !cardWindow.isDestroyed()) {
-          // Give it a moment to render, then minimize
-          setTimeout(() => {
-            if (cardWindow && !cardWindow.isDestroyed()) {
+      let minimizeScheduled = false;
+      const scheduleMinimize = () => {
+        if (minimizeScheduled) return;
+        minimizeScheduled = true;
+        setTimeout(() => {
+          try {
+            if (cardWindow && !cardWindow.isDestroyed() && !cardWindow.isMinimized()) {
               cardWindow.minimize();
             }
-          }, 500);
-        }
-      });
+          } catch (e) { }
+        }, 500);
+      };
+      cardWindow.once('ready-to-show', scheduleMinimize);
+      cardWindow.webContents.once('did-finish-load', scheduleMinimize);
+      setTimeout(scheduleMinimize, 1400);
     }
 
     // Load the actual card HTML directly without placeholder for faster startup
@@ -1124,11 +1390,11 @@ function createCardDirectly(url, options = {}) {
         let sourceUrl = '';
         try {
           sourceUrl = cardWindow.webContents.getURL();
-        } catch (e) {}
+        } catch (e) { }
         openUrlInCard(openUrl, { sourceUrl, referrerUrl: referrer && referrer.url });
         return { action: 'deny' };
       });
-    } catch (e) {}
+    } catch (e) { }
 
     // Setup event listeners
     cardWindow.webContents.on('did-start-loading', () => {
@@ -1147,7 +1413,7 @@ function createCardDirectly(url, options = {}) {
         if (cardWindow && !cardWindow.isDestroyed() && cardWindow.webContents && !cardWindow.webContents.isDestroyed()) {
           cardWindow.webContents.send('visualizer-setting', !!visualizerEnabled);
         }
-      } catch (e) {}
+      } catch (e) { }
     });
 
     cardWindow.webContents.on('did-navigate', (event, navUrl) => {
@@ -1170,7 +1436,7 @@ function createCardDirectly(url, options = {}) {
             updateBubbleNotification(cardId, 0, 'title');
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     });
 
     cardWindow.on('show', () => {
@@ -1222,7 +1488,7 @@ function openUrlInCard(url, context = {}) {
       queueAuthRedirectExternally(targetUrl, context);
       return;
     }
-    
+
     // Create card directly for instant visual feedback
     // This bypasses the renderer round-trip for external URLs
     createCardDirectly(targetUrl);
@@ -1244,13 +1510,13 @@ function openUrlAsBubble(url, meta = {}) {
       queueAuthRedirectExternally(targetUrl, { sourceUrl: meta.sourceUrl });
       return null;
     }
-    
+
     // Create the card window normally, then minimize it
     const result = createCardDirectly(targetUrl, { minimizeAfterShow: true });
     if (!result || !result.cardWindow) {
       return null;
     }
-    
+
     const { cardId, cardWindow } = result;
 
     const canShowBubble = () => {
@@ -1258,17 +1524,17 @@ function openUrlAsBubble(url, meta = {}) {
         if (!cardWindow || cardWindow.isDestroyed()) return false;
         if (cardWindow.isMinimized()) return true;
         if (!cardWindow.isVisible()) return true;
-      } catch (e) {}
+      } catch (e) { }
       return false;
     };
-    
+
     // Create bubble for this card
     const bubbleMeta = {
       pageTitle: meta.title || '',
       pageUrl: targetUrl,
       themeKey: meta.themeKey || currentCardTheme,
     };
-    
+
     // Wait for the page to get a title, then create bubble
     let bubbleCreated = false;
     const createBubbleWithMeta = () => {
@@ -1278,15 +1544,15 @@ function openUrlAsBubble(url, meta = {}) {
       if (!canShowBubble()) {
         return;
       }
-      
+
       try {
         let title = '';
         try {
           title = String(cardWindow.webContents.getTitle() || '').trim();
-        } catch (e) {}
+        } catch (e) { }
         if (!title && meta.title) title = meta.title;
         if (!title) title = `Card ${cardId}`;
-        
+
         createCardBubble(cardId, cardWindow, {
           ...bubbleMeta,
           pageTitle: title,
@@ -1295,10 +1561,10 @@ function openUrlAsBubble(url, meta = {}) {
         console.error('Error creating bubble for URL:', e);
       }
     };
-    
+
     // Create bubble immediately with placeholder, will update when page loads
     createCardBubble(cardId, cardWindow, bubbleMeta);
-    
+
     // Update bubble when page title changes
     cardWindow.webContents.on('page-title-updated', (event, title) => {
       if (!canShowBubble()) {
@@ -1318,14 +1584,14 @@ function openUrlAsBubble(url, meta = {}) {
         });
       }
     });
-    
+
     // Also create bubble after finish load if not yet created
     cardWindow.webContents.on('did-finish-load', () => {
       if (!bubbleCreated && canShowBubble()) {
         createBubbleWithMeta();
       }
     });
-    
+
     return { cardId, cardWindow };
   } catch (e) {
     console.error('Error opening URL as bubble:', e);
@@ -1376,7 +1642,7 @@ function ensureUniquePath(savePath) {
       const candidate = path.join(dir, `${base} (${i})${ext}`);
       if (!fs.existsSync(candidate)) return candidate;
     }
-  } catch (e) {}
+  } catch (e) { }
   return savePath;
 }
 
@@ -1429,7 +1695,7 @@ function extensionFromMime(mime) {
 
 function sendDownloadEvent(channel, payload, originatingWebContents) {
   console.warn('[DownloadEvent] Sending to mainWindow:', !!mainWindow, mainWindow ? !mainWindow.isDestroyed() : 'N/A');
-  
+
   // Send to main window - ensure it gets the event
   try {
     if (!mainWindow) {
@@ -1453,7 +1719,7 @@ function sendDownloadEvent(channel, payload, originatingWebContents) {
             mainWindow.webContents.send(channel, payload);
             console.warn('[DownloadEvent] Sent to mainWindow after delay');
           }
-        } catch (e) {}
+        } catch (e) { }
       }, 500);
     }
   } catch (e) {
@@ -1464,7 +1730,7 @@ function sendDownloadEvent(channel, payload, originatingWebContents) {
   try {
     if (originatingWebContents) {
       let win = BrowserWindow.fromWebContents(originatingWebContents);
-      
+
       // If webContents is a webview, BrowserWindow.fromWebContents returns null
       // Use hostWebContents to get the parent window's webContents
       if (!win) {
@@ -1473,9 +1739,9 @@ function sendDownloadEvent(channel, payload, originatingWebContents) {
           if (hostWebContents) {
             win = BrowserWindow.fromWebContents(hostWebContents);
           }
-        } catch (e) {}
+        } catch (e) { }
       }
-      
+
       if (win && !win.isDestroyed()) {
         win.webContents.send(channel, payload);
         console.warn('[DownloadEvent] Sent to originating window');
@@ -1545,7 +1811,7 @@ function setupDownloadHandlingForSession(sess) {
               percent,
               state,
             }, webContents);
-          } catch (err) {}
+          } catch (err) { }
         });
 
         item.once('done', (e, state) => {
@@ -1578,7 +1844,7 @@ function setupDownloadHandlingForSession(sess) {
         console.error('Error in will-download handler:', err);
       }
     });
-  } catch (e) {}
+  } catch (e) { }
 }
 
 // User action helpers
@@ -1636,19 +1902,45 @@ ipcMain.handle('get-card-theme', async () => {
   return currentCardTheme;
 });
 
+ipcMain.handle('set-card-launch-size-mode', async (event, mode) => {
+  try {
+    currentCardLaunchSizeMode = normalizeCardLaunchSizeMode(mode);
+    return { success: true, mode: currentCardLaunchSizeMode };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('get-card-launch-size-mode', async () => {
+  try {
+    return currentCardLaunchSizeMode;
+  } catch (e) {
+    return CARD_LAUNCH_MODE_NORMAL;
+  }
+});
+
 // Global error handler
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
 });
 
 // Handle app ready
-app.on('ready', createMainWindow);
+app.on('ready', () => {
+  console.log('[App] Ready event fired, starting app...');
+  try {
+    createMainWindow();
+  } catch (error) {
+    console.error('[App] Error in createMainWindow:', error);
+  }
+});
 
 app.on('before-quit', () => {
   flushPermissionDecisionPersist();
+  cleanupPrewarmedCardWindow();
 });
 
 app.on('window-all-closed', () => {
+  cleanupPrewarmedCardWindow();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -1674,9 +1966,15 @@ if (!gotTheLock) {
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory) => {
     // Someone tried to run a second instance.
+    const url = getUrlFromArgs(commandLine);
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      pendingStartupUrl = url || null;
+      deferInitialMainShow = !!pendingStartupUrl;
+      createMainWindow();
+      return;
+    }
+
     if (mainWindow && !mainWindow.isDestroyed()) {
-      // Use the helper to find the URL in the command line.
-      const url = getUrlFromArgs(commandLine);
       if (url) {
         // Create card directly for instant visual feedback
         createCardDirectly(url);
@@ -1684,35 +1982,38 @@ if (!gotTheLock) {
       }
 
       if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
       mainWindow.focus();
     }
   });
 }
 
 function createMainWindow() {
+  console.log('[App] createMainWindow called');
   loadPermissionDecisionsFromDisk();
 
   let windowX = 100;
   let windowY = 20;
   const CARD_WIDTH = 800;
   const CARD_HEIGHT = 500;
-  
+
   try {
     const { screen } = require('electron');
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-    
+
     windowX = Math.floor((screenWidth - CARD_WIDTH) / 2);
     windowY = Math.floor((screenHeight - CARD_HEIGHT) / 2);
   } catch (e) {
     console.warn('Could not get screen dimensions, using default position');
   }
-  
+
   mainWindow = new BrowserWindow({
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
     x: windowX,
     y: windowY,
+    icon: APP_ICON_PATH,
     minWidth: 800,
     minHeight: 500,
     show: false, // Don't show until ready - prevents white flash
@@ -1721,7 +2022,7 @@ function createMainWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false, // Disable sandbox for better compatibility
       // PERFORMANCE BOOSTS:
       enableWebSQL: false, // Disable deprecated WebSQL
       spellcheck: true,
@@ -1731,6 +2032,9 @@ function createMainWindow() {
       offscreen: false,
     },
   });
+  attachWindowHangRecovery(mainWindow, 'main-window');
+
+  console.log('[App] BrowserWindow created');
 
   // Show window only when ready - prevents flash.
   // If app was launched via external URL, delay dashboard show so the site card appears first.
@@ -1740,7 +2044,11 @@ function createMainWindow() {
     }
   });
 
-  mainWindow.loadFile('src/index.html');
+  mainWindow.loadFile('src/index.html').then(() => {
+    console.log('[App] index.html loaded successfully');
+  }).catch(err => {
+    console.error('[App] Failed to load index.html:', err);
+  });
   setupAddonBlocking();
 
   // Force any window.open/target=_blank to open as a card window
@@ -1749,11 +2057,11 @@ function createMainWindow() {
       let sourceUrl = '';
       try {
         sourceUrl = mainWindow.webContents.getURL();
-      } catch (e) {}
+      } catch (e) { }
       openUrlInCard(url, { sourceUrl, referrerUrl: referrer && referrer.url });
       return { action: 'deny' };
     });
-  } catch (e) {}
+  } catch (e) { }
 
   // Enable downloads for both the main session and card partition session
   try {
@@ -1779,7 +2087,10 @@ function createMainWindow() {
         window.close();
       }
     });
+    cleanupPrewarmedCardWindow();
   });
+
+  scheduleCardPrewarm();
 }
 
 // ========================
@@ -1854,7 +2165,7 @@ function recordDownloadHistory(entry) {
       savePath: entry.savePath,
       state: entry.state,
     });
-  } catch (e) {}
+  } catch (e) { }
   scheduleDownloadHistoryPersist();
 }
 const SOCIAL_ALLOWLIST_HOSTS = new Set([
@@ -1866,6 +2177,7 @@ const SOCIAL_ALLOWLIST_HOSTS = new Set([
   'instagram.com',
   'cdninstagram.com',
   'threads.net',
+  'threads.com',
 ]);
 
 const SECURITY_CHALLENGE_ALLOWLIST_HOSTS = new Set([
@@ -1905,7 +2217,7 @@ function applyAddons(addonsArray) {
   blockSuffixHosts = [];
   blockSubstringPatterns = [];
   if (!Array.isArray(addonsArray)) return;
-  
+
   // Comprehensive ad and tracking host blocklist (common ad networks)
   const defaultAdHosts = [
     // Google Ad Services
@@ -1914,10 +2226,10 @@ function applyAddons(addonsArray) {
     'google-analytics.com', 'analytics.google.com', 'googleanalytics.com',
     'pagead2.googlesyndication.com', 'tpc.googlesyndication.com',
     'googleads.g.doubleclick.net', 'ad.doubleclick.net',
-    
+
     // Facebook & Meta ad endpoints (keep first-party app domains allowlisted below)
     'facebook.net',
-    
+
     // Advertising Networks
     'criteo.com', 'criteo.net', 'criteo.xcdn.net',
     'rubiconproject.com', 'rubiconproject.net',
@@ -1934,26 +2246,26 @@ function applyAddons(addonsArray) {
     'undertone.com',
     'conversantmedia.com', 'tradedeskadserver.com',
     'zedo.com', 'zedo-img.com',
-    
+
     // Ad Tech Platforms
     'adtech.de', 'adtech.fr',
     'adroll.com', 'adrollcdn.com', 'adn.adroll.com',
     'rubycon.com', 'rubyconvert.com',
     'contentsquare.com',
-    
+
     // Tracking Services
     'analytics', 'tracking', 'tracker',
     'mixpanel.com', 'api.mixpanel.com',
     'intercom.io', 'intercom-analytics.com',
     'fullstory.com', 'rs.fullstory.com',
     'newrelic.com', 'bam.nr-data.net',
-    
+
     // Video Ad Networks
     'yumenetworks.com', 'yume.com',
     'tremor.com', 'tremorvideo.com',
     'spotxchange.com',
     'brightroll.com',
-    
+
     // Ad Pattern Blockers
     'ads.', 'ad.', 'adv.', 'adserver', 'advertising',
   ];
@@ -1963,17 +2275,17 @@ function applyAddons(addonsArray) {
     if (a && a.enabled) {
       const name = (a.name || '').toLowerCase();
       const desc = (a.description || '').toLowerCase();
-      
+
       // Detect ad blocker addons
-      if (name.includes('ublock') || name.includes('adblock') || 
-          name.includes('ad block') || name.includes('adblocker') ||
-          desc.includes('block ads') || desc.includes('advertisement')) {
+      if (name.includes('ublock') || name.includes('adblock') ||
+        name.includes('ad block') || name.includes('adblocker') ||
+        desc.includes('block ads') || desc.includes('advertisement')) {
         hasAdBlocker = true;
         defaultAdHosts.forEach(h => blocklist.add(h));
       }
     }
   });
-  
+
   if (!hasAdBlocker) {
     blocklist.clear();
     return;
@@ -2000,8 +2312,8 @@ function setupAddonBlocking() {
   }
 
   // Ensure sessions use the Chrome-like UA for better challenge compatibility.
-  try { session.defaultSession.setUserAgent(CHROME_LIKE_UA); } catch (e) {}
-  
+  try { session.defaultSession.setUserAgent(CHROME_LIKE_UA); } catch (e) { }
+
   const requestHandler = (details, callback) => {
     try {
       if (details && details.resourceType === 'mainFrame' && isAuthSensitiveUrl(details.url)) {
@@ -2011,7 +2323,7 @@ function setupAddonBlocking() {
             const wc = webContents.fromId(details.webContentsId);
             if (wc && !wc.isDestroyed()) sourceUrl = wc.getURL();
           }
-        } catch (e) {}
+        } catch (e) { }
         queueAuthRedirectExternally(details.url, {
           sourceUrl,
           referrerUrl: details.referrer || '',
@@ -2021,14 +2333,14 @@ function setupAddonBlocking() {
 
       const reqUrl = details.url || '';
       let hostname = '';
-      
+
       try {
         hostname = new URL(reqUrl).hostname;
       } catch (e) {
         const match = reqUrl.match(/^https?:\/\/([^/?#]+)/);
         hostname = match ? match[1] : reqUrl;
       }
-      
+
       if (blocklist.size > 0) {
         const host = String(hostname || '').toLowerCase();
         if (isSocialAllowlistedHost(host)) {
@@ -2057,10 +2369,10 @@ function setupAddonBlocking() {
     } catch (e) {
       console.error('[WebRequest] Error in blocking logic:', e.message);
     }
-    
+
     return callback({ cancel: false });
   };
-  
+
   const headerHandler = (details, callback) => {
     try {
       const url = details && details.url ? String(details.url) : '';
@@ -2074,72 +2386,60 @@ function setupAddonBlocking() {
         callback({ requestHeaders: headers });
         return;
       }
-    } catch (e) {}
+    } catch (e) { }
     callback({ requestHeaders: details.requestHeaders });
-  };
-
-  const shouldLogChallenge = (details) => {
-    try {
-      const url = details && details.url ? String(details.url) : '';
-      if (!url) return false;
-      const host = new URL(url).hostname;
-      return isSecurityAllowlistedHost(host);
-    } catch (e) {
-      return false;
-    }
-  };
-
-  const logChallengeRequest = (tag, details, extra = {}) => {
-    try {
-      if (!shouldLogChallenge(details)) return;
-      const url = details && details.url ? String(details.url) : '';
-      const status = details && typeof details.statusCode === 'number' ? details.statusCode : '';
-      const err = details && details.error ? details.error : '';
-      console.warn(`[Challenge] ${tag}`, {
-        url,
-        status,
-        error: err,
-        resourceType: details && details.resourceType,
-        fromCache: details && details.fromCache,
-        ...extra,
-      });
-    } catch (e) {}
   };
 
   // Redirect handler kept minimal to avoid extra work in navigation hot path.
   const redirectHandler = (details) => {
     return;
   };
-  
+
   session.defaultSession.webRequest.onBeforeRequest(requestHandler);
   session.defaultSession.webRequest.onBeforeSendHeaders(headerHandler);
   session.defaultSession.webRequest.onBeforeRedirect(redirectHandler);
-  session.defaultSession.webRequest.onCompleted((details) => logChallengeRequest('completed', details));
-  session.defaultSession.webRequest.onErrorOccurred((details) => logChallengeRequest('error', details));
+  // Challenge request logging removed (noise in production).
+  // Setup CSP override handler to allow external scripts like reCAPTCHA
+  const cspOverrideHandler = (details, callback) => {
+    const responseHeaders = Object.assign({}, details.responseHeaders);
+    // Remove or relax CSP headers to allow external scripts
+    if (responseHeaders['Content-Security-Policy'] || responseHeaders['content-security-policy']) {
+      // Allow Google scripts and other common external resources
+      const csp = (responseHeaders['Content-Security-Policy'] || responseHeaders['content-security-policy'])[0];
+      const relaxedCsp = csp
+        .replace(/script-src\s+'none'/g, "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com")
+        .replace(/object-src\s+'none'/g, "object-src 'self' data:")
+        .replace(/frame-ancestors\s+'none'/g, "frame-ancestors *");
+      responseHeaders['Content-Security-Policy'] = [relaxedCsp];
+      responseHeaders['content-security-policy'] = [relaxedCsp];
+    }
+    callback({ responseHeaders });
+  };
+
   configurePermissionHandlersForSession(session.defaultSession);
-  
+
   const cardPartition = 'persist:cards';
   const cardSession = session.fromPartition(cardPartition);
   if (cardSession && cardSession.webRequest) {
-    try { cardSession.setUserAgent(CHROME_LIKE_UA); } catch (e) {}
+    try { cardSession.setUserAgent(CHROME_LIKE_UA); } catch (e) { }
     cardSession.webRequest.onBeforeRequest(requestHandler);
     cardSession.webRequest.onBeforeSendHeaders(headerHandler);
     cardSession.webRequest.onBeforeRedirect(redirectHandler);
-    cardSession.webRequest.onCompleted((details) => logChallengeRequest('completed', details));
-    cardSession.webRequest.onErrorOccurred((details) => logChallengeRequest('error', details));
-    
+    cardSession.webRequest.onHeadersReceived(cspOverrideHandler);
+    // Challenge request logging removed (noise in production).
+
     configurePermissionHandlersForSession(cardSession);
   }
-  
+
   const defaultPartition = 'persist:webview';
   const webviewSession = session.fromPartition(defaultPartition);
   if (webviewSession && webviewSession.webRequest) {
-    try { webviewSession.setUserAgent(CHROME_LIKE_UA); } catch (e) {}
+    try { webviewSession.setUserAgent(CHROME_LIKE_UA); } catch (e) { }
     webviewSession.webRequest.onBeforeRequest(requestHandler);
     webviewSession.webRequest.onBeforeSendHeaders(headerHandler);
     webviewSession.webRequest.onBeforeRedirect(redirectHandler);
-    webviewSession.webRequest.onCompleted((details) => logChallengeRequest('completed', details));
-    webviewSession.webRequest.onErrorOccurred((details) => logChallengeRequest('error', details));
+    webviewSession.webRequest.onHeadersReceived(cspOverrideHandler);
+    // Challenge request logging removed (noise in production).
     configurePermissionHandlersForSession(webviewSession);
   }
 }
@@ -2174,19 +2474,21 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       return { success: false, externalOpened: true, reason: 'auth-url-opened-externally' };
     }
 
+    const launchMode = normalizeCardLaunchSizeMode(currentCardLaunchSizeMode);
+    const launchSize = getLaunchWindowSizeByMode(launchMode);
+
     // Calculate center position if not provided
-    let finalX = position.x;
-    let finalY = position.y;
-    
-    if (!position.x || !position.y) {
+    let finalX = position && Number.isFinite(Number(position.x)) ? Number(position.x) : null;
+    let finalY = position && Number.isFinite(Number(position.y)) ? Number(position.y) : null;
+
+    if (!Number.isFinite(finalX) || !Number.isFinite(finalY)) {
       try {
         const { screen } = require('electron');
         const primaryDisplay = screen.getPrimaryDisplay();
         const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-        
-        // Center the card on screen
-        finalX = Math.floor((screenWidth - 650) / 2);
-        finalY = Math.floor((screenHeight - 500) / 2);
+
+        finalX = Math.floor((screenWidth - launchSize.width) / 2);
+        finalY = Math.floor((screenHeight - launchSize.height) / 2) + CARD_LAUNCH_VERTICAL_OFFSET;
       } catch (e) {
         // Fallback to default centered position
         finalX = 200;
@@ -2196,10 +2498,11 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
 
     // Create floating card window with visible background for instant display
     const cardWindow = new BrowserWindow({
-      width: 800,
-      height: 500,
+      width: launchSize.width,
+      height: launchSize.height,
       x: finalX,
       y: finalY,
+      icon: APP_ICON_PATH,
       frame: false,
       transparent: true, // Enable transparency for smooth animations
       resizable: true,
@@ -2215,12 +2518,21 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
         // PERFORMANCE OPTIMIZATIONS:
         enableWebSQL: false,
         spellcheck: true,
-        // Keep focused card responsive by reducing background contention from other cards.
-        backgroundThrottling: true,
+        // Keep card renderers fully responsive for split-screen media playback.
+        backgroundThrottling: false,
         enablePreferredSizeMode: true,
         partition: 'persist:cards',
       },
     });
+    attachWindowHangRecovery(cardWindow, `card-${cardId}`);
+
+    if (launchMode === CARD_LAUNCH_MODE_FULLSCREEN) {
+      cardWindow.once('ready-to-show', () => {
+        try {
+          if (!cardWindow.isDestroyed()) cardWindow.setFullScreen(true);
+        } catch (e) { }
+      });
+    }
 
     // Store reference before loading
     cardWindows.set(cardId, cardWindow);
@@ -2231,11 +2543,11 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
         let sourceUrl = '';
         try {
           sourceUrl = cardWindow.webContents.getURL();
-        } catch (e) {}
+        } catch (e) { }
         openUrlInCard(url, { sourceUrl, referrerUrl: referrer && referrer.url });
         return { action: 'deny' };
       });
-    } catch (e) {}
+    } catch (e) { }
 
     // Load the actual card HTML directly without placeholder for faster startup
     const encodedUrl = Buffer.from(targetUrl).toString('base64');
@@ -2268,7 +2580,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
         if (cardWindow && !cardWindow.isDestroyed() && cardWindow.webContents && !cardWindow.webContents.isDestroyed()) {
           cardWindow.webContents.send('visualizer-setting', !!visualizerEnabled);
         }
-      } catch (e) {}
+      } catch (e) { }
     });
 
     cardWindow.webContents.on('did-navigate', (event, url) => {
@@ -2447,7 +2759,7 @@ ipcMain.handle('resize-card', async (event, cardId, x, y, width, height) => {
       width: Math.floor(width),
       height: Math.floor(height)
     });
-    
+
     return { success: true };
   } catch (error) {
     console.error('Error resizing card:', error);
@@ -2504,7 +2816,7 @@ ipcMain.handle('close-bubble-and-card', async (event, cardId) => {
     if (cardWindow && !cardWindow.isDestroyed()) {
       try {
         cardWindow.close();
-      } catch (e) {}
+      } catch (e) { }
     }
     // Then close the bubble
     closeCardBubble(cardId);
@@ -2518,19 +2830,19 @@ ipcMain.handle('close-bubble-and-card', async (event, cardId) => {
 ipcMain.handle('show-bubble-context-menu', async (event, cardId) => {
   const { Menu } = require('electron');
   const menu = new Menu();
-  
+
   menu.append(new MenuItem({
     label: 'Close Card',
     click: async () => {
       // Close both card and bubble
       const cardWindow = cardWindows.get(cardId);
       if (cardWindow && !cardWindow.isDestroyed()) {
-        try { cardWindow.close(); } catch (e) {}
+        try { cardWindow.close(); } catch (e) { }
       }
       closeCardBubble(cardId);
     }
   }));
-  
+
   menu.popup({ window: BrowserWindow.fromWebContents(event.sender) });
 });
 
@@ -2565,7 +2877,7 @@ ipcMain.on('webview-title-updated', (event, payload) => {
     } else if (bubbleNotificationSources.get(cardId) === 'title') {
       updateBubbleNotification(cardId, 0, 'title');
     }
-  } catch (e) {}
+  } catch (e) { }
 });
 
 ipcMain.on('webview-console-message', (event, payload) => {
@@ -2580,7 +2892,7 @@ ipcMain.on('webview-console-message', (event, payload) => {
       line: payload.line,
       sourceId: payload.sourceId,
     });
-  } catch (e) {}
+  } catch (e) { }
 });
 
 const recentChallengeRedirects = new Map(); // cardId -> timestamp
@@ -2598,7 +2910,7 @@ ipcMain.on('cloudflare-challenge', (event, payload) => {
     if (cardWindow && !cardWindow.isDestroyed()) {
       cardWindow.webContents.send('cloudflare-challenge-banner', { url: targetUrl });
     }
-  } catch (e) {}
+  } catch (e) { }
 });
 
 ipcMain.on('open-external-challenge', (event, payload) => {
@@ -2606,7 +2918,7 @@ ipcMain.on('open-external-challenge', (event, payload) => {
     const targetUrl = String(payload && payload.url || '').trim();
     if (!targetUrl) return;
     openExternalBrowserForChallenge(targetUrl);
-  } catch (e) {}
+  } catch (e) { }
 });
 
 // Handle web notifications from card windows - increment bubble notification count
@@ -2920,10 +3232,10 @@ ipcMain.handle('set-as-default-browser-ui', async () => {
     // Try to set as default programmatically first
     app.setAsDefaultProtocolClient('http');
     app.setAsDefaultProtocolClient('https');
-    
+
     // Then open Windows settings to allow manual confirmation
     openDefaultAppsSettings();
-    
+
     return { success: true };
   } catch (error) {
     console.error('Error setting as default:', error);

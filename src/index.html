@@ -1,18 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Discovery Browser</title>
   <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
   <!-- Main App Container (Control Panel) -->
   <div class="app-container">
     <!-- Header Bar -->
     <header class="header-bar">
       <div class="header-content">
-        <div class="header-left">          <div class="logo">            <img class="app-logo" src="../assets/discoverybrowser.jpeg" alt="Discovery Browser" />          </div><!-- Search/Address Bar -->
+        <div class="header-left">
+          <div class="logo"> <img class="app-logo" src="../assets/discoverybrowser.jpeg" alt="Discovery Browser" />
+          </div><!-- Search/Address Bar -->
           <input type="text" id="search-input" class="search-input" placeholder="Enter web address or search..." />
           <!-- Notification dropdown trigger (placed right after the address bar) -->
           <div class="notifications-btn-wrap">
@@ -29,11 +33,13 @@
           </button>
           <button class="btn" id="extensions-btn" title="Extensions">
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
-              <path fill="currentColor" d="M7 2h2v5h2V2h2v5a5 5 0 0 1 4 4.9v1.1h3v2h-3v1a5 5 0 0 1-4 4.9V22h-2v-3H9v3H7v-3.1a5 5 0 0 1-4-4.9v-1H0v-2h3v-1.1A5 5 0 0 1 7 7V2Zm0 7a3 3 0 0 0-3 3v1.1h10V12a3 3 0 0 0-3-3H7Z"/>
+              <path fill="currentColor"
+                d="M7 2h2v5h2V2h2v5a5 5 0 0 1 4 4.9v1.1h3v2h-3v1a5 5 0 0 1-4 4.9V22h-2v-3H9v3H7v-3.1a5 5 0 0 1-4-4.9v-1H0v-2h3v-1.1A5 5 0 0 1 7 7V2Zm0 7a3 3 0 0 0-3 3v1.1h10V12a3 3 0 0 0-3-3H7Z" />
             </svg>
           </button>
           <!-- Download progress ring (hidden unless downloading) -->
-          <button class="download-ring" id="download-ring" title="Downloading..." aria-hidden="true" style="display:none;">
+          <button class="download-ring" id="download-ring" title="Downloading..." aria-hidden="true"
+            style="display:none;">
             <svg viewBox="0 0 36 36" class="download-ring__svg" aria-hidden="true">
               <path class="download-ring__bg" d="M18 2.5 a 15.5 15.5 0 0 1 0 31 a 15.5 15.5 0 0 1 0 -31" />
               <path class="download-ring__fg" d="M18 2.5 a 15.5 15.5 0 0 1 0 31 a 15.5 15.5 0 0 1 0 -31" />
@@ -41,8 +47,8 @@
             <span class="download-ring__icon">⬇</span>
           </button>
           <button class="btn" id="settings-btn" title="Settings">⚙️</button>
-          
-          
+
+
         </div>
       </div>
     </header>
@@ -58,7 +64,8 @@
       </div>
     </div>
 
-    <div class="clock-row">      <div class="clock-widget" aria-live="polite">
+    <div class="clock-row">
+      <div class="clock-widget" aria-live="polite">
         <div class="clock-time" id="clock-time">--:--</div>
         <div class="clock-date" id="clock-date">Loading date...</div>
       </div>
@@ -72,7 +79,8 @@
         <div class="addon-manager-header">
           <h3>Extensions</h3>
           <div class="addon-header-actions">
-            <input id="extensions-search-input" class="addon-header-input" placeholder="Search addons (e.g., uBlock Origin)" />
+            <input id="extensions-search-input" class="addon-header-input"
+              placeholder="Search addons (e.g., uBlock Origin)" />
             <button id="discover-addons-btn" class="btn btn-primary">Discover</button>
           </div>
         </div>
@@ -85,19 +93,24 @@
     <div id="settings-panel" class="settings-panel" aria-hidden="true">
       <div class="settings-content" style="padding: 12px; max-height: 350px; overflow-y: auto;">
         <!-- Default browser quick setting (always visible, above tabs) -->
-        <div id="default-browser-setting" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 10px; margin-bottom:12px; border-radius:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.18);">
+        <div id="default-browser-setting"
+          style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 10px; margin-bottom:12px; border-radius:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.18);">
           <div style="display:flex; flex-direction:column; gap:2px; max-width:70%;">
             <span style="color:white; font-size:13px; font-weight:600;">Set Discovery as your default browser</span>
-            <span style="color:rgba(255,255,255,0.7); font-size:11px;">Opens Windows “Default apps” so you can choose Discovery for web links.</span>
+            <span style="color:rgba(255,255,255,0.7); font-size:11px;">Opens Windows “Default apps” so you can choose
+              Discovery for web links.</span>
           </div>
-          <button id="set-default-browser-btn" class="btn btn-primary" style="padding:6px 10px; font-size:11px; white-space:nowrap;">Set as default</button>
+          <button id="set-default-browser-btn" class="btn btn-primary"
+            style="padding:6px 10px; font-size:11px; white-space:nowrap;">Set as default</button>
         </div>
 
         <!-- Visualizer setting -->
-        <div id="settings-visualizer" class="settings-toggle-row">
+        <div id="settings-visualizer" class="settings-toggle-row"
+          title="Experimental: This feature uses additional resources. Turn it off if videos become choppy or laggy while playing.">
           <div style="display:flex; flex-direction:column; gap:2px;">
             <span style="color:white; font-size:13px; font-weight:600;">Audio Visualizer</span>
-            <span style="color:rgba(255,255,255,0.7); font-size:11px;">Show the animated equalizer in card headers.</span>
+            <span style="color:rgba(255,255,255,0.7); font-size:11px;">Show the animated equalizer in card
+              headers.</span>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="visualizer-toggle" />
@@ -106,14 +119,30 @@
         </div>
 
         <!-- Settings nav tabs with horizontal scroll -->
-        <div style="overflow-x: auto; margin-bottom: 12px; background: rgba(255,255,255,0.07); border-radius: 8px; padding: 3px;">
+        <div
+          style="overflow-x: auto; margin-bottom: 12px; background: rgba(255,255,255,0.07); border-radius: 8px; padding: 3px;">
           <div style="display: flex; gap: 4px; min-width: max-content;">
-            <button id="settings-tab-history" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: rgba(255,255,255,0.2); border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: 600; white-space: nowrap;">📜 History</button>
-            <button id="settings-tab-bookmarks" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🔖 Bookmarks</button>
-            <button id="settings-tab-downloads" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">⬇ Downloads</button>
-            <button id="settings-tab-search" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🔍 Search</button>
-            <button id="settings-tab-themes" style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🎨 Themes</button>
-            <button id='settings-tab-delete-data' style='flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;'>🗑️ Delete Data</button>
+            <button id="settings-tab-history"
+              style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: rgba(255,255,255,0.2); border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: 600; white-space: nowrap;">📜
+              History</button>
+            <button id="settings-tab-bookmarks"
+              style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🔖
+              Bookmarks</button>
+            <button id="settings-tab-downloads"
+              style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">⬇
+              Downloads</button>
+            <button id="settings-tab-search"
+              style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🔍
+              Search</button>
+            <button id="settings-tab-window-size"
+              style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🪟
+              Window Size</button>
+            <button id="settings-tab-themes"
+              style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🎨
+              Themes</button>
+            <button id='settings-tab-delete-data'
+              style='flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;'>🗑️
+              Delete Data</button>
           </div>
         </div>
 
@@ -121,7 +150,9 @@
         <div id="settings-history-tab">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
             <h3 style="margin: 0; color: white; font-size: 13px;">Browsing History</h3>
-            <button id="clear-history-btn" class="btn btn-danger" style="padding: 4px 10px; font-size: 11px; background: rgba(255,80,80,0.5); border: none; color: white; border-radius: 6px; cursor: pointer;">🗑 Clear All</button>
+            <button id="clear-history-btn" class="btn btn-danger"
+              style="padding: 4px 10px; font-size: 11px; background: rgba(255,80,80,0.5); border: none; color: white; border-radius: 6px; cursor: pointer;">🗑
+              Clear All</button>
           </div>
           <div id="history-list" style="max-height: 260px; overflow-y: auto;"></div>
         </div>
@@ -130,7 +161,8 @@
         <div id="settings-bookmarks-tab" style="display: none;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
             <h3 style="margin: 0; color: white; font-size: 13px;">Bookmarks</h3>
-            <button id="new-folder-btn" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">+ New Folder</button>
+            <button id="new-folder-btn" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">+ New
+              Folder</button>
           </div>
           <div id="bookmarks-folders-list" class="bookmarks-folders-list"></div>
         </div>
@@ -139,20 +171,32 @@
         <div id="settings-downloads-tab" style="display: none;">
           <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom:10px;">
             <h3 style="margin: 0; color: white; font-size: 13px;">Downloads</h3>
-            <button id="clear-downloads-btn" class="btn btn-danger" style="padding: 4px 10px; font-size: 11px; background: rgba(255,80,80,0.5); border: none; color: white; border-radius: 6px; cursor: pointer;">🗑 Clear</button>
+            <button id="clear-downloads-btn" class="btn btn-danger"
+              style="padding: 4px 10px; font-size: 11px; background: rgba(255,80,80,0.5); border: none; color: white; border-radius: 6px; cursor: pointer;">🗑
+              Clear</button>
           </div>
-<div id="downloads-list"></div>
+          <div id="downloads-list"></div>
         </div>
         <!-- Search tab content (hidden by default) -->
         <div id="settings-search-tab" style="display: none;">
           <h3 style="margin: 0 0 10px 0; color: white; font-size: 13px;">Search Engine</h3>
-          <p style="margin: 0 0 10px 0; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.4;">Choose your default search engine.</p>
-          <select id="search-engine-select" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: #000; font-size: 12px; outline: none;"></select>
+          <p style="margin: 0 0 10px 0; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.4;">Choose your
+            default search engine.</p>
+          <select id="search-engine-select"
+            style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: #000; font-size: 12px; outline: none;"></select>
+        </div>
+        <!-- Window Size tab content (hidden by default) -->
+        <div id="settings-window-size-tab" style="display: none;">
+          <h3 style="margin: 0 0 10px 0; color: white; font-size: 13px;">Card Launch Window Size</h3>
+          <p style="margin: 0 0 10px 0; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.4;">Pick how new
+            site cards should open by default.</p>
+          <div id="window-size-options" class="theme-options"></div>
         </div>
         <!-- Themes tab content (hidden by default) -->
         <div id="settings-themes-tab" style="display: none;">
           <h3 style="margin: 0 0 10px 0; color: white; font-size: 13px;">Card Header Theme</h3>
-          <p style="margin: 0 0 10px 0; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.4;">Pick one default theme for all site cards you open next.</p>
+          <p style="margin: 0 0 10px 0; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.4;">Pick one
+            default theme for all site cards you open next.</p>
           <div id="theme-options" class="theme-options"></div>
         </div>
         <!-- Delete Data tab content (hidden by default) -->
@@ -162,10 +206,12 @@
             This will remove all local data from Discovery, including history, bookmarks, passwords, downloads list,
             extensions, notifications, tabs, and sign-in data.
           </p>
-          <button id="delete-data-btn" class="btn btn-danger" style="padding: 6px 12px; font-size: 11px; background: rgba(255,80,80,0.7); border: none; color: white; border-radius: 6px; cursor: pointer;">Delete All Data</button>
+          <button id="delete-data-btn" class="btn btn-danger"
+            style="padding: 6px 12px; font-size: 11px; background: rgba(255,80,80,0.7); border: none; color: white; border-radius: 6px; cursor: pointer;">Delete
+            All Data</button>
         </div>
-          
-        
+
+
       </div>
     </div>
 
@@ -174,19 +220,25 @@
       <div class="settings-content" style="padding: 12px; max-height: 280px; overflow-y: auto;">
         <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom:10px;">
           <h3 style="margin: 0; color: white; font-size: 13px;">Updates</h3>
-          <button id="clear-notifications-btn" class="btn btn-danger" style="padding: 4px 10px; font-size: 11px; background: rgba(255,80,80,0.5); border: none; color: white; border-radius: 6px; cursor: pointer;">Check now</button>
+          <button id="clear-notifications-btn" class="btn btn-danger"
+            style="padding: 4px 10px; font-size: 11px; background: rgba(255,80,80,0.5); border: none; color: white; border-radius: 6px; cursor: pointer;">Check
+            now</button>
         </div>
         <div id="notification-list" class="notification-list"></div>
       </div>
     </div>
 
     <!-- Folder name input modal -->
-    <div id="folder-modal" class="folder-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center;">
-      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 12px; width: 300px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+    <div id="folder-modal" class="folder-modal"
+      style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center;">
+      <div
+        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 12px; width: 300px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
         <h3 style="color: white; margin: 0 0 12px 0; font-size: 14px;" id="folder-modal-title">New Folder</h3>
-        <input type="text" id="folder-name-input" placeholder="Folder name" style="width: 100%; padding: 8px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; background: rgba(255,255,255,0.1); color: white; font-size: 12px; margin-bottom: 12px;">
+        <input type="text" id="folder-name-input" placeholder="Folder name"
+          style="width: 100%; padding: 8px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; background: rgba(255,255,255,0.1); color: white; font-size: 12px; margin-bottom: 12px;">
         <div style="display: flex; gap: 8px; justify-content: flex-end;">
-          <button id="folder-modal-cancel" class="btn" style="padding: 6px 12px; font-size: 11px; background: rgba(255,255,255,0.2);">Cancel</button>
+          <button id="folder-modal-cancel" class="btn"
+            style="padding: 6px 12px; font-size: 11px; background: rgba(255,255,255,0.2);">Cancel</button>
           <button id="folder-modal-ok" class="btn btn-primary" style="padding: 6px 12px; font-size: 11px;">OK</button>
         </div>
       </div>
@@ -211,7 +263,9 @@
     <!-- Home widgets: Google search + clock -->
     <div class="home-widgets home-widgets--bottom">
       <div class="google-search-card">
-        <div class="google-search-title">          <img class="google-favicon" id="search-engine-favicon" src="https://www.google.com/favicon.ico" alt="Search" />          <span class="google-search-label" id="search-engine-label">Google</span>        </div>
+        <div class="google-search-title"> <img class="google-favicon" id="search-engine-favicon"
+            src="https://www.google.com/favicon.ico" alt="Search" /> <span class="google-search-label"
+            id="search-engine-label">Google</span> </div>
         <div class="google-search-row">
           <input type="text" id="google-search-input" class="google-search-input" placeholder="Search the web" />
           <button class="google-search-btn" id="google-search-btn">Search</button>
@@ -223,18 +277,5 @@
   <script src="addon-service.js"></script>
   <script src="renderer.js"></script>
 </body>
+
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-

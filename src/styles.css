@@ -1,7 +1,8 @@
 /*styles.css
 
-/* ================================
+/* =================================
    Discovery Browser - Control Panel Styles
+   OPTIMIZED: GPU acceleration, reduced animation complexity
    ================================ */
 
 * {
@@ -10,7 +11,8 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   width: 100%;
   height: 100%;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
@@ -19,6 +21,10 @@ html, body {
   user-select: none;
   overflow: hidden;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  /* GPU acceleration - force hardware acceleration */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
 }
 
 .app-container {
@@ -28,6 +34,9 @@ html, body {
   height: 100%;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
+  /* GPU acceleration */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .header-bar {
@@ -40,6 +49,9 @@ html, body {
   align-items: center;
   padding: 0 24px;
   z-index: 100;
+  /* GPU acceleration */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .header-content {
@@ -89,7 +101,9 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  /* GPU-accelerated transition - only animate transform and opacity */
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  transform: translateZ(0);
 }
 
 .nav-btn:hover {
@@ -157,10 +171,14 @@ html, body {
   stroke-width: 3.2;
   stroke-linecap: round;
   stroke-dasharray: 97.4;
-  stroke-dashoffset: 97.4; /* 0% */
+  stroke-dashoffset: 97.4;
+  /* 0% */
   transition: stroke-dashoffset 0.15s ease;
   transform: rotate(-90deg);
   transform-origin: 50% 50%;
+  /* GPU acceleration */
+  transform-origin: 50% 50%;
+  will-change: transform, stroke-dashoffset;
 }
 
 .download-ring__icon {
@@ -173,11 +191,15 @@ html, body {
 .download-ring.indeterminate .download-ring__fg {
   stroke-dasharray: 24, 97.4;
   stroke-dashoffset: 0;
+  /* Simplified animation for GPU - removed complex keyframe */
   animation: downloadRingSpin 1s linear infinite;
+  will-change: transform;
 }
 
 @keyframes downloadRingSpin {
-  to { transform: rotate(270deg); }
+  to {
+    transform: rotate(270deg) translateZ(0);
+  }
 }
 
 /* Downloads list (settings) */
@@ -202,7 +224,9 @@ html, body {
   padding: 8px;
   background: rgba(255, 255, 255, 0.06);
   cursor: pointer;
-  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+  /* Simplified transition */
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  transform: translateZ(0);
 }
 
 .theme-option:hover {
@@ -268,7 +292,7 @@ html, body {
 
 .download-item__sub {
   margin-top: 2px;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255, 255, 255, 0.6);
   font-size: 9.5px;
   white-space: nowrap;
   overflow: hidden;
@@ -289,12 +313,12 @@ html, body {
   padding: 6px 8px;
   font-size: 10px;
   font-weight: 600;
-  background: rgba(255,255,255,0.12);
+  background: rgba(255, 255, 255, 0.12);
   color: white;
 }
 
 .download-item__btn:hover {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* ================================
@@ -310,6 +334,8 @@ html, body {
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   flex-shrink: 0;
+  /* GPU acceleration */
+  transform: translateZ(0);
 }
 
 .tabs-header {
@@ -374,20 +400,25 @@ html, body {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Simplified transition for GPU - removed complex cubic-bezier */
+  transition: transform 0.2s ease, opacity 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
   position: relative;
   flex-shrink: 0;
-  animation: tabSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* GPU acceleration */
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  animation: tabSlideIn 0.25s ease-out;
 }
 
 @keyframes tabSlideIn {
   from {
     opacity: 0;
-    transform: scale(0.8) translateY(-10px);
+    transform: translateZ(0) translateY(-10px);
   }
+
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: translateZ(0) translateY(0);
   }
 }
 
@@ -456,8 +487,12 @@ html, body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: all 0.2s ease;
+  /* Simplified transition */
+  transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
   opacity: 0;
+  /* GPU acceleration */
+  transform: translateZ(0);
+  will-change: transform, opacity;
 }
 
 .site-tab:hover .tab-close {
@@ -488,7 +523,7 @@ html, body {
 @keyframes tabSlideOut {
   to {
     opacity: 0;
-    transform: scale(0.8) translateX(-20px);
+    transform: translateZ(0) translateX(-20px);
     max-width: 0;
     min-width: 0;
     padding: 0;
@@ -498,7 +533,7 @@ html, body {
 }
 
 .site-tab.removing {
-  animation: tabSlideOut 0.3s ease forwards;
+  animation: tabSlideOut 0.2s ease-out forwards;
 }
 
 /* Bookmark styles */
@@ -519,7 +554,9 @@ html, body {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  transition: all 0.2s ease;
+  /* Simplified transition for GPU */
+  transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+  transform: translateZ(0);
 }
 
 .bookmark-item:hover {
@@ -574,6 +611,8 @@ html, body {
   padding: 14px 16px;
   backdrop-filter: blur(12px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  /* GPU acceleration */
+  transform: translateZ(0);
 }
 
 .google-search-title {
@@ -613,7 +652,9 @@ html, body {
   color: white;
   font-size: 14px;
   outline: none;
-  transition: all 0.2s ease;
+  /* Simplified transition */
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transform: translateZ(0);
 }
 
 .google-search-input::placeholder {
@@ -636,8 +677,10 @@ html, body {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  /* Simplified transition */
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
   white-space: nowrap;
+  transform: translateZ(0);
 }
 
 .google-search-btn:hover {
@@ -667,6 +710,8 @@ html, body {
   align-items: center;
   backdrop-filter: blur(12px);
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+  /* GPU acceleration */
+  transform: translateZ(0);
 }
 
 .clock-time {
@@ -718,8 +763,8 @@ html, body {
   top: 88px;
   right: 24px;
   width: 360px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(12px);
   padding: 12px;
   border-radius: 12px;
@@ -728,30 +773,104 @@ html, body {
   display: none;
 }
 
-.settings-panel h3 { margin-bottom: 6px; }
-.settings-panel .muted { color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 8px; }
-.settings-panel .addon-form { display:flex; gap:8px; margin-bottom:8px; }
-.settings-panel input { flex:1; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.12); color: white; }
-.addons-list { list-style:none; padding:0; margin:0; max-height:200px; overflow:auto; }
-.addon-item { display:flex; justify-content:space-between; gap:8px; align-items:center; padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); margin-bottom:6px; }
-.addon-name { font-weight:600; }
-.uninstall-btn { background: rgba(255,67,67,0.9); color:white; border:none; padding:4px 6px; border-radius:8px; cursor:pointer; font-size:11px; line-height:1.1; white-space:nowrap; }
-.addon-controls .uninstall-btn { width: 100%; text-align: center; }
-.addon-controls .addon-toggle { width: 100%; }
+.settings-panel h3 {
+  margin-bottom: 6px;
+}
 
-.addons-list .btn { padding:6px 8px; border-radius:8px; border:none; cursor:pointer; background: rgba(255,255,255,0.06); color:white; }
-.addons-list .btn:hover { background: rgba(255,255,255,0.12); }
+.settings-panel .muted {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.settings-panel .addon-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.settings-panel input {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.12);
+  color: white;
+}
+
+.addons-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.addon-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  margin-bottom: 6px;
+}
+
+.addon-name {
+  font-weight: 600;
+}
+
+.uninstall-btn {
+  background: rgba(255, 67, 67, 0.9);
+  color: white;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.addon-controls .uninstall-btn {
+  width: 100%;
+  text-align: center;
+}
+
+.addon-controls .addon-toggle {
+  width: 100%;
+}
+
+.addons-list .btn {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.06);
+  color: white;
+}
+
+.addons-list .btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
 
 /* Toggle button for addons */
 .addon-toggle {
-  padding:6px 10px;
-  border-radius:8px;
-  border:none;
-  cursor:pointer;
-  color:white;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  color: white;
 }
-.addon-toggle.on { background: rgba(40,200,120,0.9); }
-.addon-toggle.off { background: rgba(200,80,80,0.9); }
+
+.addon-toggle.on {
+  background: rgba(40, 200, 120, 0.9);
+}
+
+.addon-toggle.off {
+  background: rgba(200, 80, 80, 0.9);
+}
 
 .card-counter {
   color: white;
@@ -767,8 +886,10 @@ html, body {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  /* Simplified transition */
+  transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
   outline: none;
+  transform: translateZ(0);
 }
 
 .btn-primary {
@@ -790,7 +911,9 @@ html, body {
   color: white;
   font-size: 14px;
   outline: none;
-  transition: all 0.2s ease;
+  /* Simplified transition */
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transform: translateZ(0);
 }
 
 .search-input::placeholder {
@@ -854,8 +977,10 @@ html, body {
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s ease;
+  /* Simplified transition */
+  transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
   user-select: none;
+  transform: translateZ(0);
 }
 
 .notification-pill:hover {
@@ -908,6 +1033,9 @@ html, body {
   max-width: 90%;
   overflow-x: auto;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  /* GPU acceleration */
+  transform: translateX(-50%) translateZ(0);
+  will-change: transform;
 }
 
 .dock-content {
@@ -926,11 +1054,15 @@ html, body {
   padding: 8px 12px;
   cursor: pointer;
   border-radius: 12px;
-  transition: all 0.2s ease;
+  /* Simplified transition for GPU */
+  transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.1);
   min-width: 60px;
   position: relative;
+  /* GPU acceleration */
+  transform: translateZ(0);
+  will-change: transform, opacity;
 }
 
 .dock-item:hover {
@@ -969,13 +1101,15 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  /* Simplified transition */
+  transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
   opacity: 0;
   pointer-events: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   font-weight: bold;
   padding: 0;
   line-height: 1;
+  transform: translateZ(0);
 }
 
 .dock-item:hover .dock-close-btn {
@@ -1066,7 +1200,7 @@ html, body {
   z-index: 100;
 }
 
-.card-overlays-container > * {
+.card-overlays-container>* {
   pointer-events: auto;
 }
 
@@ -1113,7 +1247,7 @@ html, body {
 }
 
 .bookmark-url {
-  color: rgba(255,255,255,0.6);
+  color: rgba(255, 255, 255, 0.6);
   font-size: 9px;
   white-space: nowrap;
   overflow: hidden;
@@ -1122,7 +1256,7 @@ html, body {
 }
 
 .bookmark-remove-btn {
-  background: rgba(255,100,100,0.8);
+  background: rgba(255, 100, 100, 0.8);
   color: white;
   border: none;
   padding: 4px 8px;
@@ -1189,7 +1323,7 @@ html, body {
 
 .browser-card.active {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5),
-              0 0 0 3px rgba(102, 126, 234, 0.6);
+    0 0 0 3px rgba(102, 126, 234, 0.6);
   opacity: 1;
   transform: scale(1);
   z-index: 50;
@@ -1395,37 +1529,43 @@ html, body {
 
 @keyframes spin {
   from {
-    transform: rotate(0deg);
+    transform: rotate(0deg) translateZ(0);
   }
+
   to {
-    transform: rotate(360deg);
+    transform: rotate(360deg) translateZ(0);
   }
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: scale(0.95);
+    transform: translateZ(0);
   }
+
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: translateZ(0);
   }
 }
 
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(20px) translateZ(0);
   }
+
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) translateZ(0);
   }
 }
 
 .browser-card {
-  animation: fadeIn 0.3s ease;
+  animation: fadeIn 0.2s ease-out;
+  /* GPU acceleration */
+  transform: translateZ(0);
+  will-change: opacity, transform;
 }
 
 /* ================================
@@ -1503,8 +1643,8 @@ html, body {
   margin-top: 12px;
   padding: 10px;
   border-radius: 10px;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1528,10 +1668,10 @@ html, body {
   position: absolute;
   cursor: pointer;
   inset: 0;
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 999px;
   transition: background 0.2s ease;
-  border: 1px solid rgba(255,255,255,0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .toggle-slider:before {
@@ -1546,12 +1686,12 @@ html, body {
   transition: transform 0.2s ease;
 }
 
-.toggle-switch input:checked + .toggle-slider {
-  background: rgba(80,200,120,0.8);
-  border-color: rgba(80,200,120,0.9);
+.toggle-switch input:checked+.toggle-slider {
+  background: rgba(80, 200, 120, 0.8);
+  border-color: rgba(80, 200, 120, 0.9);
 }
 
-.toggle-switch input:checked + .toggle-slider:before {
+.toggle-switch input:checked+.toggle-slider:before {
   transform: translateX(20px);
 }
 
@@ -1566,15 +1706,15 @@ html, body {
   min-width: 240px;
   padding: 6px 10px;
   border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
   color: white;
   font-size: 12px;
   outline: none;
 }
 
 .addon-header-input:focus {
-  border-color: rgba(255,255,255,0.35);
+  border-color: rgba(255, 255, 255, 0.35);
 }
 
 .addon-header-actions .btn {
@@ -1881,6 +2021,7 @@ html, body {
    ================================ */
 
 @media print {
+
   .header-bar,
   .card-dock,
   .titlebar-btn,

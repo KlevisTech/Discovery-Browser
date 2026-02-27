@@ -10,11 +10,11 @@ class DiscoveryBrowser {
     this.cards = new Map(); // cardId -> cardData
     this.nextCardId = 1;
     this.activeCardId = null;
-    
+
     // Tab management
     this.visitedTabs = new Map(); // url -> tabData
     this.maxTabs = 8;
-    
+
     // History management
     this.history = []; // Array of {url, title, timestamp, favicon}
     this.maxHistoryItems = 1000;
@@ -23,7 +23,7 @@ class DiscoveryBrowser {
     this.activeDownloads = new Map(); // id -> {receivedBytes,totalBytes,percent,filename,url,savePath,state}
     this.downloadHistory = []; // newest first
     this.maxDownloadHistoryItems = 200;
-    
+
     // Notifications
     this.notifications = [];
     this.maxNotifications = 20;
@@ -74,6 +74,7 @@ class DiscoveryBrowser {
     ];
     this.searchEngineKey = 'google';
     this.cardThemeKey = 'primary';
+    this.cardLaunchSizeMode = 'normal';
     this.cardThemes = [
       {
         key: 'primary',
@@ -118,12 +119,32 @@ class DiscoveryBrowser {
         preview: 'linear-gradient(135deg, rgba(110,72,44,0.62), rgba(166,123,91,0.56))',
       },
     ];
-    
+    this.cardLaunchSizeModes = [
+      {
+        key: 'normal',
+        name: 'Normal',
+        description: 'Open cards in the standard size.',
+        preview: 'linear-gradient(135deg, rgba(78,132,255,0.65), rgba(124,89,255,0.58))',
+      },
+      {
+        key: 'wide',
+        name: 'Wide',
+        description: 'Open cards wider for better side-by-side reading.',
+        preview: 'linear-gradient(135deg, rgba(0,179,255,0.62), rgba(51,121,255,0.6))',
+      },
+      {
+        key: 'fullscreen',
+        name: 'Fullscreen',
+        description: 'Open cards directly in fullscreen mode.',
+        preview: 'linear-gradient(135deg, rgba(41,45,58,0.9), rgba(20,22,32,0.92))',
+      },
+    ];
+
     // Layout constants
     this.headerBarHeight = 88;
     this.cardWidth = 650;
     this.cardHeight = 500;
-    
+
     // Container references
     this.cardDock = document.getElementById('dock-content');
     this.newCardBtn = document.getElementById('new-card-btn');
@@ -135,16 +156,16 @@ class DiscoveryBrowser {
     this.notificationsBadge = document.getElementById('notifications-badge');
     this.notificationPanel = document.getElementById('notification-panel');
     this.clearNotificationsBtn = document.getElementById('clear-notifications-btn');
-    
+
     // Note: dock-content may not exist if we're using the new tab bar only
     if (!this.cardDock) {
       console.log('Dock disabled - using tab bar only');
     }
-    
+
     // Initial position for new windows
     this.nextCardX = 200;
     this.nextCardY = 150;
-    
+
     this.init();
   }
 
@@ -157,8 +178,9 @@ class DiscoveryBrowser {
     this.searchEngineFavicon = document.getElementById('search-engine-favicon');
     this.searchEngineSelect = document.getElementById('search-engine-select');
     this.themeOptionsEl = document.getElementById('theme-options');
+    this.windowSizeOptionsEl = document.getElementById('window-size-options');
     this.googleSearchInput = googleSearchInput;
-    
+
     // Search input handler - create card on Enter key
     searchInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -170,7 +192,7 @@ class DiscoveryBrowser {
         }
       }
     });
-    
+
     this.newCardBtn.addEventListener('click', () => this.createCard(this.getSearchEngineHomeUrl()));
 
     // Google search widget handlers
@@ -197,8 +219,10 @@ class DiscoveryBrowser {
 
     this.loadSearchEngine();
     this.loadCardTheme();
+    await this.loadCardLaunchSizeMode();
     this.applySearchEngineToUI();
     this.renderThemeOptions();
+    this.renderWindowSizeOptions();
     if (this.searchEngineSelect) {
       this.populateSearchEngineSelect();
       this.searchEngineSelect.value = this.searchEngineKey;
@@ -228,13 +252,13 @@ class DiscoveryBrowser {
     };
     updateClock();
     setInterval(updateClock, 1000);
-    
+
     // Extensions and Settings panel elements
     this.extensionsBtn = document.getElementById('extensions-btn');
     this.settingsBtn = document.getElementById('settings-btn');
     this.extensionsPanel = document.getElementById('extensions-panel');
     this.settingsPanel = document.getElementById('settings-panel');
-    
+
     this.discoverAddonsBtn = document.getElementById('discover-addons-btn');
     this.extensionsSearchInput = document.getElementById('extensions-search-input');
     this.addonsListEl = document.getElementById('installed-addons-grid');
@@ -252,7 +276,7 @@ class DiscoveryBrowser {
     if (this.extensionsBtn) {
       this.extensionsBtn.addEventListener('click', () => this.toggleExtensions());
     }
-    
+
     if (this.settingsBtn) {
       this.settingsBtn.addEventListener('click', () => this.toggleSettings());
     }
@@ -311,15 +335,15 @@ class DiscoveryBrowser {
     // Listen to web notifications
     if (window.electronAPI && window.electronAPI.onNotificationReceived) {
       // Notifications tray is now update-focused; ignore site notifications here.
-      window.electronAPI.onNotificationReceived(() => {});
+      window.electronAPI.onNotificationReceived(() => { });
     }
-    
+
     // New folder button
     const newFolderBtn = document.getElementById('new-folder-btn');
     if (newFolderBtn) {
       newFolderBtn.addEventListener('click', () => this.createNewFolder());
     }
-    
+
     if (this.discoverAddonsBtn) {
       this.discoverAddonsBtn.addEventListener('click', () => {
         const query = (this.extensionsSearchInput && this.extensionsSearchInput.value || '').trim();
@@ -357,6 +381,58 @@ class DiscoveryBrowser {
       }
     }
 
+    // Close settings panel and addon modal when clicking outside
+    document.addEventListener('click', (e) => {
+      // Close settings panel if clicking outside
+      if (this.settingsPanel) {
+        const isSettingsOpen = this.settingsPanel.getAttribute('aria-hidden') !== 'true' &&
+          this.settingsPanel.style.display !== 'none';
+        if (isSettingsOpen && !this.settingsPanel.contains(e.target) &&
+          !e.target.closest('#settings-btn') && !e.target.closest('.settings-btn')) {
+          this.settingsPanel.setAttribute('aria-hidden', 'true');
+          this.settingsPanel.style.display = 'none';
+        }
+      }
+
+      // Close addon discovery modal if clicking outside (on overlay area)
+      if (this.addonDiscoveryModal) {
+        const isModalOpen = this.addonDiscoveryModal.getAttribute('aria-hidden') !== 'true' &&
+          this.addonDiscoveryModal.style.display !== 'none';
+        if (isModalOpen) {
+          const modalContent = this.addonDiscoveryModal.querySelector('.addon-modal-content');
+          const isClickInside = modalContent && modalContent.contains(e.target);
+          const isClickOnCloseBtn = e.target.closest('#close-discovery-modal');
+          const isClickOnDiscoverBtn = e.target.closest('#discover-addons-btn');
+
+          if (!isClickInside && !isClickOnCloseBtn && !isClickOnDiscoverBtn) {
+            this.closeAddonDiscovery();
+          }
+        }
+      }
+
+      // Close extensions panel if clicking outside
+      if (this.extensionsPanel) {
+        const isExtensionsOpen = this.extensionsPanel.getAttribute('aria-hidden') !== 'true' &&
+          this.extensionsPanel.style.display !== 'none';
+        if (isExtensionsOpen && !this.extensionsPanel.contains(e.target) &&
+          !e.target.closest('#extensions-btn') && !e.target.closest('.extensions-btn')) {
+          this.extensionsPanel.setAttribute('aria-hidden', 'true');
+          this.extensionsPanel.style.display = 'none';
+        }
+      }
+
+      // Close notification panel if clicking outside
+      if (this.notificationPanel) {
+        const isNotificationOpen = this.notificationPanel.getAttribute('aria-hidden') !== 'true' &&
+          this.notificationPanel.style.display !== 'none';
+        if (isNotificationOpen && !this.notificationPanel.contains(e.target) &&
+          !e.target.closest('#notifications-btn') && !e.target.closest('.notifications-btn')) {
+          this.notificationPanel.setAttribute('aria-hidden', 'true');
+          this.notificationPanel.style.display = 'none';
+        }
+      }
+    });
+
     // Visualizer toggle
     if (this.visualizerToggle) {
       const saved = localStorage.getItem('visualizerEnabled');
@@ -373,15 +449,15 @@ class DiscoveryBrowser {
         }
       });
     }
-    
+
     window.electronAPI.onCardClosed((cardId) => {
       this.removeCard(cardId);
     });
-    
+
     window.electronAPI.onCardTitleUpdated((cardId, title) => {
       this.updateCardTitle(cardId, title);
     });
-    
+
     window.electronAPI.onCardUrlUpdated((cardId, url) => {
       this.updateCardUrl(cardId, url);
     });
@@ -395,22 +471,22 @@ class DiscoveryBrowser {
         cardData.url = url;
       }
     });
-    
+
     // Load saved tabs from localStorage
     this.loadTabs();
-    
+
     // Bookmark management
     this.bookmarks = new Map(); // url -> bookmark data
     this.bookmarkFolders = new Map(); // folderId -> { name, bookmarks: [] }
     this.nextFolderId = 1;
     this.loadBookmarks();
     this.loadBookmarkFolders();
-    
+
     // Listen for bookmark toggle from card windows
     window.electronAPI.onToggleBookmark((bookmarkData) => {
       this.toggleBookmark(bookmarkData);
     });
-    
+
     // Listen for bookmark status checks from card windows
     window.electronAPI.onCheckBookmarkStatus((url) => {
       // Check if bookmark exists in any folder
@@ -475,19 +551,21 @@ class DiscoveryBrowser {
     this.loadHistory();
 
     // Card window saves a password - persist and re-render
-    window.electronAPI.onSavePassword(() => {});
+    window.electronAPI.onSavePassword(() => { });
 
     // Settings tab switching
     const tabHistory = document.getElementById('settings-tab-history');
     const tabBookmarks = document.getElementById('settings-tab-bookmarks');
     const tabDownloads = document.getElementById('settings-tab-downloads');
     const tabSearch = document.getElementById('settings-tab-search');
+    const tabWindowSize = document.getElementById('settings-tab-window-size');
     const tabThemes = document.getElementById('settings-tab-themes');
     const tabDeleteData = document.getElementById('settings-tab-delete-data');
     const paneHistory = document.getElementById('settings-history-tab');
     const paneBookmarks = document.getElementById('settings-bookmarks-tab');
     const paneDownloads = document.getElementById('settings-downloads-tab');
     const paneSearch = document.getElementById('settings-search-tab');
+    const paneWindowSize = document.getElementById('settings-window-size-tab');
     const paneThemes = document.getElementById('settings-themes-tab');
     const paneDeleteData = document.getElementById('settings-delete-data-tab');
     const deleteDataBtn = document.getElementById('delete-data-btn');
@@ -558,6 +636,7 @@ class DiscoveryBrowser {
       setActive(tabBookmarks, tabName === 'bookmarks');
       setActive(tabDownloads, tabName === 'downloads');
       setActive(tabSearch, tabName === 'search');
+      setActive(tabWindowSize, tabName === 'window-size');
       setActive(tabThemes, tabName === 'themes');
       setActive(tabDeleteData, tabName === 'delete-data');
 
@@ -565,11 +644,13 @@ class DiscoveryBrowser {
       setPane(paneBookmarks, tabName === 'bookmarks');
       setPane(paneDownloads, tabName === 'downloads');
       setPane(paneSearch, tabName === 'search');
+      setPane(paneWindowSize, tabName === 'window-size');
       setPane(paneThemes, tabName === 'themes');
       setPane(paneDeleteData, tabName === 'delete-data');
 
       if (tabName === 'history') this.renderHistory();
       if (tabName === 'downloads') this.renderDownloadHistory();
+      if (tabName === 'window-size') this.renderWindowSizeOptions();
       if (tabName === 'themes') this.renderThemeOptions();
     };
 
@@ -581,22 +662,26 @@ class DiscoveryBrowser {
       }
     };
 
-    console.warn('[Settings] Tab buttons - History:', !!tabHistory, 'Bookmarks:', !!tabBookmarks, 'Downloads:', !!tabDownloads, 'Search:', !!tabSearch);
-    if (tabHistory && tabBookmarks && tabDownloads && tabSearch && tabThemes && tabDeleteData) {
+    console.warn('[Settings] Tab buttons - History:', !!tabHistory, 'Bookmarks:', !!tabBookmarks, 'Downloads:', !!tabDownloads, 'Search:', !!tabSearch, 'WindowSize:', !!tabWindowSize);
+    if (tabHistory && tabBookmarks && tabDownloads && tabSearch && tabWindowSize && tabThemes && tabDeleteData) {
       tabHistory.addEventListener('click', () => {
         toggleSettingsTab('history');
       });
-      
+
       tabBookmarks.addEventListener('click', () => {
         toggleSettingsTab('bookmarks');
       });
-      
+
       tabDownloads.addEventListener('click', () => {
         toggleSettingsTab('downloads');
       });
 
       tabSearch.addEventListener('click', () => {
         toggleSettingsTab('search');
+      });
+
+      tabWindowSize.addEventListener('click', () => {
+        toggleSettingsTab('window-size');
       });
 
       tabThemes.addEventListener('click', () => {
@@ -678,7 +763,7 @@ class DiscoveryBrowser {
       let host = '';
       try {
         host = authUrl ? new URL(authUrl).hostname : '';
-      } catch (e) {}
+      } catch (e) { }
 
       const sameTarget = !!(authUrl && launchUrl && authUrl === launchUrl);
       const message = sameTarget
@@ -708,7 +793,7 @@ class DiscoveryBrowser {
           alert('Discovery Browser could not open Chrome/Edge. Please try again.');
         });
       } else if (window.electronAPI.cancelAuthOpenExternal) {
-        window.electronAPI.cancelAuthOpenExternal(requestId).catch(() => {});
+        window.electronAPI.cancelAuthOpenExternal(requestId).catch(() => { });
       }
     } catch (e) {
       console.warn('Failed to show auth redirect notice:', e);
@@ -736,7 +821,7 @@ class DiscoveryBrowser {
       if (saved && this.searchEngines.some(e => e.key === saved)) {
         this.searchEngineKey = saved;
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   setSearchEngine(key) {
@@ -744,7 +829,7 @@ class DiscoveryBrowser {
     this.searchEngineKey = key;
     try {
       localStorage.setItem('searchEngineKey', key);
-    } catch (e) {}
+    } catch (e) { }
     this.applySearchEngineToUI();
   }
 
@@ -758,7 +843,7 @@ class DiscoveryBrowser {
       if (window.electronAPI && window.electronAPI.setCardTheme) {
         window.electronAPI.setCardTheme(this.cardThemeKey);
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   setCardTheme(key) {
@@ -770,9 +855,66 @@ class DiscoveryBrowser {
       if (window.electronAPI && window.electronAPI.setCardTheme) {
         window.electronAPI.setCardTheme(key);
       }
-    } catch (e) {}
+    } catch (e) { }
     this.renderThemeOptions();
     this.showThemeToast(key);
+  }
+
+  async loadCardLaunchSizeMode() {
+    try {
+      const saved = localStorage.getItem('cardLaunchSizeMode');
+      if (saved && this.cardLaunchSizeModes.some((m) => m.key === saved)) {
+        this.cardLaunchSizeMode = saved;
+      }
+    } catch (e) { }
+
+    try {
+      if (window.electronAPI && window.electronAPI.setCardLaunchSizeMode) {
+        await window.electronAPI.setCardLaunchSizeMode(this.cardLaunchSizeMode);
+      }
+    } catch (e) { }
+  }
+
+  async setCardLaunchSizeMode(mode) {
+    if (!this.cardLaunchSizeModes.some((m) => m.key === mode)) return;
+    this.cardLaunchSizeMode = mode;
+    try {
+      localStorage.setItem('cardLaunchSizeMode', mode);
+    } catch (e) { }
+    try {
+      if (window.electronAPI && window.electronAPI.setCardLaunchSizeMode) {
+        await window.electronAPI.setCardLaunchSizeMode(mode);
+      }
+    } catch (e) { }
+    this.renderWindowSizeOptions();
+  }
+
+  renderWindowSizeOptions() {
+    if (!this.windowSizeOptionsEl) return;
+    this.windowSizeOptionsEl.innerHTML = '';
+    this.cardLaunchSizeModes.forEach((mode) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = `theme-option${this.cardLaunchSizeMode === mode.key ? ' is-selected' : ''}`;
+      item.innerHTML = `
+        <div class="theme-option__preview" style="background:${mode.preview};"></div>
+        <div class="theme-option__name">${mode.name}</div>
+        <div class="theme-option__desc">${mode.description}</div>
+      `;
+      item.addEventListener('click', () => this.setCardLaunchSizeMode(mode.key));
+      this.windowSizeOptionsEl.appendChild(item);
+    });
+  }
+
+  getCardLaunchWindowDimensions() {
+    if (this.cardLaunchSizeMode === 'wide') {
+      return { width: 1100, height: 600 };
+    }
+    return { width: 800, height: 500 };
+  }
+
+  getCardLaunchVerticalOffset() {
+    return 36;
   }
 
   renderThemeOptions() {
@@ -803,7 +945,7 @@ class DiscoveryBrowser {
       setTimeout(() => {
         if (toast.parentNode) toast.remove();
       }, 1800);
-    } catch (e) {}
+    } catch (e) { }
   }
 
   populateSearchEngineSelect() {
@@ -835,25 +977,25 @@ class DiscoveryBrowser {
   // Normalize URL - add https:// if protocol is missing, or convert to Google search
   normalizeUrl(url) {
     if (!url) return '';
-    
+
     url = url.trim();
-    
+
     // If already has a protocol, return as-is
     if (url.match(/^[a-zA-Z]+:\/\//)) {
       return url;
     }
-    
+
     // Check if it looks like a search query (has spaces or no dots)
     // If it has spaces, it's definitely a search query
     if (url.includes(' ')) {
       return this.buildSearchUrl(url);
     }
-    
+
     // If it has a dot and no spaces, treat it as a URL
     if (url.includes('.')) {
       return 'https://' + url;
     }
-    
+
     // Single word without dots - treat as search query
     return this.buildSearchUrl(url);
   }
@@ -886,10 +1028,10 @@ class DiscoveryBrowser {
   addOrUpdateTab(url, title) {
     // First normalize the URL to ensure it has a protocol
     url = this.normalizeUrl(url);
-    
+
     // ADD TO HISTORY HERE - same place as tabs!
     this.addToHistory(url, title);
-    
+
     // Normalize URL (remove trailing slash, fragments)
     let normalizedUrl = url;
     try {
@@ -915,19 +1057,19 @@ class DiscoveryBrowser {
         // Remove oldest tab (by lastVisited)
         let oldestUrl = null;
         let oldestTime = Infinity;
-        
+
         for (const [tabUrl, tabData] of this.visitedTabs) {
           if (tabData.lastVisited < oldestTime) {
             oldestTime = tabData.lastVisited;
             oldestUrl = tabUrl;
           }
         }
-        
+
         if (oldestUrl) {
           this.visitedTabs.delete(oldestUrl);
         }
       }
-      
+
       // Add new tab
       const tabData = {
         url: normalizedUrl,
@@ -938,7 +1080,7 @@ class DiscoveryBrowser {
       };
       this.visitedTabs.set(normalizedUrl, tabData);
     }
-    
+
     this.saveTabs();
     this.renderTabs();
   }
@@ -955,24 +1097,24 @@ class DiscoveryBrowser {
     if (!this.tabsContainer) {
       return;
     }
-    
+
     this.tabsContainer.innerHTML = '';
-    
+
     if (this.visitedTabs.size === 0) {
       this.tabsContainer.innerHTML = '<div class="tabs-empty">No sites visited yet</div>';
       this.updateTabCount();
       return;
     }
-    
+
     // Sort tabs by last visited (most recent first)
     const sortedTabs = Array.from(this.visitedTabs.values())
       .sort((a, b) => b.lastVisited - a.lastVisited);
-    
+
     sortedTabs.forEach(tabData => {
       const tabEl = this.createTabElement(tabData);
       this.tabsContainer.appendChild(tabEl);
     });
-    
+
     this.updateTabCount();
   }
 
@@ -981,11 +1123,11 @@ class DiscoveryBrowser {
     const tabEl = document.createElement('div');
     tabEl.className = 'site-tab';
     tabEl.dataset.url = tabData.url;
-    
+
     // Create favicon
     const favicon = document.createElement('div');
     favicon.className = 'tab-favicon';
-    
+
     if (tabData.favicon) {
       const img = document.createElement('img');
       img.src = tabData.favicon;
@@ -1000,15 +1142,15 @@ class DiscoveryBrowser {
     } else {
       favicon.textContent = tabData.title.charAt(0).toUpperCase();
     }
-    
+
     // Create tab info
     const tabInfo = document.createElement('div');
     tabInfo.className = 'tab-info';
-    
+
     const tabTitle = document.createElement('div');
     tabTitle.className = 'tab-title';
     tabTitle.textContent = tabData.title;
-    
+
     const tabUrl = document.createElement('div');
     tabUrl.className = 'tab-url';
     try {
@@ -1017,16 +1159,16 @@ class DiscoveryBrowser {
     } catch (e) {
       tabUrl.textContent = tabData.url;
     }
-    
+
     tabInfo.appendChild(tabTitle);
     tabInfo.appendChild(tabUrl);
-    
+
     // Create close button
     const closeBtn = document.createElement('button');
     closeBtn.className = 'tab-close';
     closeBtn.innerHTML = 'X';
     closeBtn.title = 'Close tab';
-    
+
     closeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       tabEl.classList.add('removing');
@@ -1034,16 +1176,16 @@ class DiscoveryBrowser {
         this.removeTab(tabData.url);
       }, 300);
     });
-    
+
     // Tab click handler - open or focus the card for this URL
     tabEl.addEventListener('click', () => {
       this.openOrFocusTabCard(tabData.url);
     });
-    
+
     tabEl.appendChild(favicon);
     tabEl.appendChild(tabInfo);
     tabEl.appendChild(closeBtn);
-    
+
     return tabEl;
   }
 
@@ -1051,14 +1193,14 @@ class DiscoveryBrowser {
   async openOrFocusTabCard(url) {
     // Check if a card with this URL already exists
     let existingCardId = null;
-    
+
     for (const [cardId, cardData] of this.cards) {
       if (cardData.url === url) {
         existingCardId = cardId;
         break;
       }
     }
-    
+
     if (existingCardId) {
       // Focus existing card
       this.focusCard(existingCardId);
@@ -1104,15 +1246,15 @@ class DiscoveryBrowser {
 
   toggleExtensions() {
     if (!this.extensionsPanel) return;
-    
+
     const isHidden = this.extensionsPanel.getAttribute('aria-hidden') === 'true';
-    
+
     // Close settings if open
     if (this.settingsPanel) {
       this.settingsPanel.setAttribute('aria-hidden', 'true');
       this.settingsPanel.style.display = 'none';
     }
-    
+
     // Toggle extensions
     this.extensionsPanel.setAttribute('aria-hidden', String(!isHidden));
     this.extensionsPanel.style.display = isHidden ? 'block' : 'none';
@@ -1120,9 +1262,9 @@ class DiscoveryBrowser {
 
   toggleSettings() {
     if (!this.settingsPanel) return;
-    
+
     const isHidden = this.settingsPanel.getAttribute('aria-hidden') === 'true';
-    
+
     // Close extensions if open
     if (this.extensionsPanel) {
       this.extensionsPanel.setAttribute('aria-hidden', 'true');
@@ -1134,11 +1276,11 @@ class DiscoveryBrowser {
       this.notificationPanel.setAttribute('aria-hidden', 'true');
       this.notificationPanel.style.display = 'none';
     }
-    
+
     // Toggle settings
     this.settingsPanel.setAttribute('aria-hidden', String(!isHidden));
     this.settingsPanel.style.display = isHidden ? 'block' : 'none';
-    
+
     // Render history and bookmarks when opening settings
     if (isHidden) {
       // History is the first tab by default
@@ -1153,7 +1295,7 @@ class DiscoveryBrowser {
 
   toggleNotifications() {
     if (!this.notificationPanel) return;
-    
+
     const isHidden = this.notificationPanel.getAttribute('aria-hidden') === 'true';
 
     // Close settings if open
@@ -1378,7 +1520,7 @@ class DiscoveryBrowser {
   saveDownloadHistory() {
     try {
       localStorage.setItem('downloadHistory', JSON.stringify(this.downloadHistory.slice(0, this.maxDownloadHistoryItems)));
-    } catch (e) {}
+    } catch (e) { }
   }
 
   formatBytes(bytes) {
@@ -1550,7 +1692,7 @@ class DiscoveryBrowser {
           }
         });
       }
-      
+
       // Create default folder if none exist
       if (this.bookmarkFolders.size === 0) {
         this.createFolder('My Bookmarks');
@@ -1603,7 +1745,7 @@ class DiscoveryBrowser {
   renameFolder(folderId) {
     const folder = this.bookmarkFolders.get(folderId);
     if (!folder) return;
-    
+
     this.showFolderModal('Rename Folder', folder.name, (newName) => {
       if (newName && newName.trim()) {
         folder.name = newName.trim();
@@ -1619,39 +1761,39 @@ class DiscoveryBrowser {
     const input = document.getElementById('folder-name-input');
     const okBtn = document.getElementById('folder-modal-ok');
     const cancelBtn = document.getElementById('folder-modal-cancel');
-    
+
     if (!modal || !titleEl || !input || !okBtn || !cancelBtn) {
       console.error('Modal elements not found');
       return;
     }
-    
+
     titleEl.textContent = title;
     input.value = defaultValue;
     modal.style.display = 'flex';
-    
+
     // Focus input and select text
     setTimeout(() => {
       input.focus();
       input.select();
     }, 100);
-    
+
     // Remove old listeners
     const newOkBtn = okBtn.cloneNode(true);
     okBtn.parentNode.replaceChild(newOkBtn, okBtn);
     const newCancelBtn = cancelBtn.cloneNode(true);
     cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-    
+
     // OK button
     newOkBtn.addEventListener('click', () => {
       modal.style.display = 'none';
       callback(input.value);
     });
-    
+
     // Cancel button
     newCancelBtn.addEventListener('click', () => {
       modal.style.display = 'none';
     });
-    
+
     // Enter key
     const enterHandler = (e) => {
       if (e.key === 'Enter') {
@@ -1669,13 +1811,13 @@ class DiscoveryBrowser {
   deleteFolder(folderId) {
     const folder = this.bookmarkFolders.get(folderId);
     if (!folder) return;
-    
+
     // Simple deletion - just delete it
     if (folder.bookmarks.length > 0) {
       // For now, just delete without complex confirmation
       console.log(`Deleting folder "${folder.name}" with ${folder.bookmarks.length} bookmarks`);
     }
-    
+
     this.bookmarkFolders.delete(folderId);
     this.saveBookmarkFolders();
     this.renderBookmarks();
@@ -1700,7 +1842,7 @@ class DiscoveryBrowser {
 
   toggleBookmark(bookmarkData) {
     const url = bookmarkData.url;
-    
+
     // This is now only called to REMOVE a bookmark (card handles add flow)
     for (const [folderId, folder] of this.bookmarkFolders) {
       const index = folder.bookmarks.findIndex(b => b.url === url);
@@ -1716,17 +1858,17 @@ class DiscoveryBrowser {
   renderBookmarks() {
     const foldersList = document.getElementById('bookmarks-folders-list');
     if (!foldersList) return;
-    
+
     foldersList.innerHTML = '';
-    
+
     if (this.bookmarkFolders.size === 0) {
       return;
     }
-    
+
     // Sort folders by creation date
     const sortedFolders = Array.from(this.bookmarkFolders.values())
       .sort((a, b) => a.createdAt - b.createdAt);
-    
+
     sortedFolders.forEach(folder => {
       const folderEl = this.createFolderElement(folder);
       foldersList.appendChild(folderEl);
@@ -1737,11 +1879,11 @@ class DiscoveryBrowser {
     const folderEl = document.createElement('div');
     folderEl.className = 'bookmark-folder';
     folderEl.style.cssText = 'margin-bottom: 8px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; overflow: hidden;';
-    
+
     // Folder header
     const folderHeader = document.createElement('div');
     folderHeader.style.cssText = 'display: flex; align-items: center; padding: 8px; cursor: pointer; background: rgba(255, 255, 255, 0.08);';
-    
+
     folderHeader.innerHTML = `
       <span style="font-size: 11px; margin-right: 6px;">${folder.expanded ? 'OPEN' : 'FOLDER'}</span>
       <span style="flex: 1; color: white; font-weight: 600; font-size: 12px;">${folder.name}</span>
@@ -1749,7 +1891,7 @@ class DiscoveryBrowser {
       <button class="folder-rename-btn" style="background: rgba(255,255,255,0.1); border: none; color: white; padding: 3px 6px; border-radius: 4px; font-size: 10px; cursor: pointer; margin-right: 4px;">Edit</button>
       <button class="folder-delete-btn" style="background: rgba(255,100,100,0.6); border: none; color: white; padding: 3px 6px; border-radius: 4px; font-size: 10px; cursor: pointer;">X</button>
     `;
-    
+
     // Toggle folder on header click
     folderHeader.addEventListener('click', (e) => {
       if (e.target.classList.contains('folder-rename-btn') || e.target.classList.contains('folder-delete-btn')) {
@@ -1757,37 +1899,37 @@ class DiscoveryBrowser {
       }
       this.toggleFolder(folder.id);
     });
-    
+
     // Rename button
     folderHeader.querySelector('.folder-rename-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       this.renameFolder(folder.id);
     });
-    
+
     // Delete button
     folderHeader.querySelector('.folder-delete-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       this.deleteFolder(folder.id);
     });
-    
+
     folderEl.appendChild(folderHeader);
-    
+
     // Folder content (bookmarks)
     if (folder.expanded && folder.bookmarks.length > 0) {
       const bookmarksContainer = document.createElement('div');
       bookmarksContainer.style.cssText = 'padding: 4px;';
-      
+
       // Sort bookmarks by timestamp
       const sortedBookmarks = [...folder.bookmarks].sort((a, b) => b.timestamp - a.timestamp);
-      
+
       sortedBookmarks.forEach(bookmark => {
         const bookmarkEl = this.createBookmarkElement(bookmark, folder.id);
         bookmarksContainer.appendChild(bookmarkEl);
       });
-      
+
       folderEl.appendChild(bookmarksContainer);
     }
-    
+
     return folderEl;
   }
 
@@ -1795,7 +1937,7 @@ class DiscoveryBrowser {
     const bookmarkItem = document.createElement('div');
     bookmarkItem.className = 'bookmark-item';
     bookmarkItem.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; margin-bottom: 4px; transition: all 0.2s ease; cursor: pointer;';
-    
+
     bookmarkItem.innerHTML = `
       <div class="bookmark-info" style="flex: 1; min-width: 0;">
         <div class="bookmark-title" style="color: white; font-weight: 600; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
@@ -1807,24 +1949,24 @@ class DiscoveryBrowser {
       </div>
       <button class="bookmark-remove-btn" style="background: rgba(255,100,100,0.8); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; flex-shrink: 0;" title="Remove bookmark">X</button>
     `;
-    
+
     // Hover effects
     bookmarkItem.addEventListener('mouseenter', () => {
       bookmarkItem.style.background = 'rgba(255, 255, 255, 0.12)';
       bookmarkItem.style.borderColor = 'rgba(255, 255, 255, 0.2)';
     });
-    
+
     bookmarkItem.addEventListener('mouseleave', () => {
       bookmarkItem.style.background = 'rgba(255, 255, 255, 0.08)';
       bookmarkItem.style.borderColor = 'rgba(255, 255, 255, 0.1)';
     });
-    
+
     // Click to open bookmark
     const bookmarkInfo = bookmarkItem.querySelector('.bookmark-info');
     bookmarkInfo.addEventListener('click', () => {
       this.createCard(bookmark.url);
     });
-    
+
     // Remove bookmark
     const removeBtn = bookmarkItem.querySelector('.bookmark-remove-btn');
     removeBtn.addEventListener('click', (e) => {
@@ -1839,17 +1981,17 @@ class DiscoveryBrowser {
         }
       }
     });
-    
+
     removeBtn.addEventListener('mouseenter', () => {
       removeBtn.style.background = 'rgba(255, 67, 67, 0.95)';
       removeBtn.style.transform = 'scale(1.05)';
     });
-    
+
     removeBtn.addEventListener('mouseleave', () => {
       removeBtn.style.background = 'rgba(255, 100, 100, 0.8)';
       removeBtn.style.transform = 'scale(1)';
     });
-    
+
     return bookmarkItem;
   }
 
@@ -1858,7 +2000,7 @@ class DiscoveryBrowser {
     this.passwords = [];
     try {
       localStorage.removeItem('savedPasswords');
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // ========================
@@ -1894,7 +2036,7 @@ class DiscoveryBrowser {
     if (!url || url.startsWith('file://') || url.startsWith('about:')) {
       return;
     }
-    
+
     const recentDuplicate = this.history.slice(0, 5).find(h => h.url === url);
     if (recentDuplicate) {
       return;
@@ -1971,6 +2113,9 @@ class DiscoveryBrowser {
       if (window.electronAPI && window.electronAPI.setVisualizerEnabled) {
         window.electronAPI.setVisualizerEnabled(false);
       }
+      if (window.electronAPI && window.electronAPI.setCardLaunchSizeMode) {
+        window.electronAPI.setCardLaunchSizeMode('normal');
+      }
       const vizToggle = document.getElementById('visualizer-toggle');
       if (vizToggle) vizToggle.checked = false;
     } catch (e) {
@@ -1984,6 +2129,7 @@ class DiscoveryBrowser {
     this.renderNotifications();
     this.renderAddons();
     this.applySearchEngineToUI();
+    this.renderWindowSizeOptions();
     this.renderThemeOptions();
 
     alert('All local data has been deleted.');
@@ -2016,7 +2162,7 @@ class DiscoveryBrowser {
     this.history.forEach(entry => {
       const entryDate = new Date(entry.timestamp);
       entryDate.setHours(0, 0, 0, 0);
-      
+
       if (entryDate.getTime() === today.getTime()) {
         groups.today.push(entry);
       } else if (entryDate.getTime() === yesterday.getTime()) {
@@ -2058,7 +2204,7 @@ class DiscoveryBrowser {
       const timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
       let hostname = entry.url;
-      try { hostname = new URL(entry.url).hostname; } catch(e) {}
+      try { hostname = new URL(entry.url).hostname; } catch (e) { }
 
       item.innerHTML = `
         <div style="width: 20px; height: 20px; border-radius: 4px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 10px;">WEB</div>
@@ -2071,11 +2217,11 @@ class DiscoveryBrowser {
       `;
 
       // Hover effects
-      item.addEventListener('mouseenter', () => { 
-        item.style.background = 'rgba(255,255,255,0.1)'; 
+      item.addEventListener('mouseenter', () => {
+        item.style.background = 'rgba(255,255,255,0.1)';
       });
-      item.addEventListener('mouseleave', () => { 
-        item.style.background = 'rgba(255,255,255,0.05)'; 
+      item.addEventListener('mouseleave', () => {
+        item.style.background = 'rgba(255,255,255,0.05)';
       });
 
       // Click to visit
@@ -2280,23 +2426,24 @@ class DiscoveryBrowser {
     if (!url) {
       url = this.getSearchEngineHomeUrl();
     }
-    
+
     // Normalize URL to ensure it has https:// prefix
     url = this.normalizeUrl(url);
-    
+
     const cardId = this.nextCardId++;
-    
+
     // Calculate centered position on screen
     let x = 300;
     let y = 200;
-    
+
     try {
       const screenWidth = window.screen.availWidth;
       const screenHeight = window.screen.availHeight;
-      
-      x = Math.floor((screenWidth - 650) / 2);
-      y = Math.floor((screenHeight - 500) / 2);
-      
+      const launchSize = this.getCardLaunchWindowDimensions();
+
+      x = Math.floor((screenWidth - launchSize.width) / 2);
+      y = Math.floor((screenHeight - launchSize.height) / 2) + this.getCardLaunchVerticalOffset();
+
       const cardCount = this.cards.size;
       if (cardCount > 0) {
         x += (cardCount * 25);
@@ -2325,7 +2472,7 @@ class DiscoveryBrowser {
         }
         throw new Error((result && result.error) ? result.error : 'Card creation failed');
       }
-      
+
       // Add tab only after main process confirms card creation.
       this.addOrUpdateTab(url, cardData.title);
       this.addCardToDock(cardData);
@@ -2340,10 +2487,10 @@ class DiscoveryBrowser {
     if (!this.activeCardId) {
       return;
     }
-    
+
     const cardId = this.activeCardId;
-    
-    switch(action) {
+
+    switch (action) {
       case 'back':
         window.electronAPI.cardGoBack(cardId);
         break;
@@ -2361,12 +2508,12 @@ class DiscoveryBrowser {
     if (!this.cardDock) {
       return;
     }
-    
+
     const dockItem = document.createElement('div');
     dockItem.className = 'dock-item';
     dockItem.id = `dock-${cardData.id}`;
     dockItem.title = cardData.title || 'New Tab';
-    
+
     dockItem.innerHTML = `
       <div class="dock-item-content">
         <div class="dock-item-icon" style="background: linear-gradient(135deg, #667eea 0%, #f093fb 100%); border-radius: 8px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;">
@@ -2376,7 +2523,7 @@ class DiscoveryBrowser {
       </div>
       <span class="dock-item-label" style="font-size: 11px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${cardData.title}</span>
     `;
-    
+
     dockItem.addEventListener('click', (e) => {
       if (e.target.classList.contains('dock-close-btn')) {
         e.stopPropagation();
@@ -2384,18 +2531,18 @@ class DiscoveryBrowser {
       }
       this.focusCard(cardData.id);
     });
-    
+
     const closeBtn = dockItem.querySelector('.dock-close-btn');
     closeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.closeCard(cardData.id);
     });
-    
+
     dockItem.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       this.closeCard(cardData.id);
     });
-    
+
     this.cardDock.appendChild(dockItem);
   }
 
@@ -2405,15 +2552,15 @@ class DiscoveryBrowser {
       this.activeCardId = cardId;
       return;
     }
-    
+
     const allDockItems = this.cardDock.querySelectorAll('.dock-item');
     allDockItems.forEach(item => item.classList.remove('active'));
-    
+
     const dockItem = document.getElementById(`dock-${cardId}`);
     if (dockItem) {
       dockItem.classList.add('active');
     }
-    
+
     this.activeCardId = cardId;
   }
 
@@ -2428,16 +2575,16 @@ class DiscoveryBrowser {
 
   removeCard(cardId) {
     this.cards.delete(cardId);
-    
+
     const dockItem = document.getElementById(`dock-${cardId}`);
     if (dockItem) {
       dockItem.remove();
     }
-    
+
     if (this.activeCardId === cardId) {
       this.activeCardId = null;
     }
-    
+
     this.updateCardCount();
   }
 
@@ -2445,7 +2592,7 @@ class DiscoveryBrowser {
     const cardData = this.cards.get(cardId);
     if (cardData) {
       cardData.title = title || 'New Tab';
-      
+
       const dockItem = document.getElementById(`dock-${cardId}`);
       if (dockItem) {
         const label = dockItem.querySelector('.dock-item-label');
@@ -2454,7 +2601,7 @@ class DiscoveryBrowser {
         }
         dockItem.title = title || 'New Tab';
       }
-      
+
       // Update tab if exists
       if (cardData.url) {
         this.addOrUpdateTab(cardData.url, title);
@@ -2467,10 +2614,10 @@ class DiscoveryBrowser {
     if (cardData) {
       // Normalize URL
       url = this.normalizeUrl(url);
-      
+
       const oldUrl = cardData.url;
       cardData.url = url;
-      
+
       // Add or update tab for new URL
       const title = cardData.title || this.extractDomainName(url);
       this.addOrUpdateTab(url, title);

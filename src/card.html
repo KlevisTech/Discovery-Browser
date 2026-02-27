@@ -1,16 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Card Window</title>
-  
+
   <!-- Performance optimizations -->
   <meta http-equiv="x-dns-prefetch-control" content="on">
   <link rel="dns-prefetch" href="//www.google.com">
   <link rel="dns-prefetch" href="//fonts.googleapis.com">
   <link rel="preconnect" href="https://www.google.com">
- 
+
   <style>
     * {
       margin: 0;
@@ -24,36 +25,41 @@
       background: transparent;
     }
 
-    /* Spring open/close card motion */
+    /* Spring open/close card motion - simplified for GPU */
     @keyframes springPopIn {
       0% {
-        transform: scale(0.28) translateY(34px);
+        transform: scale(0.28) translateY(34px) translateZ(0);
         opacity: 0;
       }
+
       58% {
-        transform: scale(1.08) translateY(-6px);
+        transform: scale(1.08) translateY(-6px) translateZ(0);
         opacity: 1;
       }
+
       78% {
-        transform: scale(0.96) translateY(2px);
+        transform: scale(0.96) translateY(2px) translateZ(0);
       }
+
       100% {
-        transform: scale(1) translateY(0);
+        transform: scale(1) translateY(0) translateZ(0);
         opacity: 1;
       }
     }
 
     @keyframes springPopOut {
       0% {
-        transform: scale(1) translateY(0);
+        transform: scale(1) translateY(0) translateZ(0);
         opacity: 1;
       }
+
       34% {
-        transform: scale(1.06) translateY(-4px);
+        transform: scale(1.06) translateY(-4px) translateZ(0);
         opacity: 1;
       }
+
       100% {
-        transform: scale(0.24) translateY(28px);
+        transform: scale(0.24) translateY(28px) translateZ(0);
         opacity: 0;
       }
     }
@@ -62,6 +68,7 @@
       0% {
         background-position: -1000px 0;
       }
+
       100% {
         background-position: 1000px 0;
       }
@@ -74,12 +81,13 @@
       flex-direction: column;
       background: linear-gradient(135deg, #667eea 0%, #f093fb 100%);
       border-radius: 24px;
-      box-shadow: 
+      box-shadow:
         0 25px 50px rgba(0, 0, 0, 0.3),
         0 0 0 1px rgba(255, 255, 255, 0.1) inset,
         0 50px 100px rgba(102, 126, 234, 0.3);
       overflow: hidden;
-      animation: springPopIn 520ms cubic-bezier(0.19, 1.2, 0.32, 1) both;
+      /* Simplified animation duration for GPU */
+      animation: springPopIn 400ms cubic-bezier(0.19, 1.2, 0.32, 1) both;
       position: relative;
       transform-origin: 50% 50%;
       will-change: transform, opacity;
@@ -95,24 +103,24 @@
       left: -100%;
       width: 100%;
       height: 100%;
-      background: linear-gradient(
-        90deg,
-        transparent,
-        rgba(255, 255, 255, 0.3),
-        transparent
-      );
+      background: linear-gradient(90deg,
+          transparent,
+          rgba(255, 255, 255, 0.3),
+          transparent);
       animation: shimmer 1.5s ease-in-out;
       pointer-events: none;
       z-index: 1000;
     }
 
     .card-window.is-minimizing {
-      animation: springPopOut 260ms cubic-bezier(0.4, 0.0, 1, 1) forwards;
+      /* Simplified animation for GPU */
+      animation: springPopOut 200ms ease-out forwards;
       pointer-events: none;
     }
 
     .card-window.is-restoring {
-      animation: springPopIn 460ms cubic-bezier(0.19, 1.2, 0.32, 1) both;
+      /* Simplified animation for GPU */
+      animation: springPopIn 350ms cubic-bezier(0.19, 1.2, 0.32, 1) both;
       pointer-events: auto;
     }
 
@@ -146,23 +154,23 @@
     }
 
     .theme-emerald .card-titlebar {
-      background: linear-gradient(135deg, rgba(17, 153, 142, 0.45), rgba(56, 239, 125, 0.42));
+      background: linear-gradient(135deg, rgba(14, 142, 70, 0.62), rgba(58, 191, 92, 0.55));
       border-bottom: 2px solid rgba(255, 255, 255, 0.22);
     }
 
     .theme-amber .card-titlebar {
-      background: linear-gradient(135deg, rgba(255, 153, 102, 0.46), rgba(255, 94, 98, 0.42));
+      background: linear-gradient(135deg, rgba(255, 140, 30, 0.65), rgba(255, 92, 24, 0.58));
       border-bottom: 2px solid rgba(255, 255, 255, 0.22);
     }
 
     .theme-midnight .card-titlebar {
-      background: linear-gradient(135deg, rgba(8, 8, 10, 0.78), rgba(34, 34, 40, 0.68));
-      border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+      background: linear-gradient(135deg, rgba(0, 0, 0, 0.92), rgba(18, 18, 18, 0.88));
+      border-bottom: 2px solid rgba(255, 255, 255, 0.18);
     }
 
     .theme-cocoa .card-titlebar {
-      background: linear-gradient(135deg, rgba(110, 72, 44, 0.56), rgba(166, 123, 91, 0.52));
-      border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+      background: linear-gradient(135deg, rgba(76, 42, 24, 0.92), rgba(132, 78, 46, 0.88));
+      border-bottom: 2px solid rgba(255, 220, 190, 0.22);
     }
 
     .card-titlebar:active {
@@ -186,11 +194,12 @@
     @keyframes fadeInSlide {
       from {
         opacity: 0;
-        transform: translateX(-10px);
+        transform: translateX(-10px) translateZ(0);
       }
+
       to {
         opacity: 1;
-        transform: translateX(0);
+        transform: translateX(0) translateZ(0);
       }
     }
 
@@ -198,7 +207,8 @@
       display: flex;
       gap: 8px;
       -webkit-app-region: no-drag;
-      animation: fadeInSlide 0.5s ease 0.3s backwards;
+      /* Simplified animation for GPU */
+      animation: fadeInSlide 0.3s ease 0.2s backwards;
     }
 
     .card-button {
@@ -214,7 +224,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      /* Simplified transition for GPU */
+      transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+      transform: translateZ(0);
+      will-change: transform;
     }
 
     .card-button.size-btn {
@@ -303,7 +316,9 @@
     }
 
     @keyframes downloadRingSpin {
-      to { transform: rotate(270deg); }
+      to {
+        transform: rotate(270deg) translateZ(0);
+      }
     }
 
     .card-navbar {
@@ -318,6 +333,8 @@
       -webkit-app-region: no-drag;
       position: relative;
       z-index: 10;
+      /* GPU acceleration */
+      transform: translateZ(0);
     }
 
     .nav-button {
@@ -332,18 +349,21 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      /* Simplified transition for GPU */
+      transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+      transform: translateZ(0);
+      will-change: transform;
     }
 
     .nav-button:hover {
       background: rgba(255, 255, 255, 0.25);
-      transform: scale(1.12) translateY(-2px);
+      transform: scale(1.12) translateY(-2px) translateZ(0);
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
 
     .nav-button:active {
       background: rgba(255, 255, 255, 0.35);
-      transform: scale(0.95);
+      transform: scale(0.95) translateZ(0);
     }
 
     .nav-button:disabled {
@@ -361,7 +381,9 @@
       color: white;
       font-size: 12px;
       font-family: 'Monaco', 'Menlo', monospace;
-      transition: all 0.3s ease;
+      /* Simplified transition for GPU */
+      transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+      transform: translateZ(0);
     }
 
     .url-input::placeholder {
@@ -373,7 +395,7 @@
       background: rgba(255, 255, 255, 0.2);
       border-color: rgba(255, 255, 255, 0.4);
       box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
-      transform: scale(1.02);
+      transform: scale(1.02) translateZ(0);
     }
 
     .card-content {
@@ -410,11 +432,12 @@
     @keyframes contentFadeIn {
       from {
         opacity: 0;
-        transform: scale(0.98);
+        transform: scale(0.98) translateZ(0);
       }
+
       to {
         opacity: 1;
-        transform: scale(1);
+        transform: scale(1) translateZ(0);
       }
     }
 
@@ -426,10 +449,12 @@
       height: 3px;
       background: linear-gradient(90deg, #667eea, #f093fb, #667eea);
       background-size: 200% 100%;
-      animation: gradientShift 2s ease-in-out infinite;
+      /* Simplified animation for GPU */
+      animation: gradientShift 1.5s ease-in-out infinite;
       z-index: 100;
       display: none;
       box-shadow: 0 2px 8px rgba(102, 126, 234, 0.5);
+      will-change: background-position;
     }
 
     .loading-indicator.active {
@@ -437,9 +462,12 @@
     }
 
     @keyframes gradientShift {
-      0%, 100% {
+
+      0%,
+      100% {
         background-position: 0% 50%;
       }
+
       50% {
         background-position: 100% 50%;
       }
@@ -455,10 +483,12 @@
       border: 3px solid rgba(102, 126, 234, 0.2);
       border-top: 3px solid #667eea;
       border-radius: 50%;
-      animation: spin 1s linear infinite;
+      /* Simplified animation for GPU */
+      animation: spin 0.8s linear infinite;
       display: none;
       z-index: 50;
       box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      will-change: transform;
     }
 
     .loading-spinner.active {
@@ -466,28 +496,38 @@
     }
 
     @keyframes spin {
-      0% { transform: translate(-50%, -50%) rotate(0deg); }
-      100% { transform: translate(-50%, -50%) rotate(360deg); }
+      0% {
+        transform: translate(-50%, -50%) rotate(0deg) translateZ(0);
+      }
+
+      100% {
+        transform: translate(-50%, -50%) rotate(360deg) translateZ(0);
+      }
     }
 
-    /* Pulse effect for active elements */
+    /* Pulse effect for active elements - simplified */
     @keyframes pulse {
-      0%, 100% {
+
+      0%,
+      100% {
         box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7);
       }
+
       50% {
-        box-shadow: 0 0 0 10px rgba(102, 126, 234, 0);
+        box-shadow: 0 0 0 6px rgba(102, 126, 234, 0);
       }
     }
 
     webview {
-      animation: webviewFadeIn 0.8s ease 0.4s backwards;
+      /* Simplified animation for GPU */
+      animation: webviewFadeIn 0.4s ease-out 0.2s backwards;
     }
 
     @keyframes webviewFadeIn {
       from {
         opacity: 0;
       }
+
       to {
         opacity: 1;
       }
@@ -514,7 +554,7 @@
         radial-gradient(circle at 10% 50%, rgba(120, 255, 214, 0.9) 0%, rgba(120, 255, 214, 0.0) 55%) 0 0 / 120px 100%,
         radial-gradient(circle at 40% 50%, rgba(120, 180, 255, 0.9) 0%, rgba(120, 180, 255, 0.0) 55%) 0 0 / 140px 100%,
         radial-gradient(circle at 70% 50%, rgba(255, 120, 240, 0.9) 0%, rgba(255, 120, 240, 0.0) 55%) 0 0 / 160px 100%,
-        linear-gradient(90deg, rgba(102,126,234,0.0), rgba(240,147,251,0.75), rgba(102,126,234,0.0)) 0 0 / 220px 100%;
+        linear-gradient(90deg, rgba(102, 126, 234, 0.0), rgba(240, 147, 251, 0.75), rgba(102, 126, 234, 0.0)) 0 0 / 220px 100%;
       animation: waveDrift 1.2s linear infinite;
       filter: drop-shadow(0 2px 6px rgba(102, 126, 234, 0.6));
     }
@@ -525,7 +565,7 @@
         radial-gradient(circle at 12% 50%, rgba(255, 120, 200, 0.85) 0%, rgba(255, 120, 200, 0.0) 55%) 0 0 / 120px 100%,
         radial-gradient(circle at 45% 50%, rgba(255, 110, 110, 0.85) 0%, rgba(255, 110, 110, 0.0) 55%) 0 0 / 140px 100%,
         radial-gradient(circle at 72% 50%, rgba(255, 170, 210, 0.85) 0%, rgba(255, 170, 210, 0.0) 55%) 0 0 / 160px 100%,
-        linear-gradient(90deg, rgba(255,80,150,0.0), rgba(255,70,70,0.75), rgba(255,80,150,0.0)) 0 0 / 220px 100%;
+        linear-gradient(90deg, rgba(255, 80, 150, 0.0), rgba(255, 70, 70, 0.75), rgba(255, 80, 150, 0.0)) 0 0 / 220px 100%;
       filter: drop-shadow(0 2px 6px rgba(255, 80, 150, 0.55));
     }
 
@@ -534,7 +574,7 @@
         radial-gradient(circle at 12% 50%, rgba(100, 230, 255, 0.86) 0%, rgba(100, 230, 255, 0.0) 55%) 0 0 / 120px 100%,
         radial-gradient(circle at 45% 50%, rgba(80, 160, 255, 0.86) 0%, rgba(80, 160, 255, 0.0) 55%) 0 0 / 140px 100%,
         radial-gradient(circle at 72% 50%, rgba(120, 210, 255, 0.86) 0%, rgba(120, 210, 255, 0.0) 55%) 0 0 / 160px 100%,
-        linear-gradient(90deg, rgba(0,198,255,0.0), rgba(0,114,255,0.78), rgba(0,198,255,0.0)) 0 0 / 220px 100%;
+        linear-gradient(90deg, rgba(0, 198, 255, 0.0), rgba(0, 114, 255, 0.78), rgba(0, 198, 255, 0.0)) 0 0 / 220px 100%;
       filter: drop-shadow(0 2px 6px rgba(0, 156, 255, 0.52));
     }
 
@@ -543,7 +583,7 @@
         radial-gradient(circle at 12% 50%, rgba(85, 250, 180, 0.84) 0%, rgba(85, 250, 180, 0.0) 55%) 0 0 / 120px 100%,
         radial-gradient(circle at 45% 50%, rgba(40, 210, 170, 0.84) 0%, rgba(40, 210, 170, 0.0) 55%) 0 0 / 140px 100%,
         radial-gradient(circle at 72% 50%, rgba(110, 255, 205, 0.84) 0%, rgba(110, 255, 205, 0.0) 55%) 0 0 / 160px 100%,
-        linear-gradient(90deg, rgba(17,153,142,0.0), rgba(56,239,125,0.78), rgba(17,153,142,0.0)) 0 0 / 220px 100%;
+        linear-gradient(90deg, rgba(17, 153, 142, 0.0), rgba(56, 239, 125, 0.78), rgba(17, 153, 142, 0.0)) 0 0 / 220px 100%;
       filter: drop-shadow(0 2px 6px rgba(56, 239, 125, 0.5));
     }
 
@@ -552,7 +592,7 @@
         radial-gradient(circle at 12% 50%, rgba(255, 180, 110, 0.86) 0%, rgba(255, 180, 110, 0.0) 55%) 0 0 / 120px 100%,
         radial-gradient(circle at 45% 50%, rgba(255, 125, 110, 0.86) 0%, rgba(255, 125, 110, 0.0) 55%) 0 0 / 140px 100%,
         radial-gradient(circle at 72% 50%, rgba(255, 210, 150, 0.86) 0%, rgba(255, 210, 150, 0.0) 55%) 0 0 / 160px 100%,
-        linear-gradient(90deg, rgba(255,153,102,0.0), rgba(255,94,98,0.78), rgba(255,153,102,0.0)) 0 0 / 220px 100%;
+        linear-gradient(90deg, rgba(255, 153, 102, 0.0), rgba(255, 94, 98, 0.78), rgba(255, 153, 102, 0.0)) 0 0 / 220px 100%;
       filter: drop-shadow(0 2px 6px rgba(255, 130, 90, 0.5));
     }
 
@@ -561,7 +601,7 @@
         radial-gradient(circle at 12% 50%, rgba(160, 160, 170, 0.72) 0%, rgba(160, 160, 170, 0.0) 55%) 0 0 / 120px 100%,
         radial-gradient(circle at 45% 50%, rgba(90, 90, 100, 0.78) 0%, rgba(90, 90, 100, 0.0) 55%) 0 0 / 140px 100%,
         radial-gradient(circle at 72% 50%, rgba(130, 130, 140, 0.74) 0%, rgba(130, 130, 140, 0.0) 55%) 0 0 / 160px 100%,
-        linear-gradient(90deg, rgba(18,18,22,0.0), rgba(58,58,66,0.86), rgba(18,18,22,0.0)) 0 0 / 220px 100%;
+        linear-gradient(90deg, rgba(18, 18, 22, 0.0), rgba(58, 58, 66, 0.86), rgba(18, 18, 22, 0.0)) 0 0 / 220px 100%;
       filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.58));
     }
 
@@ -570,18 +610,23 @@
         radial-gradient(circle at 12% 50%, rgba(196, 146, 106, 0.82) 0%, rgba(196, 146, 106, 0.0) 55%) 0 0 / 120px 100%,
         radial-gradient(circle at 45% 50%, rgba(166, 109, 67, 0.84) 0%, rgba(166, 109, 67, 0.0) 55%) 0 0 / 140px 100%,
         radial-gradient(circle at 72% 50%, rgba(230, 182, 136, 0.78) 0%, rgba(230, 182, 136, 0.0) 55%) 0 0 / 160px 100%,
-        linear-gradient(90deg, rgba(110,72,44,0.0), rgba(166,123,91,0.8), rgba(110,72,44,0.0)) 0 0 / 220px 100%;
+        linear-gradient(90deg, rgba(110, 72, 44, 0.0), rgba(166, 123, 91, 0.8), rgba(110, 72, 44, 0.0)) 0 0 / 220px 100%;
       filter: drop-shadow(0 2px 6px rgba(135, 86, 48, 0.52));
     }
 
     .loading-wave.active {
       opacity: 1;
-      transform: translateY(0);
+      transform: translateY(0) translateZ(0);
     }
 
     @keyframes waveDrift {
-      0% { background-position: 0 0, 0 0, 0 0, 0 0; }
-      100% { background-position: 240px 0, -280px 0, 320px 0, -220px 0; }
+      0% {
+        background-position: 0 0, 0 0, 0 0, 0 0;
+      }
+
+      100% {
+        background-position: 240px 0, -280px 0, 320px 0, -220px 0;
+      }
     }
 
     .media-hover-control {
@@ -597,7 +642,11 @@
       -webkit-app-region: no-drag;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.28s ease, transform 0.28s ease;
+      /* Simplified transition for GPU */
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      /* GPU acceleration */
+      transform: translateX(-50%) translateZ(0);
+      will-change: transform, opacity;
     }
 
     .media-hover-control.active {
@@ -617,13 +666,17 @@
       border: 1px solid rgba(255, 255, 255, 0.16);
       box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
       cursor: pointer;
-      transition: transform 0.22s ease, background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+      /* Simplified transition for GPU */
+      transition: transform 0.15s ease, background 0.15s ease;
       -webkit-app-region: no-drag;
+      /* GPU acceleration */
+      transform: translateZ(0);
+      will-change: transform;
     }
 
     .audio-visualizer:hover,
     .media-hover-control.panel-open .audio-visualizer {
-      transform: translateY(-1px);
+      transform: translateY(-1px) translateZ(0);
       background: rgba(10, 20, 30, 0.88);
       border-color: rgba(124, 247, 255, 0.5);
       box-shadow: 0 10px 22px rgba(10, 20, 30, 0.55);
@@ -634,9 +687,12 @@
       height: 14px;
       border-radius: 3px;
       background: linear-gradient(180deg, #7cf7ff 0%, #7b8bff 50%, #ff6ff0 100%);
-      animation: audioPulse 1.4s ease-in-out infinite;
+      /* Simplified animation for GPU - reduced complexity */
+      animation: audioPulse 1.2s ease-in-out infinite;
       transform-origin: bottom;
-      will-change: auto; /* Changed from 'transform' to reduce GPU memory pressure */
+      /* GPU acceleration - force hardware acceleration */
+      transform: translateZ(0);
+      will-change: transform, opacity;
       animation-play-state: paused;
     }
 
@@ -644,8 +700,34 @@
       animation-play-state: running;
     }
 
-    .audio-visualizer span:nth-child(2) { animation-delay: -0.35s; }
-    .audio-visualizer span:nth-child(3) { animation-delay: -0.7s; }
+    .audio-visualizer.video-mode {
+      background: rgba(0, 0, 0, 0.5);
+      border-color: rgba(255, 255, 255, 0.12);
+      box-shadow: none;
+    }
+
+    .audio-visualizer.video-mode:hover,
+    .media-hover-control.video-mode.panel-open .audio-visualizer {
+      transform: translateY(-1px) translateZ(0);
+      background: rgba(0, 0, 0, 0.62);
+      border-color: rgba(180, 220, 255, 0.35);
+      box-shadow: none;
+    }
+
+    .audio-visualizer.video-mode span {
+      background: rgba(180, 220, 255, 0.9);
+      animation-name: audioPulseLite;
+      animation-duration: 1.8s;
+      animation-timing-function: steps(2, end);
+    }
+
+    .audio-visualizer span:nth-child(2) {
+      animation-delay: -0.3s;
+    }
+
+    .audio-visualizer span:nth-child(3) {
+      animation-delay: -0.6s;
+    }
 
     .media-hover-panel {
       min-width: 220px;
@@ -662,13 +744,22 @@
       opacity: 0;
       transform: translateY(-5px) scale(0.98);
       pointer-events: none;
-      transition: opacity 0.24s ease, transform 0.24s ease;
+      /* Simplified transition */
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      /* GPU acceleration */
+      transform: translateY(-5px) scale(0.98) translateZ(0);
+      will-change: transform, opacity;
     }
 
     .media-hover-control.panel-open .media-hover-panel {
       opacity: 1;
       transform: translateY(0) scale(1);
       pointer-events: auto;
+    }
+
+    .media-hover-control.video-mode .media-hover-panel {
+      backdrop-filter: none;
+      box-shadow: 0 10px 18px rgba(0, 0, 0, 0.28);
     }
 
     .media-control-btn {
@@ -692,12 +783,19 @@
 
     .media-volume-group {
       display: inline-flex;
-      align-items: center;
-      gap: 6px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
       color: rgba(225, 242, 255, 0.86);
       font-size: 11px;
       letter-spacing: 0.2px;
       text-transform: uppercase;
+    }
+
+    .media-volume-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .media-volume-slider {
@@ -706,9 +804,45 @@
       cursor: pointer;
     }
 
+    .media-remaining-time {
+      width: 100%;
+      font-size: 10px;
+      letter-spacing: 0.25px;
+      text-transform: none;
+      color: rgba(190, 224, 245, 0.88);
+      font-family: 'Monaco', 'Menlo', monospace;
+      line-height: 1;
+      min-height: 12px;
+      text-align: left;
+    }
+
     @keyframes audioPulse {
-      0%, 100% { transform: scaleY(0.4); opacity: 0.55; }
-      50% { transform: scaleY(1); opacity: 1; }
+
+      0%,
+      100% {
+        /* Use transform: scaleY which is GPU-accelerated */
+        transform: scaleY(0.4) translateZ(0);
+        opacity: 0.55;
+      }
+
+      50% {
+        transform: scaleY(1) translateZ(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes audioPulseLite {
+
+      0%,
+      100% {
+        transform: scaleY(0.72) translateZ(0);
+        opacity: 0.75;
+      }
+
+      50% {
+        transform: scaleY(0.92) translateZ(0);
+        opacity: 0.92;
+      }
     }
 
     /* Reduce animation overhead when visualizer is not visible */
@@ -738,14 +872,14 @@
 
     .split-divider {
       width: 1px;
-      background: rgba(255,255,255,0.12);
+      background: rgba(255, 255, 255, 0.12);
       display: none;
     }
 
     .split-pane-right {
       flex: 1 1 auto;
       display: none;
-      background: rgba(8,12,20,0.65);
+      background: rgba(8, 12, 20, 0.85);
     }
 
     .split-container.split-active .split-divider {
@@ -761,8 +895,8 @@
       align-items: center;
       gap: 6px;
       padding: 6px 8px;
-      border-bottom: 1px solid rgba(255,255,255,0.12);
-      background: rgba(10,15,28,0.7);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(10, 15, 28, 0.85);
     }
 
     .split-url-input {
@@ -770,8 +904,8 @@
       min-width: 0;
       padding: 6px 8px;
       border-radius: 6px;
-      border: 1px solid rgba(255,255,255,0.2);
-      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
       color: white;
       font-size: 11px;
       outline: none;
@@ -787,15 +921,29 @@
       cursor: pointer;
     }
 
+    .split-reload-btn {
+      padding: 5px 8px;
+      border-radius: 6px;
+      border: none;
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .split-reload-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
     .zoom-control {
       display: inline-flex;
       align-items: center;
       gap: 4px;
       padding: 3px 6px;
       border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.18);
-      background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04));
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 6px 16px rgba(0,0,0,0.25);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 6px 16px rgba(0, 0, 0, 0.25);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
     }
@@ -804,8 +952,8 @@
       width: 22px;
       height: 22px;
       border-radius: 6px;
-      border: 1px solid rgba(255,255,255,0.2);
-      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
       color: white;
       font-size: 14px;
       line-height: 1;
@@ -816,7 +964,7 @@
     }
 
     .zoom-btn:hover {
-      background: rgba(255,255,255,0.16);
+      background: rgba(255, 255, 255, 0.16);
     }
 
     .zoom-percent-badge {
@@ -828,18 +976,18 @@
       padding: 4px 8px;
       text-align: center;
       font-size: 11px;
-      color: rgba(255,255,255,0.9);
+      color: rgba(255, 255, 255, 0.9);
       letter-spacing: 0.2px;
       border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.18);
-      background: rgba(20,24,38,0.85);
-      box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(20, 24, 38, 0.85);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
       pointer-events: none;
       z-index: 10;
     }
-
   </style>
 </head>
+
 <body>
   <div class="card-window">
     <!-- Titlebar with navigation and close button -->
@@ -853,16 +1001,20 @@
         <button class="card-button size-btn" id="fullscreen-btn" title="Toggle Fullscreen">⛶</button>
         <button class="card-button minimize-btn" id="minimize-btn" title="Minimize">−</button>
         <button class="card-button bookmark-btn" id="bookmark-btn" title="Bookmark">🔖</button>
-        <button class="card-button" id="split-btn" title="Split Screen" style="display:none;">
+        <button class="card-button" id="split-btn" title="Split Screen">
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
-            <rect x="3" y="4" width="7" height="16" rx="1.5" ry="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
-            <rect x="14" y="4" width="7" height="16" rx="1.5" ry="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
-            <line x1="12" y1="4" x2="12" y2="20" stroke="currentColor" stroke-width="1.4"/>
+            <rect x="3" y="4" width="7" height="16" rx="1.5" ry="1.5" fill="none" stroke="currentColor"
+              stroke-width="1.6" />
+            <rect x="14" y="4" width="7" height="16" rx="1.5" ry="1.5" fill="none" stroke="currentColor"
+              stroke-width="1.6" />
+            <line x1="12" y1="4" x2="12" y2="20" stroke="currentColor" stroke-width="1.4" />
           </svg>
         </button>
         <!-- Per-card download progress ring (only visible while downloading in this window) -->
-        <button class="card-button download-ring" id="card-download-ring" title="Downloading..." aria-hidden="true" style="display:none; position:relative;">
-          <svg viewBox="0 0 36 36" class="download-ring__svg" aria-hidden="true" style="position:absolute; inset:4px; width:calc(100% - 8px); height:calc(100% - 8px);">
+        <button class="card-button download-ring" id="card-download-ring" title="Downloading..." aria-hidden="true"
+          style="display:none; position:relative;">
+          <svg viewBox="0 0 36 36" class="download-ring__svg" aria-hidden="true"
+            style="position:absolute; inset:4px; width:calc(100% - 8px); height:calc(100% - 8px);">
             <path class="download-ring__bg" d="M18 2.5 a 15.5 15.5 0 0 1 0 31 a 15.5 15.5 0 0 1 0 -31" />
             <path class="download-ring__fg" d="M18 2.5 a 15.5 15.5 0 0 1 0 31 a 15.5 15.5 0 0 1 0 -31" />
           </svg>
@@ -879,8 +1031,11 @@
         <div class="media-hover-panel" id="media-hover-panel" role="group" aria-label="Media controls">
           <button class="media-control-btn" id="media-toggle-btn" type="button">Play</button>
           <label class="media-volume-group" for="media-volume-slider">
-            Vol
-            <input class="media-volume-slider" id="media-volume-slider" type="range" min="0" max="100" value="100" />
+            <span class="media-volume-row">
+              <span>Vol</span>
+              <input class="media-volume-slider" id="media-volume-slider" type="range" min="0" max="100" value="100" />
+            </span>
+            <span class="media-remaining-time" id="media-remaining-time">--:--</span>
           </label>
           <button class="media-control-btn" id="media-mute-btn" type="button">Mute</button>
         </div>
@@ -891,7 +1046,8 @@
           <button class="zoom-btn" id="zoom-in-btn" title="Zoom In">+</button>
         </div>
         <div class="zoom-percent-badge" id="zoom-percent">100%</div>
-        <input type="text" class="url-input" id="url-input" placeholder="Enter URL or search..." style="margin-right:8px;">
+        <input type="text" class="url-input" id="url-input" placeholder="Enter URL or search..."
+          style="margin-right:8px;">
         <button class="card-button" id="close-btn" title="Close">✕</button>
       </div>
       <div class="loading-wave" id="loading-wave" aria-hidden="true"></div>
@@ -901,35 +1057,20 @@
     <div class="card-content">
       <div class="split-container" id="split-container">
         <div class="split-pane split-pane-left">
-          <webview 
-            id="card-webview" 
-            style="width:100%; height:100%;" 
-            partition="persist:cards" 
-            allowpopups
-            preload=""
-            disablewebsecurity="false"
-            enableremotemodule="false"
-            enableblinkfeatures="LazyLoad,LazyImageLoading"
-            disableblinkfeatures="AutoplayIgnoresWebAudio"
-          ></webview>
+          <webview id="card-webview" style="width:100%; height:100%;" partition="persist:cards" allowpopups preload=""
+            disablewebsecurity="false" enableremotemodule="false" enableblinkfeatures="LazyLoad,LazyImageLoading"
+            disableblinkfeatures="AutoplayIgnoresWebAudio"></webview>
         </div>
         <div class="split-divider" id="split-divider"></div>
         <div class="split-pane split-pane-right" id="split-pane-right">
           <div class="split-topbar">
             <input type="text" class="split-url-input" id="split-url-input" placeholder="Enter URL for right pane..." />
+            <button class="split-reload-btn" id="split-reload-btn" title="Reload">↻</button>
             <button class="split-go-btn" id="split-go-btn">Go</button>
           </div>
-          <webview
-            id="split-webview"
-            style="width:100%; flex:1 1 auto;"
-            partition="persist:cards"
-            allowpopups
-            preload=""
-            disablewebsecurity="false"
-            enableremotemodule="false"
-            enableblinkfeatures="LazyLoad,LazyImageLoading"
-            disableblinkfeatures="AutoplayIgnoresWebAudio"
-          ></webview>
+          <webview id="split-webview" style="width:100%; flex:1 1 auto;" partition="persist:cards" allowpopups
+            preload="" disablewebsecurity="false" enableremotemodule="false"
+            enableblinkfeatures="LazyLoad,LazyImageLoading" disableblinkfeatures="AutoplayIgnoresWebAudio"></webview>
         </div>
       </div>
     </div>
@@ -981,6 +1122,7 @@
     const splitContainer = document.getElementById('split-container');
     const splitRightPane = document.getElementById('split-pane-right');
     const splitUrlInput = document.getElementById('split-url-input');
+    const splitReloadBtn = document.getElementById('split-reload-btn');
     const splitGoBtn = document.getElementById('split-go-btn');
     const splitWebview = document.getElementById('split-webview');
     const titlebar = document.querySelector('.card-titlebar');
@@ -991,12 +1133,22 @@
     const mediaToggleBtn = document.getElementById('media-toggle-btn');
     const mediaVolumeSlider = document.getElementById('media-volume-slider');
     const mediaMuteBtn = document.getElementById('media-mute-btn');
+    const mediaRemainingTime = document.getElementById('media-remaining-time');
     let challengeBannerEl = null;
     let visualizerEnabled = true;
     let lastActiveMediaWebview = null;
     let mediaSyncTimer = null;
+    let mediaVolumeDebounceTimer = null;
+    let mediaRemainingTickTimer = null;
+    let mediaRemainingSeconds = null;
+    let mediaRemainingHasDuration = false;
+    let mediaRemainingIsLive = false;
+    let mediaRemainingIsPlaying = false;
     let mediaPanelOpen = false;
+    const mediaPlayingState = new Map();
     let securityLoadNoticeEl = null;
+    let networkRecoveryWatcher = null;
+    window._networkErrorActive = false;
     let isMinimizingCard = false;
     function waitForCardAnimationEnd(el, expectedName, fallbackMs) {
       return new Promise((resolve) => {
@@ -1045,7 +1197,7 @@
         const host = parsed.hostname.toLowerCase();
         if (host === 'challenges.cloudflare.com') return true;
         if (parsed.pathname.includes('/cdn-cgi/challenge-platform/')) return true;
-      } catch (e) {}
+      } catch (e) { }
       return false;
     };
 
@@ -1124,6 +1276,82 @@
       if (!el) return;
       el.classList.remove('active');
       el.textContent = '';
+      // Reset network error flag when manually hiding
+      window._networkErrorActive = false;
+      stopNetworkRecoveryWatcher();
+    }
+
+    function setNetworkErrorActive(active) {
+      window._networkErrorActive = active;
+      if (!active) {
+        stopNetworkRecoveryWatcher();
+      }
+    }
+
+    function stopNetworkRecoveryWatcher() {
+      if (!networkRecoveryWatcher) return;
+      clearInterval(networkRecoveryWatcher);
+      networkRecoveryWatcher = null;
+    }
+
+    function isNetworkNoticeMessage(message) {
+      const text = String(message || '').toLowerCase();
+      return text.includes('internet') || text.includes('connection') || text.includes('network');
+    }
+
+    async function probeInternetConnection(timeoutMs = 3500) {
+      // Browser-level offline state is a fast first-pass check.
+      if (navigator && navigator.onLine === false) return false;
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => {
+          try { controller.abort(); } catch (e) { }
+        }, timeoutMs);
+        await fetch(`https://www.gstatic.com/generate_204?t=${Date.now()}`, {
+          method: 'GET',
+          mode: 'no-cors',
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    async function recoverNetworkNoticeIfOnline() {
+      if (!window._networkErrorActive) return false;
+      const onlineNow = await probeInternetConnection();
+      if (!onlineNow) return false;
+      setNetworkErrorActive(false);
+      hideSecurityLoadNotice();
+      return true;
+    }
+
+    function startNetworkRecoveryWatcher() {
+      if (networkRecoveryWatcher) return;
+      networkRecoveryWatcher = setInterval(() => {
+        recoverNetworkNoticeIfOnline();
+      }, 4000);
+    }
+
+    function isHttpUrl(rawUrl) {
+      const value = String(rawUrl || '').trim().toLowerCase();
+      return value.startsWith('http://') || value.startsWith('https://');
+    }
+
+    function hideSecurityNoticeWhenAppropriate(force = false) {
+      if (force) {
+        setNetworkErrorActive(false);
+        hideSecurityLoadNotice();
+        return;
+      }
+      if (window._networkErrorActive) {
+        recoverNetworkNoticeIfOnline();
+        return;
+      }
+      hideSecurityLoadNotice();
     }
 
     function showSecurityLoadNotice(message) {
@@ -1131,6 +1359,14 @@
       if (!el) return;
       el.textContent = message;
       el.classList.add('active');
+      // Keep network notices visible until a real connectivity probe confirms recovery.
+      if (isNetworkNoticeMessage(message)) {
+        setNetworkErrorActive(true);
+        startNetworkRecoveryWatcher();
+        recoverNetworkNoticeIfOnline();
+      } else {
+        setNetworkErrorActive(false);
+      }
     }
 
     function isTlsOrCertificateFailure(errorCode, errorDescription) {
@@ -1139,6 +1375,32 @@
       if (desc.includes('CERT') || desc.includes('SSL') || desc.includes('TLS')) return true;
       const certCodes = new Set([-200, -201, -202, -203, -204, -205, -206, -207, -208, -210, -213, -501]);
       return certCodes.has(code);
+    }
+
+    // Detect network/connection errors (no internet, DNS failure, timeout, etc.)
+    function isNetworkError(errorCode, errorDescription) {
+      const code = Number(errorCode);
+      const desc = String(errorDescription || '').toUpperCase();
+      // Check error description for network-related keywords
+      if (desc.includes('INTERNET') || desc.includes('NETWORK') ||
+        desc.includes('CONNECTION') || desc.includes('TIMED OUT') ||
+        desc.includes('DNS') || desc.includes('ADDRESS') || desc.includes('REACHABLE') ||
+        desc.includes('RESET') || desc.includes('DISCONNECTED')) {
+        return true;
+      }
+      // Common Chromium error codes for network failures
+      const networkCodes = new Set([
+        -2,   // ERR_NAME_NOT_RESOLVED
+        -3,   // ERR_ADDRESS_UNREACHABLE  
+        -6,   // ERR_CONNECTION_FAILED
+        -7,   // ERR_CONNECTION_TIMED_OUT
+        -17,  // ERR_INTERNET_DISCONNECTED
+        -101, // ERR_CONNECTION_RESET
+        -105, // ERR_NAME_NOT_RESOLVED
+        -118, // ERR_CONNECTION_TIMED_OUT
+        -200  // ERR_NETWORK_ACCESS_DENIED
+      ]);
+      return networkCodes.has(code);
     }
 
     function getMediaTargets() {
@@ -1157,37 +1419,59 @@
       }
     }
 
-    // Cached media state to reduce DOM queries
-    let cachedMediaState = null;
-    let lastMediaStateTime = 0;
+    // Cache media state per-webview so split panes do not share stale state.
+    const mediaStateCache = new WeakMap();
     const MEDIA_STATE_CACHE_TTL = 500; // Cache for 500ms
+
+    function clearMediaStateCache(targetWebview) {
+      if (!targetWebview) return;
+      try {
+        mediaStateCache.delete(targetWebview);
+      } catch (e) { }
+    }
 
     async function readMediaState(targetWebview) {
       // Return cached state if still valid (reduces DOM queries during playback)
       const now = Date.now();
-      if (cachedMediaState && (now - lastMediaStateTime) < MEDIA_STATE_CACHE_TTL) {
-        return cachedMediaState;
+      const cached = mediaStateCache.get(targetWebview);
+      if (cached && (now - cached.timestamp) < MEDIA_STATE_CACHE_TTL) {
+        return cached.state;
       }
 
       const script = `
         (() => {
           const media = Array.from(document.querySelectorAll('video, audio'));
-          if (!media.length) return { hasMedia: false, isPlaying: false, volume: 1, muted: false };
+          if (!media.length) return { hasMedia: false, isPlaying: false, isVideo: false, volume: 1, muted: false, hasDuration: false, remainingSeconds: null, isLive: false };
           const active = media.find((m) => !m.paused && !m.ended) || media.find((m) => (m.currentSrc || m.src)) || media[0];
-          if (!active) return { hasMedia: false, isPlaying: false, volume: 1, muted: false };
+          if (!active) return { hasMedia: false, isPlaying: false, isVideo: false, volume: 1, muted: false, hasDuration: false, remainingSeconds: null, isLive: false };
           const rawVolume = Number(active.volume);
           const volume = Number.isFinite(rawVolume) ? Math.max(0, Math.min(1, rawVolume)) : 1;
+          const duration = Number(active.duration);
+          const currentTime = Number(active.currentTime);
+          const hasDuration = Number.isFinite(duration) && duration > 0;
+          const remainingSeconds = (hasDuration && Number.isFinite(currentTime))
+            ? Math.max(0, duration - Math.max(0, currentTime))
+            : null;
+          const isLive = !hasDuration && (duration === Infinity || !Number.isFinite(duration));
           return {
             hasMedia: true,
             isPlaying: !!(!active.paused && !active.ended),
+            isVideo: String(active.tagName || '').toLowerCase() === 'video',
             volume,
-            muted: !!active.muted
+            muted: !!active.muted,
+            hasDuration,
+            remainingSeconds,
+            isLive
           };
         })();
       `;
       const result = await runMediaScript(targetWebview, script);
-      cachedMediaState = result;
-      lastMediaStateTime = now;
+      if (result) {
+        mediaStateCache.set(targetWebview, {
+          state: result,
+          timestamp: now
+        });
+      }
       return result;
     }
 
@@ -1195,13 +1479,22 @@
       if (!mediaHoverControl || !audioVisualizer) return;
 
       const isPlaying = !!(state && state.isPlaying);
-      const muted = !!(state && state.muted);
-      const sliderValue = Math.round(((state && Number.isFinite(state.volume) ? state.volume : 1) * 100));
+      const isVideo = !!(state && state.isVideo);
+      const muted = (state && typeof state.muted === 'boolean') ? state.muted : null;
+      const hasVolume = !!(state && Number.isFinite(state.volume));
+      const sliderValue = hasVolume ? Math.round((state.volume * 100)) : null;
       const shouldShow = visualizerEnabled && isPlaying;
+      const hasDuration = !!(state && state.hasDuration);
+      const isLive = !!(state && state.isLive);
+      const remainingSeconds = (state && Number.isFinite(state.remainingSeconds))
+        ? Math.max(0, state.remainingSeconds)
+        : null;
 
       mediaHoverControl.classList.toggle('active', shouldShow);
+      mediaHoverControl.classList.toggle('video-mode', shouldShow && isVideo);
       mediaHoverControl.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
       audioVisualizer.classList.toggle('playing', shouldShow && isPlaying);
+      audioVisualizer.classList.toggle('video-mode', shouldShow && isVideo);
       if (!shouldShow) {
         setMediaPanelOpen(false);
       }
@@ -1211,13 +1504,67 @@
         mediaToggleBtn.disabled = !shouldShow;
       }
       if (mediaMuteBtn) {
-        mediaMuteBtn.textContent = muted ? 'Unmute' : 'Mute';
+        if (typeof muted === 'boolean') {
+          mediaMuteBtn.textContent = muted ? 'Unmute' : 'Mute';
+        }
         mediaMuteBtn.disabled = !shouldShow;
       }
       if (mediaVolumeSlider) {
-        mediaVolumeSlider.value = String(Math.max(0, Math.min(100, sliderValue)));
+        if (hasVolume && sliderValue !== null) {
+          mediaVolumeSlider.value = String(Math.max(0, Math.min(100, sliderValue)));
+        }
         mediaVolumeSlider.disabled = !shouldShow;
       }
+
+      mediaRemainingHasDuration = shouldShow && hasDuration;
+      mediaRemainingIsLive = shouldShow && isLive;
+      mediaRemainingIsPlaying = shouldShow && isPlaying;
+      mediaRemainingSeconds = mediaRemainingHasDuration ? remainingSeconds : null;
+      updateMediaRemainingDisplay();
+      if (mediaRemainingHasDuration && mediaRemainingIsPlaying) {
+        startMediaRemainingTicker();
+      } else {
+        stopMediaRemainingTicker();
+      }
+    }
+
+    function formatMediaRemaining(totalSeconds) {
+      const safe = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+      const hours = Math.floor(safe / 3600);
+      const minutes = Math.floor((safe % 3600) / 60);
+      const seconds = safe % 60;
+      if (hours > 0) {
+        return `${String(hours)}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      }
+      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function updateMediaRemainingDisplay() {
+      if (!mediaRemainingTime) return;
+      if (mediaRemainingIsLive) {
+        mediaRemainingTime.textContent = 'LIVE';
+        return;
+      }
+      if (mediaRemainingHasDuration && Number.isFinite(mediaRemainingSeconds)) {
+        mediaRemainingTime.textContent = `-${formatMediaRemaining(mediaRemainingSeconds)}`;
+        return;
+      }
+      mediaRemainingTime.textContent = '--:--';
+    }
+
+    function startMediaRemainingTicker() {
+      if (mediaRemainingTickTimer) return;
+      mediaRemainingTickTimer = setInterval(() => {
+        if (!mediaRemainingHasDuration || !mediaRemainingIsPlaying || !Number.isFinite(mediaRemainingSeconds)) return;
+        mediaRemainingSeconds = Math.max(0, mediaRemainingSeconds - 1);
+        updateMediaRemainingDisplay();
+      }, 1000);
+    }
+
+    function stopMediaRemainingTicker() {
+      if (!mediaRemainingTickTimer) return;
+      clearInterval(mediaRemainingTickTimer);
+      mediaRemainingTickTimer = null;
     }
 
     function setMediaPanelOpen(isOpen) {
@@ -1225,6 +1572,12 @@
       const canOpen = mediaHoverControl.classList.contains('active');
       mediaPanelOpen = !!isOpen && canOpen;
       mediaHoverControl.classList.toggle('panel-open', mediaPanelOpen);
+      if (mediaPanelOpen) {
+        syncMediaControlState();
+        startMediaSyncLoop();
+      } else {
+        stopMediaSyncLoop();
+      }
     }
 
     async function getBestMediaTarget() {
@@ -1250,7 +1603,7 @@
         lastActiveMediaWebview = fallback.target;
         return fallback;
       }
-      return { target: null, state: { hasMedia: false, isPlaying: false, volume: 1, muted: false } };
+      return { target: null, state: { hasMedia: false, isPlaying: false, isVideo: false, volume: 1, muted: false } };
     }
 
     async function syncMediaControlState() {
@@ -1263,18 +1616,23 @@
 
     function setAudioVisualizer(isActive) {
       if (!visualizerEnabled) {
-        renderMediaControl({ hasMedia: false, isPlaying: false, volume: 1, muted: false });
+        renderMediaControl({ hasMedia: false, isPlaying: false, isVideo: false, volume: 1, muted: false });
+        stopMediaRemainingTicker();
         return;
       }
       if (isActive) {
-        syncMediaControlState();
+        updateVisualizerPlaybackState();
+        if (mediaPanelOpen) {
+          syncMediaControlState();
+        }
       } else {
-        renderMediaControl({ hasMedia: false, isPlaying: false, volume: 1, muted: false });
+        renderMediaControl({ hasMedia: false, isPlaying: false, isVideo: false, volume: 1, muted: false });
+        stopMediaRemainingTicker();
       }
     }
 
     function startMediaSyncLoop() {
-      if (mediaSyncTimer) return;
+      if (mediaSyncTimer || !mediaPanelOpen) return;
       mediaSyncTimer = setInterval(() => {
         syncMediaControlState();
       }, 2000); // Reduced frequency: 2000ms instead of 1200ms to reduce CPU overhead
@@ -1284,6 +1642,50 @@
       if (!mediaSyncTimer) return;
       clearInterval(mediaSyncTimer);
       mediaSyncTimer = null;
+    }
+
+    function isAnyMediaPlaying() {
+      for (const value of mediaPlayingState.values()) {
+        if (value && value.isPlaying) return true;
+      }
+      return false;
+    }
+
+    function isAnyVideoPlaying() {
+      for (const value of mediaPlayingState.values()) {
+        if (value && value.isPlaying && value.mediaType === 'video') return true;
+      }
+      return false;
+    }
+
+    async function detectPlayingMediaType(targetWebview) {
+      const script = `
+        (() => {
+          const media = Array.from(document.querySelectorAll('video, audio'));
+          const active = media.find((m) => !m.paused && !m.ended);
+          if (!active) return 'none';
+          return String(active.tagName || '').toLowerCase() === 'video' ? 'video' : 'audio';
+        })();
+      `;
+      const result = await runMediaScript(targetWebview, script);
+      return result === 'video' ? 'video' : (result === 'audio' ? 'audio' : 'unknown');
+    }
+
+    async function refreshMediaPlayingType(targetWebview) {
+      if (!targetWebview) return;
+      const state = mediaPlayingState.get(targetWebview);
+      if (!state || !state.isPlaying) return;
+      const mediaType = await detectPlayingMediaType(targetWebview);
+      const nextState = { isPlaying: true, mediaType };
+      mediaPlayingState.set(targetWebview, nextState);
+      updateVisualizerPlaybackState();
+      clearMediaStateCache(targetWebview);
+    }
+
+    function updateVisualizerPlaybackState() {
+      const isPlaying = isAnyMediaPlaying();
+      const isVideo = isAnyVideoPlaying();
+      renderMediaControl({ isPlaying, isVideo });
     }
 
     async function controlMedia(action, value) {
@@ -1374,7 +1776,13 @@
     if (mediaVolumeSlider) {
       mediaVolumeSlider.addEventListener('input', () => {
         const value = Number(mediaVolumeSlider.value);
-        controlMedia('volume', value / 100);
+        if (mediaVolumeDebounceTimer) {
+          clearTimeout(mediaVolumeDebounceTimer);
+        }
+        mediaVolumeDebounceTimer = setTimeout(() => {
+          controlMedia('volume', value / 100);
+          mediaVolumeDebounceTimer = null;
+        }, 90);
       });
     }
 
@@ -1472,10 +1880,10 @@
       const modal = document.createElement('div');
       modal.id = 'card-download-modal';
       modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center;';
-      
+
       const content = document.createElement('div');
       content.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 12px; width: 320px; max-height: 400px; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.5);';
-      
+
       content.innerHTML = `
         <h3 style="color: white; margin: 0 0 12px 0; font-size: 14px; font-weight: 600;">Completed Downloads</h3>
         <div id="card-download-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;"></div>
@@ -1496,7 +1904,7 @@
           </div>
           <button class="card-download-open-btn" data-path="${d.savePath ? encodeURIComponent(d.savePath) : ''}" style="padding: 6px 10px; font-size: 10px; background: rgba(255,255,255,0.2); border: none; border-radius: 6px; color: white; cursor: pointer; white-space: nowrap;">Open</button>
         `;
-        
+
         const openBtn = item.querySelector('.card-download-open-btn');
         if (openBtn && d.savePath) {
           openBtn.addEventListener('click', async () => {
@@ -1509,7 +1917,7 @@
             }
           });
         }
-        
+
         item.addEventListener('click', async (e) => {
           if (e.target.closest('button')) return;
           if (d.savePath && window.cardAPI && window.cardAPI.showItemInFolder) {
@@ -1558,25 +1966,25 @@
       if (splitWebview) {
         splitWebview.setAttribute('preload', preloadUrl);
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Force a Chrome-like UA for challenge compatibility (Cloudflare/Turnstile).
     try {
       if (window.cardAPI && window.cardAPI.getUserAgent) {
         window.cardAPI.getUserAgent().then((ua) => {
           if (ua) {
-            try { webview.setUserAgent(ua); } catch (e) {}
+            try { webview.setUserAgent(ua); } catch (e) { }
             if (splitWebview) {
-              try { splitWebview.setUserAgent(ua); } catch (e) {}
+              try { splitWebview.setUserAgent(ua); } catch (e) { }
             }
           }
           if (pendingInitialUrl) {
             applyInitialUrl(pendingInitialUrl);
             pendingInitialUrl = null;
           }
-        }).catch(() => {});
+        }).catch(() => { });
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Defer initial navigation until UA is applied to avoid challenge scripts
     // seeing the default Electron UA.
@@ -1590,7 +1998,7 @@
         webview.src = target;
         urlInput.value = target;
         currentPageUrl = target;
-      } catch (e) {}
+      } catch (e) { }
     };
 
     // Load initial URL if provided
@@ -1600,7 +2008,12 @@
 
     // Update URL and title when webview navigates
     webview.addEventListener('did-navigate', (e) => {
-      try { 
+      try {
+        if (isHttpUrl(e && e.url)) {
+          hideSecurityNoticeWhenAppropriate(true);
+        } else {
+          hideSecurityNoticeWhenAppropriate();
+        }
         urlInput.value = e.url;
         currentPageUrl = e.url;
         checkBookmarkStatus();
@@ -1613,11 +2026,16 @@
             targetUrl: lastNonChallengeUrl || ''
           });
         }
-      } catch (err) {}
+      } catch (err) { }
     });
 
     webview.addEventListener('did-navigate-in-page', (e) => {
-      try { 
+      try {
+        if (isHttpUrl(e && e.url)) {
+          hideSecurityNoticeWhenAppropriate(true);
+        } else {
+          hideSecurityNoticeWhenAppropriate();
+        }
         urlInput.value = e.url;
         currentPageUrl = e.url;
         checkBookmarkStatus();
@@ -1630,15 +2048,25 @@
             targetUrl: lastNonChallengeUrl || ''
           });
         }
-      } catch (err) {}
+      } catch (err) { }
     });
 
     if (splitWebview) {
       splitWebview.addEventListener('did-navigate', (e) => {
+        if (isHttpUrl(e && e.url)) {
+          hideSecurityNoticeWhenAppropriate(true);
+        } else {
+          hideSecurityNoticeWhenAppropriate();
+        }
         currentSplitUrl = e.url || '';
         if (splitUrlInput) splitUrlInput.value = currentSplitUrl;
       });
       splitWebview.addEventListener('did-navigate-in-page', (e) => {
+        if (isHttpUrl(e && e.url)) {
+          hideSecurityNoticeWhenAppropriate(true);
+        } else {
+          hideSecurityNoticeWhenAppropriate();
+        }
         currentSplitUrl = e.url || '';
         if (splitUrlInput) splitUrlInput.value = currentSplitUrl;
       });
@@ -1660,7 +2088,7 @@
       } catch (e) {
         try {
           splitWebview.loadURL(targetUrl);
-        } catch (err) {}
+        } catch (err) { }
       }
       currentSplitUrl = targetUrl;
     }
@@ -1673,10 +2101,10 @@
       zoomFactor = clampZoom(targetFactor);
       try {
         webview.setZoomFactor(zoomFactor);
-      } catch (e) {}
+      } catch (e) { }
       try {
         if (splitWebview) splitWebview.setZoomFactor(zoomFactor);
-      } catch (e) {}
+      } catch (e) { }
       if (zoomPercent) {
         zoomPercent.textContent = `${Math.round(zoomFactor * 100)}%`;
       }
@@ -1695,16 +2123,16 @@
       if (!wv) return;
       try {
         wv.setZoomLevel(0);
-      } catch (e) {}
+      } catch (e) { }
       try {
         wv.setZoomFactor(1.0);
-      } catch (e) {}
+      } catch (e) { }
       zoomFactor = 1.0;
     }
 
 
     webview.addEventListener('page-title-updated', (e) => {
-      try { 
+      try {
         titleElement.textContent = e.title;
         currentPageTitle = e.title;
         checkBookmarkStatus();
@@ -1714,21 +2142,24 @@
             title: e.title || ''
           });
         }
-      } catch (err) {}
+      } catch (err) { }
     });
 
     // Loading wave for render progress
     webview.addEventListener('did-start-navigation', (e) => {
       if (e && e.isMainFrame) {
-        hideSecurityLoadNotice();
+        hideSecurityNoticeWhenAppropriate();
         resetZoom(webview);
         setLoadingWave(true);
+        clearMediaStateCache(webview);
+        mediaPlayingState.set(webview, { isPlaying: false, mediaType: 'unknown' });
+        updateVisualizerPlaybackState();
       }
     });
 
     // Hide shortly after first paint/DOM is ready instead of waiting for full load
     webview.addEventListener('dom-ready', () => {
-      hideSecurityLoadNotice();
+      hideSecurityNoticeWhenAppropriate();
       resetZoom(webview);
       if (loadingWaveVisible) {
         setTimeout(() => setLoadingWave(false), 220);
@@ -1736,6 +2167,7 @@
     });
 
     webview.addEventListener('did-stop-loading', () => {
+      hideSecurityNoticeWhenAppropriate();
       if (loadingWaveVisible) {
         setLoadingWave(false);
       }
@@ -1745,47 +2177,135 @@
       if (loadingWaveVisible) {
         setLoadingWave(false);
       }
-      if (e && e.isMainFrame && isTlsOrCertificateFailure(e.errorCode, e.errorDescription)) {
-        showSecurityLoadNotice('Secure connection blocked: this site presented an invalid TLS certificate. Check your device date/time, network, or try again later.');
+      if (e && e.isMainFrame) {
+        if (isTlsOrCertificateFailure(e.errorCode, e.errorDescription)) {
+          showSecurityLoadNotice('Secure connection blocked: this site presented an invalid TLS certificate. Check your device date/time, network, or try again later.');
+        } else if (isNetworkError(e.errorCode, e.errorDescription)) {
+          showSecurityLoadNotice('No internet connection. Please check your network settings and try again.');
+        }
+      }
+    });
+
+    // Handle webview crash/termination (could indicate network issues)
+    webview.addEventListener('crashed', (e) => {
+      console.log('[Card] Webview crashed, checking network status');
+      showSecurityLoadNotice('Connection lost. Please check your internet connection and try again.');
+    });
+
+    // Handle render process gone (could indicate network issues)
+    webview.addEventListener('render-process-gone', (e) => {
+      console.log('[Card] Render process gone:', e.reason);
+      if (e.reason === 'crashed' || e.reason === 'abnormal') {
+        showSecurityLoadNotice('Connection lost. Please check your internet connection and try again.');
+      }
+    });
+
+    // Handle load-stop - fires after any load attempt completes
+    let loadStartTime = 0;
+    let loadTimeout = null;
+    webview.addEventListener('did-start-loading', () => {
+      loadStartTime = Date.now();
+      if (loadTimeout) clearTimeout(loadTimeout);
+      loadTimeout = setTimeout(() => {
+        const currentUrl = webview.getURL ? webview.getURL() : '';
+        if (currentUrl === 'about:blank' || !currentUrl || currentUrl.startsWith('chrome://')) {
+          showSecurityLoadNotice('Connection timed out. Please check your internet connection and try again.');
+          if (loadingWaveVisible) setLoadingWave(false);
+        }
+      }, 15000);
+    });
+
+    // Hide loading wave when main content is ready (faster than load-stop)
+    webview.addEventListener('did-finish-load', () => {
+      if (loadingWaveVisible) {
+        setLoadingWave(false);
+      }
+    });
+
+    webview.addEventListener('load-stop', () => {
+      hideSecurityNoticeWhenAppropriate();
+      if (loadTimeout) {
+        clearTimeout(loadTimeout);
+        loadTimeout = null;
+      }
+      if (loadingWaveVisible) {
+        setLoadingWave(false);
       }
     });
 
     // Media visualizer and hover controls for active media in either webview.
     webview.addEventListener('media-started-playing', () => {
       lastActiveMediaWebview = webview;
-      startMediaSyncLoop();
-      syncMediaControlState();
+      mediaPlayingState.set(webview, { isPlaying: true, mediaType: 'unknown' });
+      updateVisualizerPlaybackState();
+      refreshMediaPlayingType(webview);
+      if (mediaPanelOpen) {
+        syncMediaControlState();
+        startMediaSyncLoop();
+      }
     });
 
     webview.addEventListener('media-paused', () => {
-      syncMediaControlState();
+      mediaPlayingState.set(webview, { isPlaying: false, mediaType: 'unknown' });
+      updateVisualizerPlaybackState();
+      if (mediaPanelOpen) {
+        syncMediaControlState();
+      }
     });
 
     if (splitWebview) {
       splitWebview.addEventListener('did-start-navigation', (e) => {
         if (e && e.isMainFrame) {
-          hideSecurityLoadNotice();
+          hideSecurityNoticeWhenAppropriate();
+          clearMediaStateCache(splitWebview);
+          mediaPlayingState.set(splitWebview, { isPlaying: false, mediaType: 'unknown' });
+          updateVisualizerPlaybackState();
         }
       });
 
       splitWebview.addEventListener('dom-ready', () => {
-        hideSecurityLoadNotice();
+        hideSecurityNoticeWhenAppropriate();
       });
 
       splitWebview.addEventListener('did-fail-load', (e) => {
-        if (e && e.isMainFrame && isTlsOrCertificateFailure(e.errorCode, e.errorDescription)) {
-          showSecurityLoadNotice('Secure connection blocked in split view: invalid TLS certificate detected.');
+        if (e && e.isMainFrame) {
+          if (isTlsOrCertificateFailure(e.errorCode, e.errorDescription)) {
+            showSecurityLoadNotice('Secure connection blocked in split view: invalid TLS certificate detected.');
+          } else if (isNetworkError(e.errorCode, e.errorDescription)) {
+            showSecurityLoadNotice('No internet connection. Please check your network settings and try again.');
+          }
+        }
+      });
+
+      // Handle split webview crash
+      splitWebview.addEventListener('crashed', (e) => {
+        showSecurityLoadNotice('Connection lost in split view. Please check your internet connection and try again.');
+      });
+
+      // Handle split webview render process gone
+      splitWebview.addEventListener('render-process-gone', (e) => {
+        if (e.reason === 'crashed' || e.reason === 'abnormal') {
+          showSecurityLoadNotice('Connection lost in split view. Please check your internet connection and try again.');
         }
       });
 
       splitWebview.addEventListener('media-started-playing', () => {
         lastActiveMediaWebview = splitWebview;
-        startMediaSyncLoop();
-        syncMediaControlState();
+        mediaPlayingState.set(splitWebview, { isPlaying: true, mediaType: 'unknown' });
+        updateVisualizerPlaybackState();
+        refreshMediaPlayingType(splitWebview);
+        if (mediaPanelOpen) {
+          syncMediaControlState();
+          startMediaSyncLoop();
+        }
       });
 
       splitWebview.addEventListener('media-paused', () => {
-        syncMediaControlState();
+        mediaPlayingState.set(splitWebview, { isPlaying: false, mediaType: 'unknown' });
+        updateVisualizerPlaybackState();
+        if (mediaPanelOpen) {
+          syncMediaControlState();
+        }
       });
     }
 
@@ -1797,8 +2317,11 @@
           setAudioVisualizer(false);
           return;
         }
-        startMediaSyncLoop();
-        syncMediaControlState();
+        updateVisualizerPlaybackState();
+        if (mediaPanelOpen) {
+          syncMediaControlState();
+          startMediaSyncLoop();
+        }
       });
     }
 
@@ -1810,9 +2333,12 @@
           setAudioVisualizer(false);
           return;
         }
-        startMediaSyncLoop();
-        syncMediaControlState();
-      }).catch(() => {});
+        updateVisualizerPlaybackState();
+        if (mediaPanelOpen) {
+          syncMediaControlState();
+          startMediaSyncLoop();
+        }
+      }).catch(() => { });
     }
 
     // Check if current page is bookmarked
@@ -1864,7 +2390,7 @@
               id: webview.getWebContentsId()
             });
           }
-        } catch (err) {}
+        } catch (err) { }
       }
 
       if (e.channel === 'user-scroll') {
@@ -1874,7 +2400,7 @@
               id: webview.getWebContentsId()
             });
           }
-        } catch (err) {}
+        } catch (err) { }
       }
     });
 
@@ -1884,7 +2410,7 @@
         try {
           const detail = ev && ev.detail ? ev.detail : {};
           showChallengeBanner(detail.url || '');
-        } catch (e) {}
+        } catch (e) { }
       });
     }
 
@@ -1900,7 +2426,7 @@
             sourceId: e.sourceId
           });
         }
-      } catch (err) {}
+      } catch (err) { }
     });
 
     if (splitWebview) {
@@ -1919,7 +2445,7 @@
                 id: splitWebview.getWebContentsId()
               });
             }
-          } catch (err) {}
+          } catch (err) { }
         }
 
         if (e.channel === 'user-scroll') {
@@ -1929,7 +2455,7 @@
                 id: splitWebview.getWebContentsId()
               });
             }
-          } catch (err) {}
+          } catch (err) { }
         }
       });
     }
@@ -1948,12 +2474,30 @@
       }
     });
 
+    // Listen for load failure notifications from main process
+    window.addEventListener('card-load-failed', (ev) => {
+      const { errorCode, errorDescription } = ev.detail || {};
+      console.log('[Card] Received load-failed event:', errorCode, errorDescription);
+      if (loadingWaveVisible) {
+        setLoadingWave(false);
+      }
+      if (isTlsOrCertificateFailure(errorCode, errorDescription)) {
+        showSecurityLoadNotice('Secure connection blocked: this site presented an invalid TLS certificate. Check your device date/time, network, or try again later.');
+      } else if (isNetworkError(errorCode, errorDescription)) {
+        showSecurityLoadNotice('No internet connection. Please check your network settings and try again.');
+      }
+    });
+
+    window.addEventListener('online', () => {
+      recoverNetworkNoticeIfOnline();
+    });
+
     // Button click handlers with visual feedback
     closeBtn.addEventListener('click', async () => {
       // Add exit animation
       const cardWindow = document.querySelector('.card-window');
       cardWindow.style.animation = 'slideOut 0.3s ease forwards';
-      
+
       setTimeout(async () => {
         try {
           await window.cardAPI.closeCard(cardId);
@@ -1987,7 +2531,7 @@
       }, 600);
 
       setLoadingWave(true);
-      
+
       try {
         webview.reload();
       } catch (e) {
@@ -2027,10 +2571,10 @@
           // Restore original size
           if (originalBounds) {
             await window.cardAPI.resizeCard(
-              cardId, 
-              originalBounds.x, 
-              originalBounds.y, 
-              originalBounds.width, 
+              cardId,
+              originalBounds.x,
+              originalBounds.y,
+              originalBounds.width,
               originalBounds.height
             );
           }
@@ -2066,7 +2610,7 @@
           setSplitVisibility();
         } else {
           await window.cardAPI.toggleFullscreen(cardId, false);
-          
+
           // Restore original size after exiting fullscreen
           if (originalBounds && !isWideView) {
             setTimeout(async () => {
@@ -2079,7 +2623,7 @@
               );
             }, 100);
           }
-          
+
           isFullscreen = false;
           fullscreenBtn.style.background = 'rgba(100, 200, 255, 0.7)';
           fullscreenBtn.title = 'Toggle Fullscreen';
@@ -2092,7 +2636,7 @@
 
     if (splitBtn) {
       splitBtn.addEventListener('click', () => {
-        if (!isFullscreen) return;
+        // Split screen works in all screen sizes now
         isSplitView = !isSplitView;
         if (splitContainer) splitContainer.classList.toggle('split-active', isSplitView);
         splitBtn.style.background = isSplitView ? 'rgba(100, 255, 100, 0.8)' : 'rgba(255,255,255,0.08)';
@@ -2102,9 +2646,8 @@
       });
     }
 
-    // Keyboard shortcut: Ctrl+Shift+S toggles split screen (fullscreen only)
+    // Keyboard shortcut: Ctrl+Shift+S toggles split screen (works in all screen sizes now)
     window.addEventListener('keydown', (e) => {
-      if (!isFullscreen) return;
       if (e.ctrlKey && e.shiftKey && (e.key === 'S' || e.key === 's')) {
         e.preventDefault();
         if (splitBtn) splitBtn.click();
@@ -2116,6 +2659,22 @@
         const targetUrl = normalizeUrl(splitUrlInput.value);
         if (!targetUrl || !splitWebview) return;
         loadSplitUrl(targetUrl);
+      });
+    }
+
+    if (splitReloadBtn) {
+      splitReloadBtn.addEventListener('click', () => {
+        if (!splitWebview) return;
+        // Add spin animation on reload
+        splitReloadBtn.style.animation = 'spin 0.6s ease';
+        setTimeout(() => {
+          splitReloadBtn.style.animation = '';
+        }, 600);
+        try {
+          splitWebview.reload();
+        } catch (e) {
+          console.error('Failed to reload split webview:', e);
+        }
       });
     }
 
@@ -2144,7 +2703,7 @@
         const currentUrlForBubble = (() => {
           try {
             if (webview && typeof webview.getURL === 'function') return webview.getURL();
-          } catch (e) {}
+          } catch (e) { }
           return urlInput && urlInput.value ? urlInput.value : '';
         })();
         const titleForBubble = currentPageTitle || (titleElement ? titleElement.textContent : '') || '';
@@ -2165,7 +2724,7 @@
         cardWindowEl.classList.remove('is-restoring');
         void cardWindowEl.offsetWidth;
         cardWindowEl.classList.add('is-restoring');
-      } catch (e) {}
+      } catch (e) { }
     });
 
     // Zoom buttons
@@ -2307,16 +2866,35 @@
 
     function setSplitVisibility() {
       if (!splitBtn) return;
-      splitBtn.style.display = isFullscreen ? 'inline-flex' : 'none';
-      if (!isFullscreen && isSplitView) {
-        isSplitView = false;
-        if (splitContainer) splitContainer.classList.remove('split-active');
+      // Only show split button in fullscreen mode
+      if (isFullscreen) {
+        splitBtn.style.display = 'inline-flex';
+      } else {
+        splitBtn.style.display = 'none';
+        // Disable split view when exiting fullscreen
+        if (isSplitView) {
+          isSplitView = false;
+          if (splitContainer) splitContainer.classList.remove('split-active');
+        }
       }
-      if (!isFullscreen) {
-        splitBtn.style.background = '';
-      } else if (!isSplitView) {
+      // Set consistent background color for split button in all modes
+      if (!isSplitView) {
         splitBtn.style.background = 'rgba(255,255,255,0.08)';
+      } else {
+        splitBtn.style.background = 'rgba(100, 255, 100, 0.8)';
       }
+    }
+
+    // Check launch size mode and set fullscreen state accordingly
+    if (window.cardAPI && window.cardAPI.getCardLaunchSizeMode) {
+      window.cardAPI.getCardLaunchSizeMode().then((launchMode) => {
+        if (launchMode === 'fullscreen') {
+          isFullscreen = true;
+          setSplitVisibility();
+        }
+      }).catch(() => {
+        // Keep default isFullscreen = false on error
+      });
     }
 
     setSplitVisibility();
@@ -2386,7 +2964,7 @@
       window.cardAPI.onDownloadDone((payload) => {
         if (!payload || !payload.id) return;
         const prev = cardDownloads.get(payload.id) || {};
-        
+
         // Keep completed downloads in the map so the ring stays visible
         if (payload.state === 'completed') {
           cardDownloads.set(payload.id, { ...prev, ...payload, state: 'completed' });
@@ -2396,7 +2974,7 @@
           // Remove cancelled/interrupted downloads
           cardDownloads.delete(payload.id);
         }
-        
+
         updateCardDownloadRing();
       });
     }
@@ -2411,4 +2989,5 @@
     });
   </script>
 </body>
+
 </html>

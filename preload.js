@@ -142,6 +142,8 @@ const electronAPI = {
   // Card theme management
   setCardTheme: (themeKey) => ipcRenderer.invoke('set-card-theme', themeKey),
   getCardTheme: () => ipcRenderer.invoke('get-card-theme'),
+  setCardLaunchSizeMode: (mode) => ipcRenderer.invoke('set-card-launch-size-mode', mode),
+  getCardLaunchSizeMode: () => ipcRenderer.invoke('get-card-launch-size-mode'),
 
   // Clear all user data
   clearUserData: () => ipcRenderer.invoke('clear-user-data'),
