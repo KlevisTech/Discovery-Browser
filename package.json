@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "A beautiful, unique card-style web browser built with Electron",
   "author": "Modern Tech",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
