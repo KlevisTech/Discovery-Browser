@@ -283,6 +283,34 @@
     }
 
     /* Download ring styling inside card */
+    .download-ring {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      border: none;
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: all 0.2s ease;
+      padding: 0;
+    }
+
+    .download-ring:hover {
+      background: rgba(255, 255, 255, 0.25);
+      transform: scale(1.05);
+    }
+
+    .download-ring__svg {
+      position: absolute;
+      inset: 4px;
+      width: calc(100% - 8px);
+      height: calc(100% - 8px);
+    }
+
     .download-ring__bg {
       fill: none;
       stroke: rgba(255, 255, 255, 0.25);
@@ -1057,7 +1085,7 @@
     <div class="card-content">
       <div class="split-container" id="split-container">
         <div class="split-pane split-pane-left">
-          <webview id="card-webview" style="width:100%; height:100%;" partition="persist:cards" allowpopups preload=""
+          <webview id="card-webview" style="width:100%; height:100%;" partition="persist:webview" allowpopups preload=""
             disablewebsecurity="false" enableremotemodule="false" enableblinkfeatures="LazyLoad,LazyImageLoading"
             disableblinkfeatures="AutoplayIgnoresWebAudio"></webview>
         </div>
@@ -1068,7 +1096,7 @@
             <button class="split-reload-btn" id="split-reload-btn" title="Reload">↻</button>
             <button class="split-go-btn" id="split-go-btn">Go</button>
           </div>
-          <webview id="split-webview" style="width:100%; flex:1 1 auto;" partition="persist:cards" allowpopups
+          <webview id="split-webview" style="width:100%; flex:1 1 auto;" partition="persist:webview" allowpopups
             preload="" disablewebsecurity="false" enableremotemodule="false"
             enableblinkfeatures="LazyLoad,LazyImageLoading" disableblinkfeatures="AutoplayIgnoresWebAudio"></webview>
         </div>
@@ -1137,7 +1165,23 @@
     let challengeBannerEl = null;
     let visualizerEnabled = true;
     let lastActiveMediaWebview = null;
+    let mediaBufferingOptimizationTimer = null;
+
+    function startMediaBufferingOptimization() {
+      if (mediaBufferingOptimizationTimer) return;
+      mediaBufferingOptimizationTimer = setInterval(() => {
+        optimizeSplitScreenVideoBuffering();
+      }, 5000); // Check and optimize every 5 seconds
+    }
+
+    function stopMediaBufferingOptimization() {
+      if (!mediaBufferingOptimizationTimer) return;
+      clearInterval(mediaBufferingOptimizationTimer);
+      mediaBufferingOptimizationTimer = null;
+    }
+
     let mediaSyncTimer = null;
+    let mediaSyncInFlight = false;
     let mediaVolumeDebounceTimer = null;
     let mediaRemainingTickTimer = null;
     let mediaRemainingSeconds = null;
@@ -1146,6 +1190,7 @@
     let mediaRemainingIsPlaying = false;
     let mediaPanelOpen = false;
     const mediaPlayingState = new Map();
+    const mediaScriptPending = new WeakMap();
     let securityLoadNoticeEl = null;
     let networkRecoveryWatcher = null;
     window._networkErrorActive = false;
@@ -1207,6 +1252,8 @@
     const cardDownloads = new Map(); // id -> {receivedBytes,totalBytes,percent,state,filename,savePath,...}
     let ringDismissed = false; // User can dismiss the ring after interacting
     let loadingWaveVisible = false;
+    let firstContentSeenForMainNav = false;
+    let mainFirstContentFallbackTimer = null;
 
     function setLoadingWave(isActive) {
       if (!loadingWave) return;
@@ -1217,6 +1264,32 @@
         loadingWave.classList.remove('active');
         loadingWaveVisible = false;
       }
+    }
+
+    function clearMainFirstContentFallback() {
+      if (!mainFirstContentFallbackTimer) return;
+      clearTimeout(mainFirstContentFallbackTimer);
+      mainFirstContentFallbackTimer = null;
+    }
+
+    function hideLoadingWaveOnFirstContent(delayMs = 120) {
+      isMainNavigationLoading = false;
+      hideSecurityNoticeWhenAppropriate();
+      clearMainLoadGuard();
+      clearMainFirstContentFallback();
+      if (!loadingWaveVisible) return;
+      setTimeout(() => setLoadingWave(false), Math.max(0, Number(delayMs) || 0));
+    }
+
+    function scheduleMainFirstContentFallback() {
+      clearMainFirstContentFallback();
+      // Startup can miss the earliest dom-ready callback on some pages.
+      // Use a short fallback so we don't keep the wave until full stop-loading.
+      mainFirstContentFallbackTimer = setTimeout(() => {
+        if (!isMainNavigationLoading || firstContentSeenForMainNav) return;
+        firstContentSeenForMainNav = true;
+        hideLoadingWaveOnFirstContent(0);
+      }, 1000);
     }
 
     function ensureSecurityLoadNotice() {
@@ -1296,28 +1369,77 @@
 
     function isNetworkNoticeMessage(message) {
       const text = String(message || '').toLowerCase();
-      return text.includes('internet') || text.includes('connection') || text.includes('network');
+      return text.includes('no internet connection') ||
+        text.includes('connection lost') ||
+        text.includes('check your network settings');
+    }
+
+    const OFFLINE_CONFIRMATION_MS = 6000;
+    let offlineCandidateSince = 0;
+
+    const CONNECTIVITY_PROBE_URLS = [
+      'https://www.gstatic.com/generate_204',
+      'https://clients3.google.com/generate_204',
+      'https://www.msftconnecttest.com/connecttest.txt',
+      'https://cloudflare.com/cdn-cgi/trace',
+    ];
+
+    function buildProbeUrl(base) {
+      return `${base}${base.includes('?') ? '&' : '?'}t=${Date.now()}`;
     }
 
     async function probeInternetConnection(timeoutMs = 3500) {
-      // Browser-level offline state is a fast first-pass check.
-      if (navigator && navigator.onLine === false) return false;
-      try {
+      // Keep OS network state as a strong signal, but avoid hard-failing solely on one probe host.
+      const browserOnline = !(navigator && navigator.onLine === false);
+      if (!browserOnline) return false;
+
+      const probeOne = async (baseUrl) => {
         const controller = new AbortController();
         const timer = setTimeout(() => {
           try { controller.abort(); } catch (e) { }
         }, timeoutMs);
-        await fetch(`https://www.gstatic.com/generate_204?t=${Date.now()}`, {
-          method: 'GET',
-          mode: 'no-cors',
-          cache: 'no-store',
-          signal: controller.signal,
-        });
-        clearTimeout(timer);
-        return true;
-      } catch (e) {
+        try {
+          await fetch(buildProbeUrl(baseUrl), {
+            method: 'GET',
+            mode: 'no-cors',
+            cache: 'no-store',
+            credentials: 'omit',
+            referrerPolicy: 'no-referrer',
+            signal: controller.signal,
+          });
+          return true;
+        } catch (e) {
+          return false;
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+
+      try {
+        const results = await Promise.all(CONNECTIVITY_PROBE_URLS.map((url) => probeOne(url)));
+        if (results.some(Boolean)) return true;
+      } catch (e) { }
+
+      // If probes fail but browser still reports online, avoid a hard false-offline verdict.
+      return browserOnline;
+    }
+
+    function updateOfflineCandidateState() {
+      const offlineNow = !!(navigator && navigator.onLine === false);
+      if (!offlineNow) {
+        offlineCandidateSince = 0;
         return false;
       }
+      if (!offlineCandidateSince) offlineCandidateSince = Date.now();
+      return true;
+    }
+
+    async function isConfirmedOffline() {
+      const offlineNow = updateOfflineCandidateState();
+      if (!offlineNow) return false;
+      if ((Date.now() - offlineCandidateSince) < OFFLINE_CONFIRMATION_MS) return false;
+      const probeOnline = await probeInternetConnection(2500);
+      return !probeOnline && !!(navigator && navigator.onLine === false);
     }
 
     async function recoverNetworkNoticeIfOnline() {
@@ -1341,6 +1463,111 @@
       return value.startsWith('http://') || value.startsWith('https://');
     }
 
+    const LOAD_GUARD_TIMEOUT_MS = 12000; // Reduced to 12 seconds to prevent long hangs with bad internet
+    const LOAD_ABORT_TIMEOUT_MS = 20000; // Force abort after 20 seconds of stalled loading
+    let mainLoadGuardTimer = null;
+    let splitLoadGuardTimer = null;
+    let mainAbortTimer = null;
+    let splitAbortTimer = null;
+    let isMainNavigationLoading = false;
+    let isSplitNavigationLoading = false;
+
+    function clearMainLoadGuard() {
+      if (!mainLoadGuardTimer) return;
+      clearTimeout(mainLoadGuardTimer);
+      mainLoadGuardTimer = null;
+    }
+
+    function clearSplitLoadGuard() {
+      if (!splitLoadGuardTimer) return;
+      clearTimeout(splitLoadGuardTimer);
+      splitLoadGuardTimer = null;
+    }
+
+    function clearMainAbortTimer() {
+      if (!mainAbortTimer) return;
+      clearTimeout(mainAbortTimer);
+      mainAbortTimer = null;
+    }
+
+    function clearSplitAbortTimer() {
+      if (!splitAbortTimer) return;
+      clearTimeout(splitAbortTimer);
+      splitAbortTimer = null;
+    }
+
+    async function handleStalledLoad(targetWebview, scopeLabel) {
+      if (!targetWebview) return;
+      const isSplitTarget = targetWebview === splitWebview;
+      const navigationActive = isSplitTarget ? isSplitNavigationLoading : isMainNavigationLoading;
+      if (!navigationActive) return;
+
+      let stillLoading = true;
+      try {
+        if (typeof targetWebview.isLoading === 'function') {
+          stillLoading = !!targetWebview.isLoading();
+        }
+      } catch (e) { }
+      if (!stillLoading) return;
+
+      const onlineNow = await probeInternetConnection(2500);
+      const confirmedOffline = await isConfirmedOffline();
+      if (!onlineNow && confirmedOffline) {
+        showSecurityLoadNotice('No internet connection. Please check your network settings and try again.');
+      } else {
+        const prefix = scopeLabel ? `${scopeLabel} ` : '';
+        showSecurityLoadNotice(`${prefix}Page is taking too long to load. The site may be slow, blocked, or your connection may be unstable. Try reloading.`);
+      }
+
+      if (loadingWaveVisible) {
+        setLoadingWave(false);
+      }
+      pauseMediaSyncForFailure();
+
+      // Schedule force-abort if still loading after showing notice
+      if (isSplitTarget) {
+        clearSplitAbortTimer();
+        splitAbortTimer = setTimeout(() => {
+          try {
+            if (splitWebview && typeof splitWebview.stop === 'function') {
+              console.warn('[Card] Force-stopping split webview after load timeout');
+              splitWebview.stop();
+            }
+          } catch (e) { }
+          clearSplitLoadGuard();
+          isSplitNavigationLoading = false;
+        }, LOAD_ABORT_TIMEOUT_MS - LOAD_GUARD_TIMEOUT_MS);
+      } else {
+        clearMainAbortTimer();
+        mainAbortTimer = setTimeout(() => {
+          try {
+            if (webview && typeof webview.stop === 'function') {
+              console.warn('[Card] Force-stopping webview after load timeout');
+              webview.stop();
+            }
+          } catch (e) { }
+          clearMainLoadGuard();
+          isMainNavigationLoading = false;
+        }, LOAD_ABORT_TIMEOUT_MS - LOAD_GUARD_TIMEOUT_MS);
+      }
+    }
+
+    function startMainLoadGuard() {
+      if (!isMainNavigationLoading) return;
+      clearMainLoadGuard();
+      mainLoadGuardTimer = setTimeout(() => {
+        handleStalledLoad(webview, '');
+      }, LOAD_GUARD_TIMEOUT_MS);
+    }
+
+    function startSplitLoadGuard() {
+      if (!isSplitNavigationLoading) return;
+      clearSplitLoadGuard();
+      splitLoadGuardTimer = setTimeout(() => {
+        handleStalledLoad(splitWebview, 'Split view');
+      }, LOAD_GUARD_TIMEOUT_MS);
+    }
+
     function hideSecurityNoticeWhenAppropriate(force = false) {
       if (force) {
         setNetworkErrorActive(false);
@@ -1357,8 +1584,36 @@
     function showSecurityLoadNotice(message) {
       const el = ensureSecurityLoadNotice();
       if (!el) return;
-      el.textContent = message;
+
+      // Create dismissible notice with close button
+      el.innerHTML = `
+        <div style="display: flex; align-items: flex-start; gap: 10px; justify-content: space-between;">
+          <div style="flex: 1;">${message}</div>
+          <button id="notice-close-btn" style="
+            flex-shrink: 0;
+            padding: 2px 6px;
+            border: none;
+            background: rgba(255, 255, 255, 0.15);
+            color: rgba(255, 236, 214, 0.96);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+            min-width: 24px;
+            text-align: center;
+          ">✕</button>
+        </div>
+      `;
       el.classList.add('active');
+
+      // Add close button handler
+      const closeBtn = el.querySelector('#notice-close-btn');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+          hideSecurityLoadNotice();
+        });
+      }
+
       // Keep network notices visible until a real connectivity probe confirms recovery.
       if (isNetworkNoticeMessage(message)) {
         setNetworkErrorActive(true);
@@ -1391,16 +1646,43 @@
       // Common Chromium error codes for network failures
       const networkCodes = new Set([
         -2,   // ERR_NAME_NOT_RESOLVED
-        -3,   // ERR_ADDRESS_UNREACHABLE  
+        // -3 is ERR_ABORTED (usually navigation cancellation), not a connectivity loss.
         -6,   // ERR_CONNECTION_FAILED
         -7,   // ERR_CONNECTION_TIMED_OUT
         -17,  // ERR_INTERNET_DISCONNECTED
         -101, // ERR_CONNECTION_RESET
         -105, // ERR_NAME_NOT_RESOLVED
         -118, // ERR_CONNECTION_TIMED_OUT
+        -109, // ERR_ADDRESS_UNREACHABLE
         -200  // ERR_NETWORK_ACCESS_DENIED
       ]);
       return networkCodes.has(code);
+    }
+
+    async function showConnectivityFailureNotice(errorCode, errorDescription, scopeLabel = '') {
+      const code = Number(errorCode);
+      const desc = String(errorDescription || '').toUpperCase();
+      const prefix = scopeLabel ? `${scopeLabel} ` : '';
+      const browserOnline = !(navigator && navigator.onLine === false);
+      const probeOnline = browserOnline ? await probeInternetConnection(2000) : false;
+      const confirmedOffline = await isConfirmedOffline();
+
+      if (!browserOnline && !probeOnline && confirmedOffline) {
+        showSecurityLoadNotice('No internet connection. Please check your network settings and try again.');
+        return;
+      }
+
+      if (code === -2 || code === -105 || desc.includes('DNS') || desc.includes('NAME_NOT_RESOLVED')) {
+        showSecurityLoadNotice(`${prefix}This site can't be reached (DNS lookup failed). Check the URL and try again.`);
+        return;
+      }
+
+      if (code === -7 || code === -118 || desc.includes('TIMED OUT')) {
+        showSecurityLoadNotice(`${prefix}This site took too long to respond. Try reloading.`);
+        return;
+      }
+
+      showSecurityLoadNotice(`${prefix}Couldn't connect to this site. Your internet appears available, but this site may be temporarily unreachable.`);
     }
 
     function getMediaTargets() {
@@ -1412,11 +1694,325 @@
 
     async function runMediaScript(targetWebview, script) {
       if (!targetWebview || typeof targetWebview.executeJavaScript !== 'function') return null;
+      if (mediaScriptPending.get(targetWebview)) return null;
+      mediaScriptPending.set(targetWebview, true);
       try {
-        return await targetWebview.executeJavaScript(script, true);
+        const timeoutMs = 1200;
+        return await Promise.race([
+          targetWebview.executeJavaScript(script, true),
+          new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+        ]);
       } catch (e) {
         return null;
+      } finally {
+        mediaScriptPending.set(targetWebview, false);
       }
+    }
+
+    // Detect if both videos are currently playing and optimize buffering
+    async function optimizeSplitScreenVideoBuffering() {
+      if (!isSplitView || !splitWebview) return;
+
+      try {
+        // Check if both webviews have video playing
+        const mainVideoPlaying = mediaPlayingState.get(webview)?.isPlaying && mediaPlayingState.get(webview)?.mediaType === 'video';
+        const splitVideoPlaying = mediaPlayingState.get(splitWebview)?.isPlaying && mediaPlayingState.get(splitWebview)?.mediaType === 'video';
+
+        if (!mainVideoPlaying || !splitVideoPlaying) return;
+
+        // Both videos are playing - apply adaptive quality reduction
+        await applyAdaptiveQualityForDualVideo(webview, 'main');
+        await applyAdaptiveQualityForDualVideo(splitWebview, 'split');
+      } catch (e) {
+        console.error('[Card] Error optimizing split-screen video:', e);
+      }
+    }
+
+    async function applyAdaptiveQualityForDualVideo(targetWebview, paneLabel) {
+      if (!targetWebview || typeof targetWebview.executeJavaScript !== 'function') return;
+
+      const script = `
+        (() => {
+          try {
+            // YouTube quality control
+            if ((location.hostname || '').includes('youtube')) {
+              try {
+                // YouTube: Select 720p or lower when dual-video mode active
+                const ytPlayer = window.yt?.player?.Application?.getActivePlayer?.();
+                if (ytPlayer && typeof ytPlayer.setOption === 'function') {
+                  // Use YouTube's API if available
+                  ytPlayer.setOption('iv', { args: ['player.setQualityRange', { minQuality: 'hd720', maxQuality: 'hd720' }] });
+                }
+                
+                // Fallback: find and click quality menu
+                const settingsButton = document.querySelector('[aria-label*="Settings"], .ytp-settings-button');
+                if (settingsButton) {
+                  // Find quality options in menu
+                  const qualityItems = document.querySelectorAll('[aria-label*="720"], [aria-label*="360"], [aria-label*="480"]');
+                  for (const item of qualityItems) {
+                    const label = (item.textContent || '').toLowerCase();
+                    if (label.includes('720') || label.includes('480')) {
+                      if (!item.getAttribute('aria-checked')) {
+                        item.click();
+                        break;
+                      }
+                    }
+                  }
+                }
+              } catch (e) {}
+            }
+            
+            // Vimeo quality control
+            if ((location.hostname || '').includes('vimeo')) {
+              try {
+                if (window.player && typeof window.player.setQuality === 'function') {
+                  // Get available qualities and select lower one
+                  const qualities = window.player.getQualities?.() || [];
+                  const lowerQuality = qualities.find(q => q.id === '720p' || q.id === '480p' || q.id === '360p');
+                  if (lowerQuality) {
+                    window.player.setQuality(lowerQuality.id);
+                  }
+                }
+              } catch (e) {}
+            }
+            
+            // General video element optimization
+            const videos = document.querySelectorAll('video');
+            for (const video of videos) {
+              if (!video.paused && !video.ended) {
+                // Optimize buffering by adjusting min buffer
+                if (video.buffered && video.buffered.length > 0) {
+                  const bufferedTime = video.buffered.end(video.buffered.length - 1) - video.currentTime;
+                  // Maintain minimum 8-second buffer for dual-video
+                  if (bufferedTime < 8 && video.networkState === 2) {
+                    // Pause briefly to let buffer catch up
+                    const wasPaused = video.paused;
+                    if (!wasPaused) {
+                      // Don't actually pause, just reduce quality perception
+                      video.playbackRate = 0.95; // Slightly slow down to reduce decode pressure
+                    }
+                  } else if (bufferedTime > 12) {
+                    // Resume normal playback
+                    video.playbackRate = 1.0;
+                  }
+                }
+                
+                // Enable hardware acceleration hints
+                video.style.willChange = 'auto';
+                
+                // Set preload to intelligent buffer strategy
+                if (video.preload !== 'auto') {
+                  video.preload = 'auto';
+                }
+              }
+            }
+            
+            // Reduce animation frame rate on other elements to save CPU
+            const observer = window.__bufferingFrameObserver;
+            if (!observer) {
+              let frameCount = 0;
+              let lastFrameUpdate = Date.now();
+              
+              window.__bufferingFrameObserver = {
+                init: () => {
+                  const animatedElements = document.querySelectorAll('[style*="animation"], [class*="animate"]');
+                  animatedElements.forEach(el => {
+                    const currentRate = window.getComputedStyle(el).animationPlayState;
+                    if (currentRate === 'running') {
+                      el.style.animationPlayState = 'running';
+                    }
+                  });
+                }
+              };
+              observer?.init?.();
+            }
+            
+            return true;
+          } catch (e) {
+            return false;
+          }
+        })();
+      `;
+
+      try {
+        await runMediaScript(targetWebview, script);
+      } catch (e) {
+        console.error('[Card] Error applying dual-video quality for ' + paneLabel + ':', e);
+      }
+    }
+
+    async function installMediaRecoveryHooks(targetWebview) {
+      if (!targetWebview || typeof targetWebview.executeJavaScript !== 'function') return;
+      const script = `
+        (() => {
+          if (window.__discoveryMediaRecoveryInstalled) return true;
+          window.__discoveryMediaRecoveryInstalled = true;
+
+          // YouTube and similar players manage their own adaptive buffering.
+          // Seeking into them mid-stall resets their internal segment queue
+          // and is the primary cause of the infinite loading loop.
+          const isYouTubeLike = () => {
+            const host = (location.hostname || '').toLowerCase();
+            return host.includes('youtube.com') || host.includes('youtu.be') ||
+                   !!document.querySelector('.html5-video-player, #movie_player, ytd-player');
+          };
+
+          const RETRY_BASE_MS = 1200;  // Slower — give the buffer time to fill
+          const RETRY_MAX_MS  = 12000; // Much longer cap
+          const STALL_GIVEUP  = 4;     // Stop poking after this many attempts
+
+          const getState = (mediaEl) => {
+            if (!mediaEl.__discoveryRecoveryState) {
+              mediaEl.__discoveryRecoveryState = {
+                attempts: 0,
+                lastAttemptAt: 0,
+                stallWatchTimer: null,
+                lastCurrentTime: null,
+                lastCurrentTimeAt: 0,
+              };
+            }
+            return mediaEl.__discoveryRecoveryState;
+          };
+
+          const resetState = (mediaEl) => {
+            const state = getState(mediaEl);
+            if (state.stallWatchTimer) { clearInterval(state.stallWatchTimer); state.stallWatchTimer = null; }
+            state.attempts = 0;
+            state.lastAttemptAt = 0;
+            state.lastCurrentTime = null;
+            state.lastCurrentTimeAt = 0;
+          };
+
+          const attemptResume = (mediaEl) => {
+            if (!(mediaEl instanceof HTMLMediaElement)) return;
+            if (mediaEl.paused || mediaEl.ended) return;
+
+            const state = getState(mediaEl);
+            const now = Date.now();
+            const delay = Math.min(RETRY_BASE_MS * (2 ** state.attempts), RETRY_MAX_MS);
+            if ((now - state.lastAttemptAt) < delay) return;
+
+            state.lastAttemptAt = now;
+            state.attempts = Math.min(state.attempts + 1, 8);
+
+            if (isYouTubeLike()) {
+              // Never seek on YouTube — just call play() a limited number of times
+              if (state.attempts > STALL_GIVEUP) return;
+              try {
+                const p = mediaEl.play();
+                if (p && typeof p.catch === 'function') p.catch(() => {});
+              } catch (e) {}
+              return;
+            }
+
+            // Generic players: only nudge currentTime if position is genuinely frozen
+            // (not just buffering) and readyState is critically low
+            try {
+              const currentTime = Number(mediaEl.currentTime);
+              const duration    = Number(mediaEl.duration);
+              const hasHeadroom = Number.isFinite(duration) ? (duration - currentTime) > 0.5 : true;
+              const positionFrozen =
+                state.lastCurrentTime !== null &&
+                Math.abs(currentTime - state.lastCurrentTime) < 0.05 &&
+                (now - state.lastCurrentTimeAt) > 3000;
+
+              if (Number.isFinite(currentTime) && hasHeadroom && mediaEl.readyState < 2 && positionFrozen) {
+                mediaEl.currentTime = Math.max(0, currentTime + 0.05);
+              }
+              state.lastCurrentTime   = currentTime;
+              state.lastCurrentTimeAt = now;
+            } catch (e) {}
+
+            try {
+              const p = mediaEl.play();
+              if (p && typeof p.catch === 'function') p.catch(() => {});
+            } catch (e) {}
+          };
+
+          // Watchdog: detects true position freezes (currentTime not advancing)
+          // vs normal buffering pauses, and only acts after a long threshold.
+          const startStallWatchdog = (mediaEl) => {
+            const state = getState(mediaEl);
+            if (state.stallWatchTimer) return;
+            const FROZEN_THRESHOLD_MS = 25000; // Must be frozen 25 s before we act
+            let lastSeen   = mediaEl.currentTime;
+            let lastSeenAt = Date.now();
+            state.stallWatchTimer = setInterval(() => {
+              if (mediaEl.paused || mediaEl.ended || mediaEl.readyState === 0) return;
+              const now = Date.now();
+              const cur = mediaEl.currentTime;
+              if (Math.abs(cur - lastSeen) > 0.1) {
+                lastSeen   = cur;
+                lastSeenAt = now;
+                return;
+              }
+              if ((now - lastSeenAt) >= FROZEN_THRESHOLD_MS) {
+                if (!isYouTubeLike()) {
+                  try { mediaEl.currentTime = Math.max(0, cur - 0.5); } catch (e) {}
+                  try {
+                    const p = mediaEl.play();
+                    if (p && typeof p.catch === 'function') p.catch(() => {});
+                  } catch (e) {}
+                }
+                lastSeenAt = now; // Debounce
+              }
+            }, 5000);
+          };
+
+          const stopStallWatchdog = (mediaEl) => {
+            const state = getState(mediaEl);
+            if (!state.stallWatchTimer) return;
+            clearInterval(state.stallWatchTimer);
+            state.stallWatchTimer = null;
+          };
+
+          const bindMediaRecovery = (mediaEl) => {
+            if (!(mediaEl instanceof HTMLMediaElement)) return;
+            if (mediaEl.__discoveryRecoveryBound) return;
+            mediaEl.__discoveryRecoveryBound = true;
+
+            // IMPORTANT: removed 'waiting' and 'suspend' — these fire constantly
+            // during normal YouTube buffering and cause the loop. Only react to
+            // genuine failure events.
+            ['stalled', 'error'].forEach((eventName) => {
+              mediaEl.addEventListener(eventName, () => attemptResume(mediaEl), { passive: true });
+            });
+
+            ['playing'].forEach((eventName) => {
+              mediaEl.addEventListener(eventName, () => {
+                resetState(mediaEl);
+                startStallWatchdog(mediaEl);
+              }, { passive: true });
+            });
+
+            ['pause', 'ended'].forEach((eventName) => {
+              mediaEl.addEventListener(eventName, () => stopStallWatchdog(mediaEl), { passive: true });
+            });
+
+            ['canplaythrough', 'seeked'].forEach((eventName) => {
+              mediaEl.addEventListener(eventName, () => resetState(mediaEl), { passive: true });
+            });
+          };
+
+          const scanAndBind = () => {
+            document.querySelectorAll('video, audio').forEach(bindMediaRecovery);
+          };
+
+          scanAndBind();
+          const observerTarget = document.documentElement || document.body;
+          if (observerTarget) {
+            const observer = new MutationObserver(() => scanAndBind());
+            observer.observe(observerTarget, { childList: true, subtree: true });
+            window.addEventListener('beforeunload', () => {
+              try { observer.disconnect(); } catch (e) {}
+            }, { once: true });
+          }
+          return true;
+        })();
+      `;
+      try {
+        await targetWebview.executeJavaScript(script, true);
+      } catch (e) { }
     }
 
     // Cache media state per-webview so split panes do not share stale state.
@@ -1607,10 +2203,16 @@
     }
 
     async function syncMediaControlState() {
-      const result = await getBestMediaTarget();
-      renderMediaControl(result.state);
-      if (!result || !result.state || !result.state.isPlaying) {
-        stopMediaSyncLoop();
+      if (mediaSyncInFlight) return;
+      mediaSyncInFlight = true;
+      try {
+        const result = await getBestMediaTarget();
+        renderMediaControl(result.state);
+        if (!result || !result.state || !result.state.isPlaying) {
+          stopMediaSyncLoop();
+        }
+      } finally {
+        mediaSyncInFlight = false;
       }
     }
 
@@ -1634,14 +2236,35 @@
     function startMediaSyncLoop() {
       if (mediaSyncTimer || !mediaPanelOpen) return;
       mediaSyncTimer = setInterval(() => {
+        if (mediaSyncInFlight) return;
         syncMediaControlState();
       }, 2000); // Reduced frequency: 2000ms instead of 1200ms to reduce CPU overhead
+
+      // Also start buffering optimization for dual-video scenarios
+      startMediaBufferingOptimization();
     }
 
     function stopMediaSyncLoop() {
       if (!mediaSyncTimer) return;
       clearInterval(mediaSyncTimer);
       mediaSyncTimer = null;
+      stopMediaBufferingOptimization();
+    }
+
+    function pauseMediaSyncForFailure() {
+      mediaPlayingState.set(webview, { isPlaying: false, mediaType: 'unknown' });
+      if (splitWebview) {
+        mediaPlayingState.set(splitWebview, { isPlaying: false, mediaType: 'unknown' });
+      }
+      clearMediaStateCache(webview);
+      if (splitWebview) {
+        clearMediaStateCache(splitWebview);
+      }
+      mediaSyncInFlight = false;
+      setMediaPanelOpen(false);
+      stopMediaSyncLoop();
+      stopMediaRemainingTicker();
+      updateVisualizerPlaybackState();
     }
 
     function isAnyMediaPlaying() {
@@ -1793,10 +2416,12 @@
     }
 
     function updateCardDownloadRing() {
+      console.log('[Card] updateCardDownloadRing called, cardDownloadRingBtn:', !!cardDownloadRingBtn, 'ringDismissed:', ringDismissed, 'cardDownloads.size:', cardDownloads ? cardDownloads.size : 'N/A');
       if (!cardDownloadRingBtn) return;
 
       // Hide if dismissed or no downloads at all
       if (ringDismissed || cardDownloads.size === 0) {
+        console.log('[Card] Hiding download ring - ringDismissed:', ringDismissed, 'downloads:', cardDownloads.size);
         cardDownloadRingBtn.style.display = 'none';
         cardDownloadRingBtn.setAttribute('aria-hidden', 'true');
         cardDownloadRingBtn.classList.remove('indeterminate');
@@ -1804,6 +2429,7 @@
         return;
       }
 
+      console.log('[Card] Showing download ring');
       cardDownloadRingBtn.style.display = 'inline-flex';
       cardDownloadRingBtn.setAttribute('aria-hidden', 'false');
 
@@ -2082,15 +2708,28 @@
 
     function loadSplitUrl(targetUrl) {
       if (!splitWebview || !targetUrl) return;
-      try {
-        splitWebview.setAttribute('src', targetUrl);
-        splitWebview.src = targetUrl;
-      } catch (e) {
-        try {
-          splitWebview.loadURL(targetUrl);
-        } catch (err) { }
+
+      // Immediately set loading state and start guard timers
+      isSplitNavigationLoading = true;
+      clearSplitLoadGuard();
+      clearSplitAbortTimer();
+      startSplitLoadGuard();
+
+      // Update the input field
+      if (splitUrlInput) {
+        splitUrlInput.value = targetUrl;
       }
       currentSplitUrl = targetUrl;
+
+      // Set the src attribute on the webview
+      try {
+        splitWebview.setAttribute('src', targetUrl);
+      } catch (e) {
+        console.error('[Card] Error setting split webview src:', e);
+        // Reset loading state if setAttribute fails
+        isSplitNavigationLoading = false;
+        clearSplitLoadGuard();
+      }
     }
 
     function clampZoom(value) {
@@ -2148,9 +2787,13 @@
     // Loading wave for render progress
     webview.addEventListener('did-start-navigation', (e) => {
       if (e && e.isMainFrame) {
+        isMainNavigationLoading = true;
+        firstContentSeenForMainNav = false;
         hideSecurityNoticeWhenAppropriate();
         resetZoom(webview);
         setLoadingWave(true);
+        startMainLoadGuard();
+        scheduleMainFirstContentFallback();
         clearMediaStateCache(webview);
         mediaPlayingState.set(webview, { isPlaying: false, mediaType: 'unknown' });
         updateVisualizerPlaybackState();
@@ -2159,75 +2802,102 @@
 
     // Hide shortly after first paint/DOM is ready instead of waiting for full load
     webview.addEventListener('dom-ready', () => {
-      hideSecurityNoticeWhenAppropriate();
-      resetZoom(webview);
-      if (loadingWaveVisible) {
-        setTimeout(() => setLoadingWave(false), 220);
+      if (!firstContentSeenForMainNav) {
+        firstContentSeenForMainNav = true;
+        hideLoadingWaveOnFirstContent(120);
+      } else {
+        clearMainFirstContentFallback();
       }
+      resetZoom(webview);
     });
 
     webview.addEventListener('did-stop-loading', () => {
+      firstContentSeenForMainNav = true;
+      isMainNavigationLoading = false;
       hideSecurityNoticeWhenAppropriate();
+      clearMainLoadGuard();
+      clearMainAbortTimer();
+      clearMainFirstContentFallback();
       if (loadingWaveVisible) {
         setLoadingWave(false);
       }
     });
 
-    webview.addEventListener('did-fail-load', (e) => {
+    webview.addEventListener('did-fail-load', async (e) => {
+      if (e && e.isMainFrame) {
+        console.warn('[Card] webview did-fail-load:', e.errorCode, e.errorDescription, e.validatedURL || '');
+      }
+      if (e && e.isMainFrame) {
+        isMainNavigationLoading = false;
+      }
+      clearMainLoadGuard();
+      clearMainAbortTimer();
+      clearMainFirstContentFallback();
       if (loadingWaveVisible) {
         setLoadingWave(false);
+      }
+      if (e && e.isMainFrame) {
+        pauseMediaSyncForFailure();
       }
       if (e && e.isMainFrame) {
         if (isTlsOrCertificateFailure(e.errorCode, e.errorDescription)) {
           showSecurityLoadNotice('Secure connection blocked: this site presented an invalid TLS certificate. Check your device date/time, network, or try again later.');
         } else if (isNetworkError(e.errorCode, e.errorDescription)) {
-          showSecurityLoadNotice('No internet connection. Please check your network settings and try again.');
+          await showConnectivityFailureNotice(e.errorCode, e.errorDescription);
         }
       }
     });
 
     // Handle webview crash/termination (could indicate network issues)
     webview.addEventListener('crashed', (e) => {
-      console.log('[Card] Webview crashed, checking network status');
-      showSecurityLoadNotice('Connection lost. Please check your internet connection and try again.');
+      firstContentSeenForMainNav = true;
+      isMainNavigationLoading = false;
+      clearMainLoadGuard();
+      clearMainAbortTimer();
+      clearMainFirstContentFallback();
+      pauseMediaSyncForFailure();
+      console.log('[Card] Webview crashed');
+      showSecurityLoadNotice('This page crashed. Reload to continue.');
     });
 
     // Handle render process gone (could indicate network issues)
     webview.addEventListener('render-process-gone', (e) => {
+      firstContentSeenForMainNav = true;
+      isMainNavigationLoading = false;
+      clearMainLoadGuard();
+      clearMainAbortTimer();
+      clearMainFirstContentFallback();
+      pauseMediaSyncForFailure();
       console.log('[Card] Render process gone:', e.reason);
       if (e.reason === 'crashed' || e.reason === 'abnormal') {
-        showSecurityLoadNotice('Connection lost. Please check your internet connection and try again.');
+        showSecurityLoadNotice('This page crashed. Reload to continue.');
       }
     });
 
-    // Handle load-stop - fires after any load attempt completes
-    let loadStartTime = 0;
-    let loadTimeout = null;
     webview.addEventListener('did-start-loading', () => {
-      loadStartTime = Date.now();
-      if (loadTimeout) clearTimeout(loadTimeout);
-      loadTimeout = setTimeout(() => {
-        const currentUrl = webview.getURL ? webview.getURL() : '';
-        if (currentUrl === 'about:blank' || !currentUrl || currentUrl.startsWith('chrome://')) {
-          showSecurityLoadNotice('Connection timed out. Please check your internet connection and try again.');
-          if (loadingWaveVisible) setLoadingWave(false);
-        }
-      }, 15000);
+      if (isMainNavigationLoading) {
+        startMainLoadGuard();
+      }
     });
 
     // Hide loading wave when main content is ready (faster than load-stop)
     webview.addEventListener('did-finish-load', () => {
+      firstContentSeenForMainNav = true;
+      isMainNavigationLoading = false;
+      clearMainLoadGuard();
+      clearMainAbortTimer();
+      clearMainFirstContentFallback();
       if (loadingWaveVisible) {
         setLoadingWave(false);
       }
     });
 
     webview.addEventListener('load-stop', () => {
+      firstContentSeenForMainNav = true;
+      isMainNavigationLoading = false;
       hideSecurityNoticeWhenAppropriate();
-      if (loadTimeout) {
-        clearTimeout(loadTimeout);
-        loadTimeout = null;
-      }
+      clearMainLoadGuard();
+      clearMainFirstContentFallback();
       if (loadingWaveVisible) {
         setLoadingWave(false);
       }
@@ -2235,10 +2905,13 @@
 
     // Media visualizer and hover controls for active media in either webview.
     webview.addEventListener('media-started-playing', () => {
+      installMediaRecoveryHooks(webview);
       lastActiveMediaWebview = webview;
       mediaPlayingState.set(webview, { isPlaying: true, mediaType: 'unknown' });
       updateVisualizerPlaybackState();
       refreshMediaPlayingType(webview);
+      // Optimize buffering when both videos are playing
+      optimizeSplitScreenVideoBuffering();
       if (mediaPanelOpen) {
         syncMediaControlState();
         startMediaSyncLoop();
@@ -2256,44 +2929,88 @@
     if (splitWebview) {
       splitWebview.addEventListener('did-start-navigation', (e) => {
         if (e && e.isMainFrame) {
+          isSplitNavigationLoading = true;
           hideSecurityNoticeWhenAppropriate();
+          startSplitLoadGuard();
           clearMediaStateCache(splitWebview);
           mediaPlayingState.set(splitWebview, { isPlaying: false, mediaType: 'unknown' });
           updateVisualizerPlaybackState();
         }
       });
 
-      splitWebview.addEventListener('dom-ready', () => {
-        hideSecurityNoticeWhenAppropriate();
+      // Fallback handler for when did-start-navigation doesn't fire
+      splitWebview.addEventListener('did-start-loading', () => {
+        if (!isSplitNavigationLoading) {
+          isSplitNavigationLoading = true;
+          startSplitLoadGuard();
+        }
       });
 
-      splitWebview.addEventListener('did-fail-load', (e) => {
+      splitWebview.addEventListener('dom-ready', () => {
+        isSplitNavigationLoading = false;
+        hideSecurityNoticeWhenAppropriate();
+        clearSplitLoadGuard();
+      });
+
+      splitWebview.addEventListener('did-fail-load', async (e) => {
         if (e && e.isMainFrame) {
+          console.warn('[Card] split webview did-fail-load:', e.errorCode, e.errorDescription, e.validatedURL || '');
+        }
+        if (e && e.isMainFrame) {
+          isSplitNavigationLoading = false;
+        }
+        clearSplitLoadGuard();
+        clearSplitAbortTimer();
+        if (e && e.isMainFrame) {
+          pauseMediaSyncForFailure();
           if (isTlsOrCertificateFailure(e.errorCode, e.errorDescription)) {
             showSecurityLoadNotice('Secure connection blocked in split view: invalid TLS certificate detected.');
           } else if (isNetworkError(e.errorCode, e.errorDescription)) {
-            showSecurityLoadNotice('No internet connection. Please check your network settings and try again.');
+            await showConnectivityFailureNotice(e.errorCode, e.errorDescription, 'Split view');
           }
         }
       });
 
       // Handle split webview crash
       splitWebview.addEventListener('crashed', (e) => {
-        showSecurityLoadNotice('Connection lost in split view. Please check your internet connection and try again.');
+        isSplitNavigationLoading = false;
+        clearSplitLoadGuard();
+        clearSplitAbortTimer();
+        pauseMediaSyncForFailure();
+        showSecurityLoadNotice('Split view page crashed. Reload to continue.');
       });
 
       // Handle split webview render process gone
       splitWebview.addEventListener('render-process-gone', (e) => {
+        isSplitNavigationLoading = false;
+        clearSplitLoadGuard();
+        clearSplitAbortTimer();
+        pauseMediaSyncForFailure();
         if (e.reason === 'crashed' || e.reason === 'abnormal') {
-          showSecurityLoadNotice('Connection lost in split view. Please check your internet connection and try again.');
+          showSecurityLoadNotice('Split view page crashed. Reload to continue.');
         }
       });
 
+      splitWebview.addEventListener('did-stop-loading', () => {
+        isSplitNavigationLoading = false;
+        clearSplitLoadGuard();
+        clearSplitAbortTimer();
+      });
+
+      splitWebview.addEventListener('did-finish-load', () => {
+        isSplitNavigationLoading = false;
+        clearSplitLoadGuard();
+        clearSplitAbortTimer();
+      });
+
       splitWebview.addEventListener('media-started-playing', () => {
+        installMediaRecoveryHooks(splitWebview);
         lastActiveMediaWebview = splitWebview;
         mediaPlayingState.set(splitWebview, { isPlaying: true, mediaType: 'unknown' });
         updateVisualizerPlaybackState();
         refreshMediaPlayingType(splitWebview);
+        // Optimize buffering when both videos are playing
+        optimizeSplitScreenVideoBuffering();
         if (mediaPanelOpen) {
           syncMediaControlState();
           startMediaSyncLoop();
@@ -2475,21 +3192,27 @@
     });
 
     // Listen for load failure notifications from main process
-    window.addEventListener('card-load-failed', (ev) => {
+    window.addEventListener('card-load-failed', async (ev) => {
       const { errorCode, errorDescription } = ev.detail || {};
       console.log('[Card] Received load-failed event:', errorCode, errorDescription);
       if (loadingWaveVisible) {
         setLoadingWave(false);
       }
+      pauseMediaSyncForFailure();
       if (isTlsOrCertificateFailure(errorCode, errorDescription)) {
         showSecurityLoadNotice('Secure connection blocked: this site presented an invalid TLS certificate. Check your device date/time, network, or try again later.');
       } else if (isNetworkError(errorCode, errorDescription)) {
-        showSecurityLoadNotice('No internet connection. Please check your network settings and try again.');
+        await showConnectivityFailureNotice(errorCode, errorDescription);
       }
     });
 
     window.addEventListener('online', () => {
+      offlineCandidateSince = 0;
       recoverNetworkNoticeIfOnline();
+    });
+
+    window.addEventListener('offline', () => {
+      updateOfflineCandidateState();
     });
 
     // Button click handlers with visual feedback
@@ -2637,9 +3360,24 @@
     if (splitBtn) {
       splitBtn.addEventListener('click', () => {
         // Split screen works in all screen sizes now
+        const wasEnabled = isSplitView;
         isSplitView = !isSplitView;
         if (splitContainer) splitContainer.classList.toggle('split-active', isSplitView);
         splitBtn.style.background = isSplitView ? 'rgba(100, 255, 100, 0.8)' : 'rgba(255,255,255,0.08)';
+
+        if (!isSplitView && wasEnabled) {
+          // Cleanup when disabling split view - cancel any pending loads/timers
+          isSplitNavigationLoading = false;
+          clearSplitLoadGuard();
+          clearSplitAbortTimer();
+          // Stop any ongoing split webview operations
+          try {
+            if (splitWebview && typeof splitWebview.stop === 'function') {
+              splitWebview.stop();
+            }
+          } catch (e) { }
+        }
+
         if (isSplitView && splitUrlInput) {
           splitUrlInput.focus();
         }
@@ -2656,8 +3394,17 @@
 
     if (splitGoBtn) {
       splitGoBtn.addEventListener('click', () => {
-        const targetUrl = normalizeUrl(splitUrlInput.value);
-        if (!targetUrl || !splitWebview) return;
+        if (!splitUrlInput || !splitWebview) return;
+        const rawUrl = splitUrlInput.value.trim();
+        if (!rawUrl) {
+          showSecurityLoadNotice('Please enter a URL in the split view address bar.');
+          return;
+        }
+        const targetUrl = normalizeUrl(rawUrl);
+        if (!targetUrl) {
+          showSecurityLoadNotice('Invalid URL format.');
+          return;
+        }
         loadSplitUrl(targetUrl);
       });
     }
@@ -2670,10 +3417,17 @@
         setTimeout(() => {
           splitReloadBtn.style.animation = '';
         }, 600);
+        // Ensure proper loading state tracking
+        isSplitNavigationLoading = true;
+        clearSplitLoadGuard();
+        clearSplitAbortTimer();
+        startSplitLoadGuard();
         try {
           splitWebview.reload();
         } catch (e) {
           console.error('Failed to reload split webview:', e);
+          isSplitNavigationLoading = false;
+          clearSplitLoadGuard();
         }
       });
     }
@@ -2681,8 +3435,16 @@
     if (splitUrlInput) {
       splitUrlInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
-          const targetUrl = normalizeUrl(splitUrlInput.value);
-          if (!targetUrl || !splitWebview) return;
+          const rawUrl = splitUrlInput.value.trim();
+          if (!rawUrl) {
+            showSecurityLoadNotice('Please enter a URL in the split view address bar.');
+            return;
+          }
+          const targetUrl = normalizeUrl(rawUrl);
+          if (!targetUrl) {
+            showSecurityLoadNotice('Invalid URL format.');
+            return;
+          }
           loadSplitUrl(targetUrl);
         }
       });
@@ -2942,8 +3704,11 @@
     setTimeout(checkBookmarkStatus, 1000);
 
     // --- Downloads for this card window ---
+    console.log('[Card] Setting up download handlers, cardAPI exists:', !!window.cardAPI);
     if (window.cardAPI && window.cardAPI.onDownloadStarted) {
+      console.log('[Card] Download handlers being set up');
       window.cardAPI.onDownloadStarted((payload) => {
+        console.log('[Card] Download started received:', payload);
         if (!payload || !payload.id) return;
         // Reset dismissal state when a new download starts
         ringDismissed = false;
@@ -2955,6 +3720,7 @@
       });
 
       window.cardAPI.onDownloadProgress((payload) => {
+        console.log('[Card] Download progress received:', payload);
         if (!payload || !payload.id) return;
         const prev = cardDownloads.get(payload.id) || {};
         cardDownloads.set(payload.id, { ...prev, ...payload });
@@ -2962,6 +3728,7 @@
       });
 
       window.cardAPI.onDownloadDone((payload) => {
+        console.log('[Card] Download done received:', payload);
         if (!payload || !payload.id) return;
         const prev = cardDownloads.get(payload.id) || {};
 
@@ -2977,10 +3744,15 @@
 
         updateCardDownloadRing();
       });
+    } else {
+      console.log('[Card] WARNING: cardAPI.onDownloadStarted is not available!');
     }
 
     // Clean up downloads when card window closes
     window.addEventListener('beforeunload', () => {
+      clearMainLoadGuard();
+      clearSplitLoadGuard();
+      stopNetworkRecoveryWatcher();
       cardDownloads.clear();
       ringDismissed = false;
       stopMediaSyncLoop();

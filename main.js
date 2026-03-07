@@ -6,10 +6,107 @@ const fs = require('fs');
 
 const { Menu, MenuItem } = require('electron');
 const APP_ICON_PATH = path.join(__dirname, 'assets', 'discoverybrowser.ico');
+
+function dirLooksLikeBrowserProfile(dirPath) {
+  if (!dirPath) return false;
+  try {
+    const checks = [
+      path.join(dirPath, 'Partitions', 'webview'),
+      path.join(dirPath, 'Partitions', 'cards'),
+      path.join(dirPath, 'Network'),
+      path.join(dirPath, 'Cookies'),
+      path.join(dirPath, 'Local Storage'),
+    ];
+    return checks.some((candidate) => fs.existsSync(candidate));
+  } catch (e) {
+    return false;
+  }
+}
+
+function pickStableUserDataPath() {
+  let appDataPath = '';
+  let defaultUserData = '';
+  try {
+    appDataPath = app.getPath('appData');
+    defaultUserData = app.getPath('userData');
+  } catch (e) {
+    return '';
+  }
+  if (!appDataPath) return defaultUserData || '';
+
+  const preferred = path.join(appDataPath, 'Discovery Browser');
+  const candidates = [
+    preferred,
+    defaultUserData,
+    path.join(appDataPath, 'discovery-browser'),
+    path.join(appDataPath, 'Discovery Web'),
+    path.join(appDataPath, 'DiscoveryWeb'),
+  ].filter(Boolean);
+
+  let bestPath = preferred;
+  let bestScore = -1;
+  for (const candidate of candidates) {
+    if (!candidate || !fs.existsSync(candidate)) continue;
+    let score = 0;
+    if (dirLooksLikeBrowserProfile(candidate)) score += 100;
+    try {
+      const stat = fs.statSync(candidate);
+      const modifiedAt = stat && Number.isFinite(stat.mtimeMs) ? stat.mtimeMs : 0;
+      score += Math.floor(modifiedAt / 1000);
+    } catch (e) { }
+    if (score > bestScore) {
+      bestScore = score;
+      bestPath = candidate;
+    }
+  }
+
+  return bestPath || preferred;
+}
+
+try {
+  const stableUserDataPath = pickStableUserDataPath();
+  if (stableUserDataPath) {
+    app.setPath('userData', stableUserDataPath);
+    console.log(`[Storage] Using userData path: ${stableUserDataPath}`);
+  }
+} catch (e) {
+  console.warn('[Storage] Failed to set stable userData path:', e && e.message ? e.message : e);
+}
 const WINDOW_HANG_RECOVERY_COOLDOWN_MS = 20000;
 const WINDOW_HANG_FORCE_RELOAD_MS = 8000;
+const WINDOW_HANG_CARD_GRACE_MS = 15000; // Reduced grace period for card loads
+const WINDOW_HANG_NETWORK_SUPPRESS_MS = 120000;
+const WINDOW_HANG_BURST_WINDOW_MS = 180000;
+const WINDOW_HANG_BURST_LIMIT = 2;
+const WINDOW_HANG_FORCE_CRASH_COOLDOWN_MS = 180000;
+const CARD_LOAD_TIMEOUT_MS = 25000; // Maximum time to wait for card to load before timeout
 const hangRecoveryAttachedWindows = new WeakSet();
 const hangRecoveryWindowState = new WeakMap();
+const cardLoadTimeouts = new WeakMap(); // Store load timeout timers per window
+
+function isLikelyNetworkLoadFailure(errorCode, errorDescription) {
+  const code = Number(errorCode);
+  const desc = String(errorDescription || '').toUpperCase();
+  if (desc.includes('INTERNET') || desc.includes('NETWORK') ||
+    desc.includes('CONNECTION') || desc.includes('TIMED OUT') ||
+    desc.includes('DNS') || desc.includes('ADDRESS') || desc.includes('REACHABLE') ||
+    desc.includes('RESET') || desc.includes('DISCONNECTED')) {
+    return true;
+  }
+  const networkCodes = new Set([
+    -2,   // ERR_NAME_NOT_RESOLVED
+    // -3 is ERR_ABORTED (usually navigation cancellation), not a connectivity loss.
+    -6,   // ERR_CONNECTION_FAILED
+    -7,   // ERR_CONNECTION_TIMED_OUT
+    -17,  // ERR_INTERNET_DISCONNECTED
+    -101, // ERR_CONNECTION_RESET
+    -105, // ERR_NAME_NOT_RESOLVED
+    -118, // ERR_CONNECTION_TIMED_OUT
+    -109, // ERR_ADDRESS_UNREACHABLE
+    -200  // ERR_NETWORK_ACCESS_DENIED
+  ]);
+  return networkCodes.has(code);
+}
 
 function triggerWindowHangRecovery(win, windowLabel, reason) {
   if (!win || win.isDestroyed()) return;
@@ -18,12 +115,33 @@ function triggerWindowHangRecovery(win, windowLabel, reason) {
 
   const state = hangRecoveryWindowState.get(win);
   if (!state) return;
+  const isCardLikeWindow = String(windowLabel || '').startsWith('card-') ||
+    String(windowLabel || '').startsWith('direct-card-') ||
+    String(windowLabel || '').startsWith('prewarmed-card');
+  if (isCardLikeWindow && reason === 'window-event') {
+    // Do not auto-reload card windows on transient unresponsive spikes.
+    // Heavy streaming pages can recover on their own; forced reloads make UX worse.
+    console.warn(`[HangRecovery] ${windowLabel} unresponsive event observed; waiting for renderer recovery.`);
+    return;
+  }
 
   const now = Date.now();
+  if (state.lastNetworkFailureAt > 0 && (now - state.lastNetworkFailureAt) < WINDOW_HANG_NETWORK_SUPPRESS_MS) {
+    console.warn(`[HangRecovery] ${windowLabel} recovery suppressed after recent network load failure.`);
+    return;
+  }
+
+  state.recoveryAttempts = state.recoveryAttempts.filter((ts) => (now - ts) < WINDOW_HANG_BURST_WINDOW_MS);
+  if (isCardLikeWindow && state.recoveryAttempts.length >= WINDOW_HANG_BURST_LIMIT) {
+    console.warn(`[HangRecovery] ${windowLabel} recovery suppressed to avoid restart loop.`);
+    return;
+  }
+
   if ((now - state.lastRecoveryAt) < WINDOW_HANG_RECOVERY_COOLDOWN_MS) return;
 
   state.lastRecoveryAt = now;
   state.waitingForResponsive = true;
+  state.recoveryAttempts.push(now);
   console.warn(`[HangRecovery] ${windowLabel} became unresponsive (${reason}). Attempting reload.`);
 
   try {
@@ -45,11 +163,24 @@ function triggerWindowHangRecovery(win, windowLabel, reason) {
     if (!state.waitingForResponsive) return;
     if (!win || win.isDestroyed()) return;
     if (!win.webContents || win.webContents.isDestroyed()) return;
+    const timerNow = Date.now();
+
+    if (state.lastNetworkFailureAt > 0 && (timerNow - state.lastNetworkFailureAt) < WINDOW_HANG_NETWORK_SUPPRESS_MS) {
+      state.waitingForResponsive = false;
+      return;
+    }
+
+    if (isCardLikeWindow && (timerNow - state.lastForceCrashAt) < WINDOW_HANG_FORCE_CRASH_COOLDOWN_MS) {
+      state.waitingForResponsive = false;
+      console.warn(`[HangRecovery] ${windowLabel} skip force-crash (cooldown active).`);
+      return;
+    }
 
     console.warn(`[HangRecovery] ${windowLabel} still unresponsive. Forcing renderer restart.`);
     try {
       if (typeof win.webContents.forcefullyCrashRenderer === 'function') {
         win.webContents.forcefullyCrashRenderer();
+        state.lastForceCrashAt = timerNow;
       }
     } catch (e) { }
 
@@ -70,6 +201,10 @@ function attachWindowHangRecovery(win, windowLabel) {
     lastRecoveryAt: 0,
     waitingForResponsive: false,
     forceReloadTimer: null,
+    unresponsiveTimer: null,
+    recoveryAttempts: [],
+    lastNetworkFailureAt: 0,
+    lastForceCrashAt: 0,
   };
   hangRecoveryWindowState.set(win, state);
 
@@ -79,17 +214,39 @@ function attachWindowHangRecovery(win, windowLabel) {
     state.forceReloadTimer = null;
   };
 
+  const clearUnresponsiveTimer = () => {
+    if (!state.unresponsiveTimer) return;
+    clearTimeout(state.unresponsiveTimer);
+    state.unresponsiveTimer = null;
+  };
+
+  const isCardLikeWindow = String(windowLabel || '').startsWith('card-') ||
+    String(windowLabel || '').startsWith('direct-card-') ||
+    String(windowLabel || '').startsWith('prewarmed-card');
+
   win.on('unresponsive', () => {
+    if (!isCardLikeWindow) {
+      triggerWindowHangRecovery(win, windowLabel, 'window-event');
+      return;
+    }
+    // Keep card windows passive on unresponsive; avoid reload loops on heavy pages.
     triggerWindowHangRecovery(win, windowLabel, 'window-event');
   });
 
   win.on('responsive', () => {
     state.waitingForResponsive = false;
     clearForceTimer();
+    clearUnresponsiveTimer();
     console.log(`[HangRecovery] ${windowLabel} recovered.`);
   });
 
   try {
+    win.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (!isMainFrame) return;
+      if (!isLikelyNetworkLoadFailure(errorCode, errorDescription)) return;
+      state.lastNetworkFailureAt = Date.now();
+    });
+
     win.webContents.on('render-process-gone', (event, details) => {
       const reason = details && details.reason ? String(details.reason) : 'unknown';
       if (reason === 'unresponsive' || reason === 'crashed' || reason === 'abnormal') {
@@ -101,9 +258,57 @@ function attachWindowHangRecovery(win, windowLabel) {
   win.on('closed', () => {
     state.waitingForResponsive = false;
     clearForceTimer();
+    clearUnresponsiveTimer();
     hangRecoveryWindowState.delete(win);
     hangRecoveryAttachedWindows.delete(win);
   });
+}
+
+// Setup load timeout for card windows to prevent indefinite loading with bad internet
+function setupCardLoadTimeout(win, windowLabel) {
+  if (!win || win.isDestroyed()) return;
+  const wc = win.webContents;
+  if (!wc || wc.isDestroyed()) return;
+
+  // Clear any existing timeout
+  const existingTimer = cardLoadTimeouts.get(win);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    cardLoadTimeouts.delete(win);
+  }
+
+  // Set up a timeout to abort loading if it takes too long
+  const loadTimer = setTimeout(() => {
+    if (!win || win.isDestroyed() || !wc || wc.isDestroyed()) return;
+
+    let isStillLoading = false;
+    try {
+      isStillLoading = wc.isLoading();
+    } catch (e) { }
+
+    if (isStillLoading) {
+      console.warn(`[CardLoadTimeout] ${windowLabel} still loading after ${CARD_LOAD_TIMEOUT_MS}ms, forcing stop`);
+      try {
+        wc.stop();
+      } catch (e) { }
+
+      // Trigger recovery
+      triggerWindowHangRecovery(win, windowLabel, 'load-timeout');
+    }
+
+    cardLoadTimeouts.delete(win);
+  }, CARD_LOAD_TIMEOUT_MS);
+
+  cardLoadTimeouts.set(win, loadTimer);
+}
+
+function clearCardLoadTimeout(win) {
+  if (!win) return;
+  const timer = cardLoadTimeouts.get(win);
+  if (timer) {
+    clearTimeout(timer);
+    cardLoadTimeouts.delete(win);
+  }
 }
 
 // GPU stability flags
@@ -130,6 +335,8 @@ app.commandLine.appendSwitch('dns-resolver-timeout', '15000'); // Increase DNS t
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+// Reduce Chromium process stderr noise (for example repeated STUN DNS failures).
+app.commandLine.appendSwitch('log-level', '3');
 
 // Use a Chrome-like UA to improve compatibility with security challenges.
 const chromeVersion = process.versions && process.versions.chrome ? process.versions.chrome : '120.0.0.0';
@@ -1337,6 +1544,7 @@ function createCardDirectly(url, options = {}) {
 
     // Add network error handlers at main process level
     cardWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      clearCardLoadTimeout(cardWindow);
       console.log('[Card] did-fail-load:', errorCode, errorDescription);
       // Forward to renderer for display
       if (isMainFrame) {
@@ -1345,6 +1553,7 @@ function createCardDirectly(url, options = {}) {
     });
 
     cardWindow.webContents.on('render-process-gone', (event, details) => {
+      clearCardLoadTimeout(cardWindow);
       console.log('[Card] render-process-gone:', details.reason);
       if (details.reason === 'crashed' || details.reason === 'abnormal') {
         cardWindow.webContents.send('card-load-failed', { errorCode: -1, errorDescription: details.reason });
@@ -1398,12 +1607,15 @@ function createCardDirectly(url, options = {}) {
 
     // Setup event listeners
     cardWindow.webContents.on('did-start-loading', () => {
+      // Setup load timeout for card - will force-stop if loading takes too long
+      setupCardLoadTimeout(cardWindow, `direct-card-${cardId}`);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('card-loading-start', cardId);
       }
     });
 
     cardWindow.webContents.on('did-finish-load', () => {
+      clearCardLoadTimeout(cardWindow);
       if (mainWindow && !mainWindow.isDestroyed() && cardWindow && !cardWindow.isDestroyed()) {
         const pageTitle = cardWindow.webContents.getTitle();
         const currentUrl = cardWindow.webContents.getURL();
@@ -1444,6 +1656,7 @@ function createCardDirectly(url, options = {}) {
     });
 
     cardWindow.on('closed', () => {
+      clearCardLoadTimeout(cardWindow);
       closeCardBubble(cardId);
       cardWindows.delete(cardId);
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1794,6 +2007,7 @@ function setupDownloadHandlingForSession(sess) {
           state: 'progressing',
           startTime: Date.now(),
         }, webContents);
+        console.warn('[Download] Download started, sending event to card window');
 
         item.on('updated', (e, state) => {
           try {
@@ -2063,11 +2277,13 @@ function createMainWindow() {
     });
   } catch (e) { }
 
-  // Enable downloads for both the main session and card partition session
+  // Enable downloads for all sessions that can trigger downloads.
   try {
     setupDownloadHandlingForSession(session.defaultSession);
     const cardSession = session.fromPartition('persist:cards');
     setupDownloadHandlingForSession(cardSession);
+    const webviewSession = session.fromPartition('persist:webview');
+    setupDownloadHandlingForSession(webviewSession);
   } catch (e) {
     console.warn('Download handler setup failed:', e.message);
   }
@@ -2343,6 +2559,11 @@ function setupAddonBlocking() {
 
       if (blocklist.size > 0) {
         const host = String(hostname || '').toLowerCase();
+        // Never block top-level navigations; only filter subresources.
+        // Blocking a main frame can look like total connectivity failure.
+        if (details && details.resourceType === 'mainFrame') {
+          return callback({ cancel: false });
+        }
         if (isSocialAllowlistedHost(host)) {
           return callback({ cancel: false });
         }
@@ -2402,6 +2623,16 @@ function setupAddonBlocking() {
   // Setup CSP override handler to allow external scripts like reCAPTCHA
   const cspOverrideHandler = (details, callback) => {
     const responseHeaders = Object.assign({}, details.responseHeaders);
+    let host = '';
+    try {
+      host = details && details.url ? String(new URL(details.url).hostname || '').toLowerCase() : '';
+    } catch (e) { }
+    // Keep normal browser behavior for most sites; only relax CSP for
+    // known challenge/security hosts where external scripts are required.
+    if (!isSecurityAllowlistedHost(host)) {
+      callback({ responseHeaders });
+      return;
+    }
     // Remove or relax CSP headers to allow external scripts
     if (responseHeaders['Content-Security-Policy'] || responseHeaders['content-security-policy']) {
       // Allow Google scripts and other common external resources
@@ -2884,13 +3115,18 @@ ipcMain.on('webview-console-message', (event, payload) => {
   try {
     const msg = payload && payload.message ? String(payload.message) : '';
     if (!msg) return;
+    const sourceId = payload && payload.sourceId ? String(payload.sourceId) : '';
+    // Filter noisy report-only CSP logs and STUN resolution noise.
+    if (/^\[Report Only\]\s+Refused to evaluate/i.test(msg)) return;
+    if (/stun\.l\.google\.com|socket_manager\.cc|errorcode:\s*-105/i.test(msg)) return;
+    if (/ttwstatic\.com|tiktok_web_login_static/i.test(sourceId) && /Content Security Policy|unsafe-eval/i.test(msg)) return;
     if (!/turnstile|cloudflare|captcha|challenge/i.test(msg)) return;
     console.warn('[Webview Console]', {
       cardId: payload.cardId,
       level: payload.level,
       message: msg,
       line: payload.line,
-      sourceId: payload.sourceId,
+      sourceId,
     });
   } catch (e) { }
 });

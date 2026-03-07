@@ -81,13 +81,25 @@ contextBridge.exposeInMainWorld('cardAPI', {
 
   // Downloads (per card window)
   onDownloadStarted: (callback) => {
-    ipcRenderer.on('download-started', (event, payload) => callback(payload));
+    console.log('[Preload-Card] Setting up onDownloadStarted handler');
+    ipcRenderer.on('download-started', (event, payload) => {
+      console.log('[Preload-Card] download-started received:', payload);
+      callback(payload);
+    });
   },
   onDownloadProgress: (callback) => {
-    ipcRenderer.on('download-progress', (event, payload) => callback(payload));
+    console.log('[Preload-Card] Setting up onDownloadProgress handler');
+    ipcRenderer.on('download-progress', (event, payload) => {
+      console.log('[Preload-Card] download-progress received:', payload);
+      callback(payload);
+    });
   },
   onDownloadDone: (callback) => {
-    ipcRenderer.on('download-done', (event, payload) => callback(payload));
+    console.log('[Preload-Card] Setting up onDownloadDone handler');
+    ipcRenderer.on('download-done', (event, payload) => {
+      console.log('[Preload-Card] download-done received:', payload);
+      callback(payload);
+    });
   },
   showItemInFolder: (filePath) => ipcRenderer.invoke('show-item-in-folder', filePath),
 
