@@ -132,6 +132,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 10px;
       padding: 0 12px;
       cursor: default;
       user-select: none;
@@ -177,18 +178,29 @@
       cursor: default;
     }
 
+    .card-primary-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+      position: relative;
+      z-index: 15;
+      -webkit-app-region: no-drag;
+    }
+
     .title-text {
       color: white;
       font-size: 14px;
       font-weight: 600;
-      flex: 1;
-      margin-left: 8px;
+      flex: 1 1 auto;
+      min-width: 48px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       opacity: 1;
       text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
       animation: fadeInSlide 0.5s ease 0.2s backwards;
+      pointer-events: none;
     }
 
     @keyframes fadeInSlide {
@@ -205,10 +217,16 @@
 
     .card-controls {
       display: flex;
+      flex: 1 1 auto;
+      min-width: 0;
+      justify-content: flex-end;
+      align-items: center;
       gap: 8px;
       -webkit-app-region: no-drag;
       /* Simplified animation for GPU */
       animation: fadeInSlide 0.3s ease 0.2s backwards;
+      position: relative;
+      z-index: 12;
     }
 
     .card-button {
@@ -228,6 +246,9 @@
       transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
       transform: translateZ(0);
       will-change: transform;
+      position: relative;
+      z-index: 30;
+      pointer-events: auto;
     }
 
     .card-button.size-btn {
@@ -277,9 +298,40 @@
       box-shadow: 0 4px 12px rgba(255, 215, 0, 0.6);
     }
 
+    /* Readmode button - cyan/blue gradient for reading */
+    .card-button.readmode-btn {
+      background: linear-gradient(135deg, rgba(0, 198, 255, 0.7), rgba(0, 114, 255, 0.7)) !important;
+      border: 1px solid rgba(0, 198, 255, 0.5) !important;
+    }
+
+    .card-button.readmode-btn:hover {
+      background: linear-gradient(135deg, rgba(0, 198, 255, 0.95), rgba(0, 114, 255, 0.95)) !important;
+      transform: scale(1.15) !important;
+      box-shadow: 0 4px 20px rgba(0, 198, 255, 0.6) !important;
+      border-color: rgba(0, 198, 255, 0.9) !important;
+    }
+
+    .card-button.readmode-btn:focus-visible {
+      outline: 2px solid rgba(125, 230, 255, 0.95);
+      outline-offset: 2px;
+      box-shadow: 0 0 0 4px rgba(0, 198, 255, 0.2), 0 4px 20px rgba(0, 198, 255, 0.45) !important;
+    }
+
     .card-button:active {
       background: rgba(255, 50, 50, 1);
       transform: scale(0.95);
+    }
+
+    .card-button.readmode-btn:active {
+      background: linear-gradient(135deg, rgba(0, 230, 255, 1), rgba(0, 140, 255, 1)) !important;
+      transform: scale(1.05) !important;
+    }
+
+    .card-button.readmode-btn.is-busy {
+      background: linear-gradient(135deg, rgba(0, 230, 255, 1), rgba(0, 140, 255, 1)) !important;
+      border-color: rgba(145, 235, 255, 1) !important;
+      box-shadow: 0 0 0 3px rgba(0, 198, 255, 0.18), 0 6px 22px rgba(0, 198, 255, 0.5) !important;
+      transform: scale(1.08) !important;
     }
 
     /* Download ring styling inside card */
@@ -401,6 +453,8 @@
 
     .url-input {
       flex: 1;
+      min-width: 0;
+      width: clamp(120px, 28vw, 260px);
       height: 32px;
       background: rgba(255, 255, 255, 0.15);
       border: 1px solid rgba(255, 255, 255, 0.25);
@@ -1020,7 +1074,7 @@
   <div class="card-window">
     <!-- Titlebar with navigation and close button -->
     <div class="card-titlebar">
-      <div style="display:flex; align-items:center; gap:8px; -webkit-app-region: no-drag;">
+      <div class="card-primary-controls">
         <button class="card-button" id="back-btn" title="Back">←</button>
         <button class="card-button" id="forward-btn" title="Forward">→</button>
         <button class="card-button" id="reload-btn" title="Reload">↻</button>
@@ -1029,6 +1083,7 @@
         <button class="card-button size-btn" id="fullscreen-btn" title="Toggle Fullscreen">⛶</button>
         <button class="card-button minimize-btn" id="minimize-btn" title="Minimize">−</button>
         <button class="card-button bookmark-btn" id="bookmark-btn" title="Bookmark">🔖</button>
+        <button class="card-button readmode-btn" id="readmode-btn" title="Read Mode">📖</button>
         <button class="card-button" id="split-btn" title="Split Screen">
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
             <rect x="3" y="4" width="7" height="16" rx="1.5" ry="1.5" fill="none" stroke="currentColor"
@@ -1140,6 +1195,7 @@
     const fullscreenBtn = document.getElementById('fullscreen-btn');
     const minimizeBtn = document.getElementById('minimize-btn');
     const bookmarkBtn = document.getElementById('bookmark-btn');
+    const readmodeBtn = document.getElementById('readmode-btn');
     const splitBtn = document.getElementById('split-btn');
     const zoomOutBtn = document.getElementById('zoom-out-btn');
     const zoomInBtn = document.getElementById('zoom-in-btn');
@@ -3612,6 +3668,39 @@
       toast.textContent = '✓ Bookmark saved';
       document.body.appendChild(toast);
       setTimeout(() => toast.remove(), 2000);
+    }
+
+    // Readmode button handler - opens a phone-sized readmode card
+    if (readmodeBtn) {
+      let isOpeningReadmode = false;
+      readmodeBtn.addEventListener('click', async () => {
+        if (isOpeningReadmode) return;
+        isOpeningReadmode = true;
+        readmodeBtn.classList.add('is-busy');
+        readmodeBtn.setAttribute('aria-busy', 'true');
+
+        try {
+          // Get current page URL and title
+          const pageUrl = currentPageUrl;
+          const pageTitle = currentPageTitle || 'Read Mode';
+          
+          console.log('[Readmode] Opening readmode for:', pageUrl, pageTitle);
+          
+          // Call the main process to open readmode card
+          await window.cardAPI.openReadmode(pageUrl, pageTitle, theme);
+          console.log('[Readmode] openReadmode called successfully');
+        } catch (err) {
+          console.error('Error opening readmode:', err);
+        } finally {
+          setTimeout(() => {
+            readmodeBtn.classList.remove('is-busy');
+            readmodeBtn.removeAttribute('aria-busy');
+            isOpeningReadmode = false;
+          }, 180);
+        }
+      });
+    } else {
+      console.error('[Readmode] readmodeBtn element not found');
     }
 
     function normalizeUrl(raw) {

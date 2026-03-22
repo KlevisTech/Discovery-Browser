@@ -109,6 +109,10 @@ contextBridge.exposeInMainWorld('cardAPI', {
   // Send custom events to main process
   sendToMain: (channel, payload) => ipcRenderer.send(channel, payload),
   getUserAgent: () => ipcRenderer.invoke('get-user-agent'),
+
+  // Open readmode card - creates a phone-sized reading view
+  openReadmode: (url, title, theme) =>
+    ipcRenderer.invoke('open-readmode-card', url, title, theme),
 });
 
 // Receive requests from main to load a URL into this card's webview

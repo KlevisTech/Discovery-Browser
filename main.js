@@ -3091,8 +3091,163 @@ ipcMain.handle('open-url-as-bubble', async (event, url, meta = {}) => {
   }
 });
 
+// Readmode card - phone-sized reading view
+const READMODE_WIDTH = 380;
+const READMODE_HEIGHT = 620;
+const readmodeWindows = new Map(); // readmodeId -> BrowserWindow
+let readmodeIdCounter = 0;
+
+// Open readmode card - creates a phone-sized reading window
+ipcMain.handle('open-readmode-card', async (event, url, title, theme = 'primary') => {
+  try {
+    const readmodeId = ++readmodeIdCounter;
+    
+    // Calculate centered position
+    let finalX = 200;
+    let finalY = 100;
+    try {
+      const { screen } = require('electron');
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+      const { x: workX, y: workY } = primaryDisplay.workArea;
+      finalX = workX + Math.floor((screenWidth - READMODE_WIDTH) / 2) + 60;
+      finalY = workY + Math.max(16, Math.floor((screenHeight - READMODE_HEIGHT) / 2) - 10);
+      // Offset based on existing readmode windows
+      const readmodeCount = readmodeWindows.size;
+      if (readmodeCount > 0) {
+        finalX += (readmodeCount * 30);
+        finalY += (readmodeCount * 20);
+      }
+      finalX = Math.max(workX + 16, finalX);
+      finalY = Math.max(workY + 16, finalY);
+    } catch (e) { }
+
+    // Create phone-sized readmode window
+    const readmodeWindow = new BrowserWindow({
+      width: READMODE_WIDTH,
+      height: READMODE_HEIGHT,
+      x: finalX,
+      y: finalY,
+      icon: APP_ICON_PATH,
+      frame: false,
+      transparent: false,
+      resizable: true,
+      skipTaskbar: false,
+      show: true,
+      backgroundColor: '#1a1a2e',
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        webviewTag: true,
+        preload: path.join(__dirname, 'preload-readmode.js'),
+        enableWebSQL: false,
+        spellcheck: true,
+        backgroundThrottling: false,
+        partition: 'persist:readmode',
+      },
+    });
+
+    // Store reference
+    readmodeWindows.set(readmodeId, readmodeWindow);
+
+    // Handle close
+    readmodeWindow.on('closed', () => {
+      readmodeWindows.delete(readmodeId);
+    });
+
+    // Load the readmode HTML
+    const encodedUrl = Buffer.from(url).toString('base64');
+    const encodedTitle = Buffer.from(title || 'Read Mode').toString('base64');
+    const readmodeHtmlPath = path.join(__dirname, 'src', 'readmode.html');
+    
+    await readmodeWindow.loadFile(readmodeHtmlPath, {
+      query: {
+        readmodeId: String(readmodeId),
+        url: encodedUrl,
+        title: encodedTitle,
+        theme: theme
+      }
+    });
+
+    return { success: true, readmodeId: readmodeId };
+  } catch (error) {
+    console.error('Error opening readmode card:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('get-user-agent', async () => {
   return CHROME_LIKE_UA;
+});
+
+// Readmode window handlers
+ipcMain.handle('close-readmode', async (event, readmodeId) => {
+  try {
+    const win = readmodeWindows.get(readmodeId);
+    if (win && !win.isDestroyed()) {
+      win.close();
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error closing readmode:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('navigate-readmode', async (event, readmodeId, url) => {
+  try {
+    const win = readmodeWindows.get(readmodeId);
+    if (win && !win.isDestroyed()) {
+      const webview = win.webContents;
+      if (webview) {
+        webview.loadURL(url);
+      }
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error navigating readmode:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('minimize-readmode-window', async (event) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) {
+      win.minimize();
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error minimizing readmode:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('toggle-readmode-fullscreen', async (event, shouldBeFullscreen) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) {
+      win.setFullScreen(shouldBeFullscreen);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error toggling readmode fullscreen:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('update-readmode-position', async (event, readmodeId, x, y) => {
+  try {
+    const win = readmodeWindows.get(readmodeId);
+    if (win && !win.isDestroyed()) {
+      win.setPosition(x, y);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating readmode position:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 // Title updates from embedded webview inside card window

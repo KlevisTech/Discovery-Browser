@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Read Mode</title>
+
+  <style>
+    :root {
+      color-scheme: light;
+      --shell-bg: linear-gradient(180deg, #dce8f6 0%, #eef2f7 42%, #dde6f1 100%);
+      --chrome-bg: rgba(255, 255, 255, 0.72);
+      --chrome-border: rgba(88, 120, 156, 0.18);
+      --button-bg: rgba(49, 88, 129, 0.08);
+      --button-fg: #27496d;
+      --button-border: rgba(39, 73, 109, 0.14);
+      --button-hover: rgba(37, 99, 235, 0.14);
+      --paper: linear-gradient(180deg, #fffdf8 0%, #f8f3e8 100%);
+      --paper-shadow: 0 24px 46px rgba(49, 72, 96, 0.18);
+      --text-main: #1e2937;
+      --text-muted: #6b7280;
+      --accent: #2f6fed;
+      --accent-soft: rgba(47, 111, 237, 0.14);
+      --progress: linear-gradient(90deg, #2f6fed 0%, #58a6ff 100%);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Georgia, "Times New Roman", serif;
+      background: #dfe8f1;
+      color: var(--text-main);
+    }
+
+    body {
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .phone-frame {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--shell-bg);
+      position: relative;
+      overflow: hidden;
+      -webkit-app-region: drag;
+      animation: frameIn 240ms ease-out;
+    }
+
+    .phone-frame::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at top right, rgba(88, 166, 255, 0.16), transparent 26%),
+        radial-gradient(circle at bottom left, rgba(255, 220, 160, 0.18), transparent 22%);
+    }
+
+    /* Reduced notch height */
+    .phone-notch {
+      flex: 0 0 auto;
+      height: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(246, 249, 252, 0.55);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.45);
+      position: relative;
+      z-index: 3;
+    }
+
+    .notch-speaker {
+      width: 54px;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(72, 97, 123, 0.2);
+    }
+
+    .phone-bottom {
+      flex: 0 0 auto;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(246, 249, 252, 0.55);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid rgba(255, 255, 255, 0.4);
+      position: relative;
+      z-index: 3;
+    }
+
+    .home-indicator {
+      width: 80px;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(72, 97, 123, 0.28);
+    }
+
+    .status-bar {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 26px;
+      padding: 0 12px;
+      background: var(--chrome-bg);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--chrome-border);
+      font-family: "Segoe UI", sans-serif;
+      position: relative;
+      z-index: 3;
+    }
+
+    .status-time,
+    .status-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    /* Titlebar: nav buttons LEFT, heading CENTER, close button RIGHT */
+    .readmode-titlebar {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 8px;
+      background: var(--chrome-bg);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--chrome-border);
+      position: relative;
+      z-index: 3;
+      -webkit-app-region: drag;
+    }
+
+    .readmode-btn,
+    .reader-stage,
+    .reader-surface,
+    .reader-article,
+    .reader-empty,
+    .loading-overlay,
+    .status-icons {
+      -webkit-app-region: no-drag;
+    }
+
+    .readmode-btn {
+      flex: 0 0 auto;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      border: 1px solid var(--button-border);
+      background: var(--button-bg);
+      color: var(--button-fg);
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .readmode-btn:hover {
+      background: var(--button-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 18px rgba(47, 111, 237, 0.14);
+    }
+
+    .readmode-btn:active {
+      transform: translateY(0);
+    }
+
+    .readmode-btn.close-btn {
+      color: #b42318;
+      background: rgba(217, 45, 32, 0.08);
+      border-color: rgba(217, 45, 32, 0.14);
+    }
+
+    .readmode-btn.close-btn:hover {
+      background: rgba(217, 45, 32, 0.16);
+      box-shadow: 0 8px 18px rgba(217, 45, 32, 0.16);
+    }
+
+    .readmode-heading {
+      min-width: 0;
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      padding: 0 6px;
+      font-family: "Segoe UI", sans-serif;
+    }
+
+    .readmode-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #243447;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .readmode-subtitle {
+      font-size: 10px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .reading-progress {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      z-index: 4;
+      background: rgba(47, 111, 237, 0.08);
+      pointer-events: none;
+    }
+
+    .reading-progress-bar {
+      width: 0;
+      height: 100%;
+      background: var(--progress);
+      box-shadow: 0 0 12px rgba(47, 111, 237, 0.3);
+      transition: width 0.2s ease;
+    }
+
+    .readmode-content {
+      flex: 1 1 auto;
+      min-height: 0;
+      position: relative;
+      padding: 14px 12px 10px;
+      z-index: 1;
+    }
+
+    .reader-stage {
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      padding-right: 6px;
+      user-select: text;
+      -webkit-user-select: text;
+      position: relative;
+    }
+
+    .reader-stage::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .reader-stage::-webkit-scrollbar-thumb {
+      background: rgba(39, 73, 109, 0.18);
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+
+    .reader-surface {
+      width: min(100%, 680px);
+      margin: 0 auto;
+      border-radius: 24px;
+      background: var(--paper);
+      box-shadow: var(--paper-shadow);
+      border: 1px solid rgba(116, 139, 165, 0.18);
+      padding: 24px 22px 30px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .reader-surface::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(135deg, rgba(88, 166, 255, 0.06), transparent 22%),
+        linear-gradient(180deg, transparent 0%, rgba(255, 244, 221, 0.35) 100%);
+    }
+
+    .reader-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      margin-bottom: 14px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font: 700 10px/1 "Segoe UI", sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .reader-article {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .reader-title {
+      font-size: clamp(24px, 4vw, 32px);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      color: #111927;
+    }
+
+    .reader-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font: 600 11px/1.4 "Segoe UI", sans-serif;
+      color: var(--text-muted);
+    }
+
+    .reader-excerpt {
+      padding-left: 12px;
+      border-left: 3px solid rgba(47, 111, 237, 0.22);
+      font-size: 16px;
+      line-height: 1.65;
+      color: #475467;
+    }
+
+    .reader-body {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      font-size: 18px;
+      line-height: 1.8;
+      color: var(--text-main);
+    }
+
+    .reader-body h2,
+    .reader-body h3,
+    .reader-body h4 {
+      font-family: "Segoe UI", sans-serif;
+      font-weight: 700;
+      line-height: 1.25;
+      color: #111927;
+      margin-top: 6px;
+    }
+
+    .reader-body h2 { font-size: 22px; }
+    .reader-body h3 { font-size: 19px; }
+    .reader-body h4 { font-size: 17px; }
+
+    .reader-body p,
+    .reader-body li,
+    .reader-body blockquote,
+    .reader-body pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .reader-body ul,
+    .reader-body ol {
+      padding-left: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .reader-body blockquote {
+      padding: 12px 14px;
+      border-left: 4px solid rgba(47, 111, 237, 0.32);
+      background: rgba(47, 111, 237, 0.05);
+      color: #334155;
+      border-radius: 0 14px 14px 0;
+      font-style: italic;
+    }
+
+    .reader-body pre {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #f4f7fb;
+      border: 1px solid rgba(116, 139, 165, 0.18);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.65;
+      overflow-x: auto;
+    }
+
+    .reader-empty {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: flex-start;
+      color: var(--text-muted);
+      font: 500 14px/1.6 "Segoe UI", sans-serif;
+    }
+
+    .reader-empty strong {
+      color: #111927;
+      font-size: 15px;
+    }
+
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(239, 243, 248, 0.86);
+      backdrop-filter: blur(10px);
+      transition: opacity 0.25s ease;
+      z-index: 5;
+    }
+
+    .loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-card {
+      padding: 16px 18px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(116, 139, 165, 0.18);
+      box-shadow: 0 20px 30px rgba(49, 72, 96, 0.12);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font: 600 12px/1.4 "Segoe UI", sans-serif;
+      color: #445268;
+    }
+
+    .loading-spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(47, 111, 237, 0.12);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      flex-shrink: 0;
+    }
+
+    .source-webview {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+      left: -9999px;
+      top: -9999px;
+    }
+
+    /* ── Auto-scroll button ── */
+    .readmode-btn.autoscroll-btn {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .readmode-btn.autoscroll-btn.active {
+      background: rgba(255, 200, 30, 0.22);
+      border-color: rgba(220, 160, 0, 0.45);
+      color: #7a5500;
+      box-shadow: 0 0 0 2px rgba(255, 200, 30, 0.18);
+    }
+
+    .readmode-btn.autoscroll-btn.active:hover {
+      background: rgba(255, 200, 30, 0.32);
+      box-shadow: 0 4px 14px rgba(220, 160, 0, 0.28), 0 0 0 2px rgba(255, 200, 30, 0.22);
+    }
+
+    /* Speed pill that appears beside the button when active */
+    .autoscroll-speed-pill {
+      display: none;
+      align-items: center;
+      gap: 3px;
+      padding: 0 6px;
+      height: 30px;
+      border-radius: 8px;
+      border: 1px solid rgba(220, 160, 0, 0.3);
+      background: rgba(255, 200, 30, 0.12);
+      font: 700 11px/1 "Segoe UI", sans-serif;
+      color: #7a5500;
+      -webkit-app-region: no-drag;
+      flex-shrink: 0;
+    }
+
+    .autoscroll-speed-pill.visible {
+      display: inline-flex;
+    }
+
+    .speed-btn {
+      width: 18px;
+      height: 18px;
+      border: none;
+      border-radius: 4px;
+      background: rgba(0,0,0,0.06);
+      color: #7a5500;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: background 0.12s;
+    }
+
+    .speed-btn:hover { background: rgba(0,0,0,0.12); }
+
+    /* ── Sentence highlight ── */
+    .read-sentence {
+      border-radius: 3px;
+      transition: background 0.25s ease, box-shadow 0.25s ease;
+      cursor: pointer;
+    }
+
+    .read-sentence.active-sentence {
+      background: rgba(255, 213, 0, 0.55) !important;
+      box-shadow: 0 0 0 2px rgba(255, 190, 0, 0.35), 2px 0 0 2px rgba(255, 190, 0, 0.35);
+    }
+
+    .read-sentence.past-sentence {
+      background: rgba(255, 213, 0, 0.12);
+    }
+
+    /* Pulse ring that appears on the active sentence */
+    @keyframes sentencePulse {
+      0%   { box-shadow: 0 0 0 2px rgba(255, 190, 0, 0.55), 0 0 0 0   rgba(255, 190, 0, 0.0); }
+      60%  { box-shadow: 0 0 0 2px rgba(255, 190, 0, 0.35), 0 0 0 8px rgba(255, 190, 0, 0.0); }
+      100% { box-shadow: 0 0 0 2px rgba(255, 190, 0, 0.35), 0 0 0 8px rgba(255, 190, 0, 0.0); }
+    }
+
+    .read-sentence.active-sentence {
+      animation: sentencePulse 0.4s ease forwards;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes frameIn {
+      from { opacity: 0; transform: scale(0.985); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    @media (max-width: 520px) {
+      .readmode-content { padding: 10px 8px 8px; }
+      .reader-surface { padding: 18px 16px 24px; border-radius: 18px; }
+      .reader-body { font-size: 17px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="phone-frame" id="phone-frame">
+    <div class="reading-progress">
+      <div class="reading-progress-bar" id="progress-bar"></div>
+    </div>
+
+    <div class="phone-notch">
+      <div class="notch-speaker"></div>
+    </div>
+
+    <div class="status-bar">
+      <span class="status-time" id="status-time">00:00</span>
+      <span class="status-label">Read mode</span>
+      <div class="status-icons">
+        <span class="status-label" id="word-count-label">Preparing...</span>
+      </div>
+    </div>
+
+    <!-- Titlebar: nav left, heading center, close RIGHT -->
+    <div class="readmode-titlebar">
+      <button class="readmode-btn" id="back-btn" title="Back">&lt;</button>
+      <button class="readmode-btn" id="forward-btn" title="Forward">&gt;</button>
+      <button class="readmode-btn" id="refresh-btn" title="Refresh">↻</button>
+      <div class="readmode-heading">
+        <span class="readmode-title" id="page-title">Loading article...</span>
+        <span class="readmode-subtitle" id="page-subtitle">Extracting the readable text</span>
+      </div>
+      <button class="readmode-btn" id="fullscreen-btn" title="Fullscreen">⛶</button>
+      <button class="readmode-btn autoscroll-btn" id="autoscroll-btn" title="Auto-read (highlight &amp; scroll sentences)">▶︎</button>
+      <div class="autoscroll-speed-pill" id="speed-pill">
+        <button class="speed-btn" id="speed-down-btn" title="Slower">−</button>
+        <span id="speed-label">1×</span>
+        <button class="speed-btn" id="speed-up-btn" title="Faster">+</button>
+      </div>
+      <button class="readmode-btn close-btn" id="close-btn" title="Close">✕</button>
+    </div>
+
+    <div class="readmode-content">
+      <div class="reader-stage" id="reader-stage">
+        <div class="reader-surface">
+          <div class="reader-kicker">Reader View</div>
+          <article class="reader-article" id="reader-article">
+            <div class="reader-empty" id="reader-empty">
+              <strong>Preparing a cleaner reading view</strong>
+              <p>Removing images, page chrome, and noisy layout so only the readable content remains.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-card">
+          <div class="loading-spinner"></div>
+          <span id="loading-text">Loading the page and building a cleaner article view...</span>
+        </div>
+      </div>
+
+      <webview id="source-webview" class="source-webview" partition="persist:readmode" allowpopups></webview>
+    </div>
+
+    <div class="phone-bottom">
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    let readmodeId = parseInt(params.get('readmodeId'), 10);
+    const encodedUrl = params.get('url');
+    const encodedTitle = params.get('title');
+
+    let initialUrl = '';
+    if (encodedUrl) {
+      try { initialUrl = atob(encodedUrl); }
+      catch (e) { initialUrl = decodeURIComponent(encodedUrl); }
+    }
+
+    let initialTitle = 'Read Mode';
+    if (encodedTitle) {
+      try { initialTitle = atob(encodedTitle); }
+      catch (e) { initialTitle = decodeURIComponent(encodedTitle); }
+    }
+
+    const closeBtn          = document.getElementById('close-btn');
+    const backBtn           = document.getElementById('back-btn');
+    const forwardBtn        = document.getElementById('forward-btn');
+    const refreshBtn        = document.getElementById('refresh-btn');
+    const fullscreenBtn     = document.getElementById('fullscreen-btn');
+    const pageTitleEl       = document.getElementById('page-title');
+    const pageSubtitleEl    = document.getElementById('page-subtitle');
+    const progressBar       = document.getElementById('progress-bar');
+    const loadingOverlay    = document.getElementById('loading-overlay');
+    const loadingText       = document.getElementById('loading-text');
+    const sourceWebview     = document.getElementById('source-webview');
+    const statusTime        = document.getElementById('status-time');
+    const wordCountLabel    = document.getElementById('word-count-label');
+    const readerStage       = document.getElementById('reader-stage');
+    const readerArticle     = document.getElementById('reader-article');
+
+    let isFullscreen     = false;
+    let extractionToken  = 0;
+    let extractionTimer  = null;
+
+    // --- State guards to prevent re-extraction loops ---
+    // extractedUrl:        URL we last successfully rendered — never re-extract same URL
+    // extractionInProgress: true while async extraction is running — block re-entry
+    // articleRendered:     true once we have real content — suppress all loading UI after this
+    // userNavigating:      true only when user explicitly clicked back/forward/refresh
+    //                      — the ONLY time we allow loading UI to reappear
+    let extractedUrl         = '';
+    let extractionInProgress = false;
+    let articleRendered      = false;
+    let userNavigating       = false;
+
+    pageTitleEl.textContent    = initialTitle || 'Read Mode';
+    pageSubtitleEl.textContent = initialUrl   || 'Loading source';
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    function updateTime() {
+      const now     = new Date();
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      statusTime.textContent = `${now.getHours()}:${minutes}`;
+    }
+
+    function setLoadingState(isLoading, message) {
+      // Once we have rendered article content, NEVER show the loading overlay
+      // again unless the user explicitly triggered a navigation.
+      if (isLoading && articleRendered && !userNavigating) return;
+      if (message) loadingText.textContent = message;
+      loadingOverlay.classList.toggle('hidden', !isLoading);
+    }
+
+    function setProgress(value) {
+      progressBar.style.width = `${Math.max(0, Math.min(100, Number(value) || 0))}%`;
+    }
+
+    function updateNavButtons() {
+      try {
+        backBtn.disabled    = !sourceWebview.canGoBack();
+        forwardBtn.disabled = !sourceWebview.canGoForward();
+      } catch (e) {
+        backBtn.disabled    = true;
+        forwardBtn.disabled = true;
+      }
+    }
+
+    function closeReadmodeWindow() {
+      window.readmodeAPI.closeReadmode(readmodeId);
+    }
+
+    function escapeHtml(text) {
+      return String(text || '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function createTextElement(tagName, text) {
+      const el = document.createElement(tagName);
+      el.textContent = text;
+      return el;
+    }
+
+    // ── Render ───────────────────────────────────────────────────────────────
+
+    function renderArticle(payload) {
+      readerArticle.innerHTML = '';
+
+      const blocks    = Array.isArray(payload && payload.blocks) ? payload.blocks : [];
+      const title     = (payload && payload.title)   || initialTitle || 'Read Mode';
+      const excerpt   = (payload && payload.excerpt) ? payload.excerpt : '';
+      const byline    = (payload && payload.byline)  ? payload.byline  : '';
+      const sourceUrl = (payload && payload.url)     ? payload.url     : initialUrl;
+      const wordCount = (payload && payload.wordCount) ? payload.wordCount : 0;
+
+      pageTitleEl.textContent    = title;
+      pageSubtitleEl.textContent = sourceUrl || 'Reader view';
+      wordCountLabel.textContent = wordCount > 0 ? `${wordCount.toLocaleString()} words` : 'Text view';
+
+      if (!blocks.length) {
+        const empty = document.createElement('div');
+        empty.className = 'reader-empty';
+        empty.innerHTML = `<strong>Readable text was hard to isolate here.</strong>
+          <p>This page may be highly interactive. Try refreshing or opening another article.</p>`;
+        readerArticle.appendChild(empty);
+        return;
+      }
+
+      const titleEl = createTextElement('h1', title);
+      titleEl.className = 'reader-title';
+      readerArticle.appendChild(titleEl);
+
+      const metaEl = document.createElement('div');
+      metaEl.className = 'reader-meta';
+      if (byline)    metaEl.appendChild(createTextElement('span', byline));
+      if (sourceUrl) metaEl.appendChild(createTextElement('span', sourceUrl.replace(/^https?:\/\//i, '')));
+      if (wordCount > 0) metaEl.appendChild(createTextElement('span', `${wordCount.toLocaleString()} words`));
+      readerArticle.appendChild(metaEl);
+
+      if (excerpt) {
+        const excerptEl = createTextElement('p', excerpt);
+        excerptEl.className = 'reader-excerpt';
+        readerArticle.appendChild(excerptEl);
+      }
+
+      const bodyEl = document.createElement('div');
+      bodyEl.className = 'reader-body';
+
+      blocks.forEach((block) => {
+        if (!block || !block.type) return;
+        if (block.type === 'ul' || block.type === 'ol') {
+          const listEl  = document.createElement(block.type);
+          const items   = Array.isArray(block.items) ? block.items : [];
+          items.forEach((item) => {
+            const norm = String(item || '').trim();
+            if (!norm) return;
+            const li = document.createElement('li');
+            li.textContent = norm;
+            listEl.appendChild(li);
+          });
+          if (listEl.children.length) bodyEl.appendChild(listEl);
+          return;
+        }
+        const tagName = ['h2','h3','h4','blockquote','pre','p'].includes(block.type) ? block.type : 'p';
+        const text    = String(block.text || '').trim();
+        if (!text) return;
+        bodyEl.appendChild(createTextElement(tagName, text));
+      });
+
+      readerArticle.appendChild(bodyEl);
+      readerStage.scrollTop = 0;
+      setProgress(0);
+    }
+
+    // ── Extraction ───────────────────────────────────────────────────────────
+
+    async function extractReadablePayload() {
+      return sourceWebview.executeJavaScript(`
+        (() => {
+          const normalize = (v) => String(v || '').replace(/\\s+/g, ' ').trim();
+          const work = document.implementation.createHTMLDocument('reader-mode');
+          work.documentElement.innerHTML = document.documentElement.outerHTML;
+
+          const removals = [
+            'script','style','noscript','template','iframe','svg','canvas',
+            'video','audio','picture','source','img','figure','form','button',
+            'input','textarea','select','nav','aside','footer',
+            '.ad','.ads','.advertisement','.sidebar','.share',
+            '.social','.related','.recommended','.newsletter','.cookie','.popup','.modal'
+          ];
+          removals.forEach(sel => work.querySelectorAll(sel).forEach(n => n.remove()));
+
+          const preferred = [
+            'article','main','[role="main"]','.article','.article-body','.article-content',
+            '.story-body','.story-content','.post-content','.entry-content','.post','.content'
+          ];
+          const candidates = [];
+          preferred.forEach(sel => work.querySelectorAll(sel).forEach(n => candidates.push(n)));
+          candidates.push(work.body);
+
+          const linkDensity = (node) => {
+            const total = normalize(node.innerText).length || 1;
+            let lc = 0;
+            node.querySelectorAll('a').forEach(a => { lc += normalize(a.textContent).length; });
+            return lc / total;
+          };
+          const scoreNode = (node) => {
+            const text = normalize(node.innerText);
+            return text.length
+              + node.querySelectorAll('p').length * 160
+              + node.querySelectorAll('h1,h2,h3').length * 60
+              + node.querySelectorAll('li').length * 20
+              - linkDensity(node) * 800;
+          };
+
+          const unique = Array.from(new Set(candidates)).filter(n => n && scoreNode(n) > 240);
+          const best   = unique.sort((a,b) => scoreNode(b) - scoreNode(a))[0] || work.body;
+
+          const seenText = new Set();
+          const blocks   = [];
+          best.querySelectorAll('h1,h2,h3,h4,p,blockquote,pre,ul,ol').forEach(node => {
+            if (node.closest('nav,aside,footer,header')) return;
+            if (node.tagName === 'UL' || node.tagName === 'OL') {
+              const items  = Array.from(node.querySelectorAll(':scope > li'))
+                .map(li => normalize(li.textContent)).filter(t => t.length > 1);
+              const joined = items.join('|');
+              if (items.length && !seenText.has(joined)) {
+                seenText.add(joined);
+                blocks.push({ type: node.tagName.toLowerCase(), items: items.slice(0,40) });
+              }
+              return;
+            }
+            const text = normalize(node.textContent);
+            if (text.length < (node.tagName.startsWith('H') ? 6 : 40)) return;
+            if (seenText.has(text)) return;
+            seenText.add(text);
+            blocks.push({ type: node.tagName.toLowerCase(), text });
+          });
+
+          if (!blocks.length) {
+            normalize(work.body.innerText).split(/\\n+/)
+              .map(c => normalize(c)).filter(c => c.length > 60)
+              .slice(0,80).forEach(c => blocks.push({ type:'p', text:c }));
+          }
+
+          const h1              = work.querySelector('h1');
+          const metaDesc        = work.querySelector('meta[name="description"]');
+          const authorNode      = work.querySelector('[rel="author"],.author,.byline,[itemprop="author"]');
+          const title           = normalize((h1 && h1.textContent) || document.title || '');
+          const excerpt         = normalize(metaDesc ? metaDesc.getAttribute('content') : '');
+          const byline          = normalize(authorNode ? authorNode.textContent : '');
+          const wordCount       = blocks.reduce((c,b) => {
+            if (Array.isArray(b.items)) return c + b.items.join(' ').split(/\\s+/).filter(Boolean).length;
+            return c + String(b.text||'').split(/\\s+/).filter(Boolean).length;
+          }, 0);
+
+          return { title, excerpt, byline, url: location.href, wordCount, blocks: blocks.slice(0,220) };
+        })();
+      `);
+    }
+
+    /**
+     * Run extraction exactly once for the current page.
+     * Guards prevent re-entry if did-finish-load fires multiple times
+     * (which happens because executeJavaScript can itself trigger events).
+     */
+    async function runExtraction(reason) {
+      if (extractionInProgress && reason !== 'refresh') return;
+
+      const currentUrl = (() => {
+        try { return sourceWebview.getURL() || ''; } catch (e) { return ''; }
+      })();
+
+      // Don't re-extract the same URL unless the user explicitly refreshed.
+      if (currentUrl && currentUrl === extractedUrl && reason !== 'refresh') {
+        setLoadingState(false);
+        return;
+      }
+
+      extractionInProgress = true;
+      const token = ++extractionToken;
+
+      setLoadingState(true, 'Extracting text and removing images...');
+      setProgress(28);
+
+      try {
+        const payload = await extractReadablePayload();
+        if (token !== extractionToken) return; // Superseded
+        setProgress(72);
+        renderArticle(payload || {});
+        extractedUrl     = currentUrl;
+        articleRendered  = true;
+        userNavigating   = false;
+        setProgress(100);
+        // Instrument sentences for auto-scroll now that DOM is populated
+        setTimeout(() => instrumentSentences(), 60);
+      } catch (err) {
+        if (token !== extractionToken) return;
+        readerArticle.innerHTML = '';
+        const fail = document.createElement('div');
+        fail.className = 'reader-empty';
+        fail.innerHTML = `<strong>We could not build the reader view for this page.</strong>
+          <p>${escapeHtml(err && err.message ? err.message : 'Unknown error')}</p>`;
+        readerArticle.appendChild(fail);
+        wordCountLabel.textContent = 'Unavailable';
+        setProgress(0);
+      } finally {
+        if (token === extractionToken) {
+          extractionInProgress = false;
+          setTimeout(() => setLoadingState(false), 160);
+        }
+      }
+    }
+
+    // ── Button handlers ──────────────────────────────────────────────────────
+
+    closeBtn.addEventListener('click', closeReadmodeWindow);
+
+    backBtn.addEventListener('click', () => {
+      try {
+        if (sourceWebview.canGoBack()) {
+          extractedUrl         = '';
+          extractionInProgress = false;
+          articleRendered      = false;
+          userNavigating       = true;
+          stopAutoScroll(false);
+          sourceWebview.goBack();
+        }
+      } catch (e) {}
+    });
+
+    forwardBtn.addEventListener('click', () => {
+      try {
+        if (sourceWebview.canGoForward()) {
+          extractedUrl         = '';
+          extractionInProgress = false;
+          articleRendered      = false;
+          userNavigating       = true;
+          stopAutoScroll(false);
+          sourceWebview.goForward();
+        }
+      } catch (e) {}
+    });
+
+    refreshBtn.addEventListener('click', () => {
+      try {
+        extractedUrl         = '';
+        extractionInProgress = false;
+        articleRendered      = false;
+        userNavigating       = true;
+        stopAutoScroll(false);
+        sourceWebview.reload();
+      } catch (e) {}
+    });
+
+    fullscreenBtn.addEventListener('click', async () => {
+      isFullscreen = !isFullscreen;
+      await window.readmodeAPI.toggleFullscreen(isFullscreen);
+      fullscreenBtn.textContent = isFullscreen ? '⊡' : '⛶';
+    });
+
+    readerStage.addEventListener('scroll', () => {
+      const max      = readerStage.scrollHeight - readerStage.clientHeight;
+      const progress = max > 0 ? (readerStage.scrollTop / max) * 100 : 0;
+      setProgress(progress);
+    });
+
+    // ── Webview events ───────────────────────────────────────────────────────
+
+    sourceWebview.addEventListener('did-start-loading', () => {
+      // Sub-resource loads (ads, trackers, redirects) also fire this event.
+      // Only show loading UI if the user explicitly triggered a navigation.
+      if (userNavigating) {
+        setLoadingState(true, 'Loading the source page...');
+        setProgress(10);
+      }
+      updateNavButtons();
+    });
+
+    sourceWebview.addEventListener('did-stop-loading', () => {
+      updateNavButtons();
+    });
+
+    sourceWebview.addEventListener('page-title-updated', (ev) => {
+      pageTitleEl.textContent = ev.title || 'Read Mode';
+    });
+
+    // did-finish-load fires for the main frame AND can fire again after
+    // executeJavaScript runs. The extractedUrl + extractionInProgress guards
+    // ensure we only run extraction once per unique URL.
+    sourceWebview.addEventListener('did-finish-load', () => {
+      updateNavButtons();
+      const url = (() => { try { return sourceWebview.getURL() || ''; } catch (e) { return ''; } })();
+      if (!url) { setLoadingState(false); return; }
+
+      pageSubtitleEl.textContent = url;
+
+      // Already extracted this URL — do nothing, keep rendered article visible.
+      if (url === extractedUrl && articleRendered) return;
+
+      if (extractionTimer) { clearTimeout(extractionTimer); extractionTimer = null; }
+      extractionTimer = setTimeout(() => {
+        extractionTimer = null;
+        runExtraction('navigation');
+      }, 150);
+    });
+
+    sourceWebview.addEventListener('did-fail-load', (ev) => {
+      // Error code -3 is ERR_ABORTED — this fires on redirects and is not a real failure.
+      if (ev && ev.errorCode === -3) return;
+
+      extractionInProgress = false;
+      userNavigating       = false;
+      readerArticle.innerHTML = '';
+      const fail = document.createElement('div');
+      fail.className = 'reader-empty';
+      fail.innerHTML = `<strong>This page could not load in read mode.</strong>
+        <p>${escapeHtml(ev && ev.errorDescription ? ev.errorDescription : 'The content failed to load.')}</p>`;
+      readerArticle.appendChild(fail);
+      wordCountLabel.textContent = 'Load failed';
+      setProgress(0);
+      loadingOverlay.classList.add('hidden'); // Force hide regardless of guards
+    });
+
+    // ── Auto-scroll / sentence-highlight engine ──────────────────────────────
+
+    const autoscrollBtn  = document.getElementById('autoscroll-btn');
+    const speedPill      = document.getElementById('speed-pill');
+    const speedLabel     = document.getElementById('speed-label');
+    const speedDownBtn   = document.getElementById('speed-down-btn');
+    const speedUpBtn     = document.getElementById('speed-up-btn');
+
+    // Speed levels: words-per-minute equivalents mapped to ms-per-sentence.
+    // We compute actual delay from sentence word count + speed multiplier.
+    const SPEED_LEVELS  = [0.4, 0.6, 0.8, 1.0, 1.4, 1.8, 2.5, 3.5];
+    const SPEED_LABELS  = ['0.4×','0.6×','0.8×','1×','1.4×','1.8×','2.5×','3.5×'];
+    const BASE_WPM      = 200;   // baseline reading pace
+    const MIN_MS        = 600;   // minimum ms per sentence regardless of length
+    const SCROLL_MARGIN = 120;   // px from viewport edge before we scroll
+
+    let autoScrollActive  = false;
+    let autoScrollTimer   = null;
+    let sentenceNodes     = [];  // all <span class="read-sentence"> elements
+    let currentSentenceIdx = -1;
+    let speedIdx          = 3;   // default 1× (index 3)
+    let manualPause       = false;
+
+    // Split text into sentences, preserving abbreviations reasonably well.
+    function splitSentences(text) {
+      // Split on . ! ? followed by whitespace or end, but not on common abbreviations
+      return text
+        .replace(/([.!?])(\s+)/g, '$1\x00$2')
+        .split('\x00')
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+    }
+
+    // Wrap every text node's sentences in <span class="read-sentence"> elements.
+    // Called after renderArticle() populates readerArticle.
+    function instrumentSentences() {
+      sentenceNodes = [];
+      currentSentenceIdx = -1;
+
+      // Walk all text-bearing elements inside reader-body and the excerpt
+      const textEls = readerArticle.querySelectorAll(
+        '.reader-body p, .reader-body li, .reader-body blockquote, .reader-excerpt'
+      );
+
+      let globalIdx = 0;
+
+      textEls.forEach((el) => {
+        const raw = el.textContent || '';
+        if (!raw.trim()) return;
+
+        const sentences = splitSentences(raw);
+        if (!sentences.length) return;
+
+        // Replace element content with wrapped spans
+        el.innerHTML = '';
+        sentences.forEach((sentence, i) => {
+          if (!sentence.trim()) return;
+          const span = document.createElement('span');
+          span.className = 'read-sentence';
+          span.dataset.idx = String(globalIdx);
+          span.textContent = sentence;
+          // Add a space between sentences
+          if (i > 0) el.appendChild(document.createTextNode(' '));
+          el.appendChild(span);
+          sentenceNodes.push(span);
+          globalIdx++;
+        });
+      });
+    }
+
+    function clearAllHighlights() {
+      sentenceNodes.forEach(s => {
+        s.classList.remove('active-sentence', 'past-sentence');
+      });
+    }
+
+    function highlightSentence(idx) {
+      if (idx < 0 || idx >= sentenceNodes.length) return;
+
+      // Unmark previous active, mark as past
+      if (currentSentenceIdx >= 0 && currentSentenceIdx < sentenceNodes.length) {
+        const prev = sentenceNodes[currentSentenceIdx];
+        prev.classList.remove('active-sentence');
+        prev.classList.add('past-sentence');
+      }
+
+      currentSentenceIdx = idx;
+      const span = sentenceNodes[idx];
+      span.classList.remove('past-sentence');
+      span.classList.add('active-sentence');
+
+      // Scroll into view if outside the visible area of readerStage
+      const stageRect = readerStage.getBoundingClientRect();
+      const spanRect  = span.getBoundingClientRect();
+
+      const aboveViewport = spanRect.top < stageRect.top + SCROLL_MARGIN;
+      const belowViewport = spanRect.bottom > stageRect.bottom - SCROLL_MARGIN;
+
+      if (aboveViewport || belowViewport) {
+        // Smooth scroll so the sentence lands near the vertical center
+        const offsetTop   = span.offsetTop;
+        const stageHeight = readerStage.clientHeight;
+        const spanHeight  = span.offsetHeight;
+        const target      = offsetTop - (stageHeight / 2) + (spanHeight / 2);
+
+        readerStage.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+      }
+    }
+
+    function msForSentence(sentence) {
+      const words    = sentence.trim().split(/\s+/).length;
+      const speed    = SPEED_LEVELS[speedIdx];
+      const wpm      = BASE_WPM * speed;
+      const ms       = (words / wpm) * 60_000;
+      return Math.max(MIN_MS, ms);
+    }
+
+    function scheduleNext(idx) {
+      if (!autoScrollActive || manualPause) return;
+      if (idx >= sentenceNodes.length) {
+        // Reached end — stop gracefully
+        stopAutoScroll(false);
+        updateScrollProgress();
+        return;
+      }
+
+      highlightSentence(idx);
+      updateScrollProgress();
+
+      const delay = msForSentence(sentenceNodes[idx].textContent || '');
+      autoScrollTimer = setTimeout(() => {
+        scheduleNext(idx + 1);
+      }, delay);
+    }
+
+    function startAutoScroll() {
+      if (!sentenceNodes.length) {
+        // Not yet instrumented — instrument now
+        instrumentSentences();
+      }
+      if (!sentenceNodes.length) return; // no content
+
+      autoScrollActive = true;
+      manualPause      = false;
+
+      autoscrollBtn.classList.add('active');
+      autoscrollBtn.title = 'Pause auto-read';
+      autoscrollBtn.textContent = '⏸';
+      speedPill.classList.add('visible');
+
+      // Resume from current position or start from beginning
+      const startIdx = (currentSentenceIdx >= 0 && currentSentenceIdx < sentenceNodes.length - 1)
+        ? currentSentenceIdx + 1
+        : 0;
+
+      scheduleNext(startIdx);
+    }
+
+    function stopAutoScroll(keepHighlight = true) {
+      autoScrollActive = false;
+      if (autoScrollTimer) {
+        clearTimeout(autoScrollTimer);
+        autoScrollTimer = null;
+      }
+
+      autoscrollBtn.classList.remove('active');
+      autoscrollBtn.title = 'Auto-read (highlight & scroll sentences)';
+      autoscrollBtn.textContent = '▶︎';
+      speedPill.classList.remove('visible');
+
+      if (!keepHighlight) {
+        clearAllHighlights();
+        currentSentenceIdx = -1;
+      }
+    }
+
+    function resetAutoScroll() {
+      stopAutoScroll(false);
+      // Re-instrument in case article was re-rendered
+      instrumentSentences();
+    }
+
+    function updateScrollProgress() {
+      if (!autoScrollActive || !sentenceNodes.length) return;
+      const pct = ((currentSentenceIdx + 1) / sentenceNodes.length) * 100;
+      setProgress(pct);
+    }
+
+    // Button: toggle play/pause
+    autoscrollBtn.addEventListener('click', () => {
+      if (autoScrollActive) {
+        manualPause = true;
+        stopAutoScroll(true); // keep highlight where we paused
+      } else {
+        startAutoScroll();
+      }
+    });
+
+    // Speed controls
+    speedDownBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (speedIdx > 0) {
+        speedIdx--;
+        speedLabel.textContent = SPEED_LABELS[speedIdx];
+      }
+    });
+
+    speedUpBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (speedIdx < SPEED_LEVELS.length - 1) {
+        speedIdx++;
+        speedLabel.textContent = SPEED_LABELS[speedIdx];
+      }
+    });
+
+    // Clicking a sentence jumps to it
+    readerArticle.addEventListener('click', (e) => {
+      const span = e.target.closest('.read-sentence');
+      if (!span) return;
+      const idx = parseInt(span.dataset.idx, 10);
+      if (!Number.isFinite(idx)) return;
+
+      // Clear timer, jump to clicked sentence, then continue
+      if (autoScrollTimer) { clearTimeout(autoScrollTimer); autoScrollTimer = null; }
+      // Mark everything before as past
+      sentenceNodes.forEach((s, i) => {
+        s.classList.remove('active-sentence', 'past-sentence');
+        if (i < idx) s.classList.add('past-sentence');
+      });
+      currentSentenceIdx = idx - 1; // highlightSentence will advance it
+      if (autoScrollActive) {
+        scheduleNext(idx);
+      } else {
+        highlightSentence(idx);
+      }
+    });
+
+    // Keyboard shortcuts: Space = play/pause, Left/Right = prev/next sentence
+    window.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') {
+        if (autoScrollActive) { stopAutoScroll(true); return; }
+        closeReadmodeWindow();
+        return;
+      }
+      if (ev.key === ' ' && ev.target === document.body) {
+        ev.preventDefault();
+        autoscrollBtn.click();
+        return;
+      }
+      if (ev.key === 'ArrowRight' && autoScrollActive) {
+        ev.preventDefault();
+        if (autoScrollTimer) { clearTimeout(autoScrollTimer); autoScrollTimer = null; }
+        scheduleNext(Math.min(currentSentenceIdx + 1, sentenceNodes.length - 1));
+        return;
+      }
+      if (ev.key === 'ArrowLeft' && (autoScrollActive || currentSentenceIdx > 0)) {
+        ev.preventDefault();
+        if (autoScrollTimer) { clearTimeout(autoScrollTimer); autoScrollTimer = null; }
+        const prev = Math.max(0, currentSentenceIdx - 1);
+        sentenceNodes.forEach((s, i) => {
+          s.classList.remove('active-sentence', 'past-sentence');
+          if (i < prev) s.classList.add('past-sentence');
+        });
+        currentSentenceIdx = prev - 1;
+        if (autoScrollActive) {
+          scheduleNext(prev);
+        } else {
+          highlightSentence(prev);
+        }
+      }
+    });
+
+    // ── Init ─────────────────────────────────────────────────────────────────
+
+    updateTime();
+    setInterval(updateTime, 1000);
+    updateNavButtons();
+
+    if (initialUrl) {
+      userNavigating    = true;
+      sourceWebview.src = initialUrl;
+    } else {
+      loadingOverlay.classList.add('hidden');
+      wordCountLabel.textContent = 'No page';
+    }
+  </script>
+</body>
+
+</html>
