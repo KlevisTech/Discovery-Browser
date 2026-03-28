@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Article Recap</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --shell-bg: linear-gradient(180deg, #dbe6f2 0%, #edf3f8 40%, #dde8f3 100%);
+      --chrome-bg: rgba(255, 255, 255, 0.72);
+      --chrome-border: rgba(88, 120, 156, 0.18);
+      --button-bg: rgba(49, 88, 129, 0.08);
+      --button-fg: #27496d;
+      --button-border: rgba(39, 73, 109, 0.14);
+      --button-hover: rgba(37, 99, 235, 0.14);
+      --paper: rgba(255, 255, 255, 0.55);
+      --text-main: #1e2937;
+      --text-muted: #667085;
+      --accent: #2f6fed;
+      --accent-soft: rgba(47, 111, 237, 0.12);
+      --gold: rgba(255, 219, 143, 0.9);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Georgia, "Times New Roman", serif;
+      background: #dbe6f2;
+      color: var(--text-main);
+    }
+
+    body { user-select: none; -webkit-user-select: none; }
+
+    .recap-shell {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--shell-bg);
+      position: relative;
+      overflow: hidden;
+      -webkit-app-region: drag;
+    }
+
+    .recap-shell::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at top right, rgba(88,166,255,0.16), transparent 24%),
+        radial-gradient(circle at bottom left, rgba(255,220,160,0.16), transparent 22%);
+    }
+
+    .recap-titlebar {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: var(--chrome-bg);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--chrome-border);
+      position: relative;
+      z-index: 2;
+    }
+
+    .recap-btn, .recap-content, .recap-stage, .recap-highlight-chip, .recap-card, .recap-page-btn {
+      -webkit-app-region: no-drag;
+    }
+
+    .recap-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      border: 1px solid var(--button-border);
+      background: var(--button-bg);
+      color: var(--button-fg);
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .recap-btn:hover {
+      background: var(--button-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 18px rgba(47,111,237,0.14);
+    }
+
+    .recap-btn.close-btn {
+      color: #b42318;
+      background: rgba(217,45,32,0.08);
+      border-color: rgba(217,45,32,0.14);
+    }
+
+    .recap-heading {
+      min-width: 0;
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 0 8px;
+      font-family: "Segoe UI", sans-serif;
+    }
+
+    .recap-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #243447;
+    }
+
+    .recap-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .recap-content {
+      flex: 1 1 auto;
+      min-height: 0;
+      padding: 16px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .recap-stage {
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      padding-right: 6px;
+    }
+
+    .recap-stage::-webkit-scrollbar { width: 8px; }
+    .recap-stage::-webkit-scrollbar-thumb {
+      background: rgba(39,73,109,0.18);
+      border-radius: 999px;
+    }
+
+    .recap-layout {
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+      gap: 16px;
+      min-height: 100%;
+    }
+
+    .recap-sidebar,
+    .recap-main {
+      border-radius: 28px;
+      background: var(--paper);
+      border: 1px solid rgba(116,139,165,0.18);
+      box-shadow: 0 22px 44px rgba(49, 72, 96, 0.14);
+      backdrop-filter: blur(18px);
+    }
+
+    .recap-sidebar {
+      padding: 16px 14px;
+      position: sticky;
+      top: 0;
+      align-self: start;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font: 700 10px/1 "Segoe UI", sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .sidebar-title {
+      margin-top: 10px;
+      font: 700 16px/1.25 "Segoe UI", sans-serif;
+      color: #132238;
+    }
+
+    .sidebar-text {
+      margin-top: 6px;
+      color: var(--text-muted);
+      font: 500 11px/1.5 "Segoe UI", sans-serif;
+    }
+
+    .highlight-list {
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .recap-highlight-chip {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: left;
+      padding: 11px 12px;
+      border-radius: 18px;
+      border: 1px solid rgba(88,120,156,0.15);
+      background: rgba(255,255,255,0.72);
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .recap-highlight-chip:hover {
+      transform: translateX(4px);
+      border-color: rgba(47,111,237,0.34);
+      box-shadow: 0 10px 20px rgba(47,111,237,0.10);
+    }
+
+    .highlight-text {
+      font: 600 12px/1.45 "Segoe UI", sans-serif;
+      color: #22324a;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .highlight-meta {
+      color: var(--text-muted);
+      font: 500 10px/1.4 "Segoe UI", sans-serif;
+    }
+
+    .recap-main {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .recap-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .recap-header h2 {
+      margin-top: 8px;
+      font-size: clamp(24px, 3vw, 34px);
+      line-height: 1.08;
+      color: #172536;
+    }
+
+    .recap-header p {
+      margin-top: 8px;
+      color: var(--text-muted);
+      font: 500 12px/1.6 "Segoe UI", sans-serif;
+      max-width: 520px;
+    }
+
+    .recap-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .summary-pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.82);
+      color: #2a3c56;
+      font: 600 11px/1.2 "Segoe UI", sans-serif;
+    }
+
+    .recap-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+      padding-top: 4px;
+    }
+
+    .recap-node {
+      position: relative;
+      display: flex;
+      min-height: 228px;
+    }
+
+    .recap-node.left {
+      justify-content: flex-start;
+      padding-right: 88px;
+    }
+
+    .recap-node.right {
+      justify-content: flex-end;
+      padding-left: 88px;
+    }
+
+    .recap-connector {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -18px;
+      height: 84px;
+      pointer-events: none;
+      opacity: 0.96;
+    }
+
+    .recap-connector svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .recap-connector path {
+      fill: none;
+      stroke: var(--gold);
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 4px 10px rgba(219, 181, 104, 0.28));
+    }
+
+    .recap-connector.left {
+      padding-left: 210px;
+      padding-right: 36px;
+    }
+
+    .recap-connector.right {
+      padding-left: 36px;
+      padding-right: 210px;
+    }
+
+    .recap-node.last .recap-connector {
+      display: none;
+    }
+
+    .recap-card {
+      width: min(100%, 360px);
+      min-height: 188px;
+      padding: 20px 22px 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(116,139,165,0.2);
+      background:
+        radial-gradient(circle at top, rgba(255,255,255,0.84), transparent 54%),
+        linear-gradient(135deg, rgba(255,255,255,0.74), rgba(230,238,248,0.68));
+      box-shadow: 0 18px 40px rgba(49,72,96,0.16);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .recap-card:hover {
+      transform: translateY(-2px) scale(1.01);
+      border-color: rgba(47,111,237,0.34);
+      box-shadow: 0 22px 46px rgba(49,72,96,0.18);
+    }
+
+    .recap-card.linked {
+      animation: pulse 1.2s ease;
+      border-color: rgba(47,111,237,0.58);
+      box-shadow: 0 0 0 3px rgba(47,111,237,0.12), 0 24px 46px rgba(49,72,96,0.18);
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.98); }
+      40% { transform: scale(1.02); }
+      100% { transform: scale(1); }
+    }
+
+    .card-time-row, .card-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .card-time, .card-count {
+      color: var(--text-muted);
+      font: 600 10px/1.3 "Segoe UI", sans-serif;
+    }
+
+    .card-title {
+      text-align: center;
+      color: #162739;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.28;
+      padding: 0 10px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card-excerpt {
+      text-align: center;
+      color: #415366;
+      font: 500 11px/1.6 "Segoe UI", sans-serif;
+      padding: 0 16px;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card-footer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 0 24px;
+    }
+
+    .card-link {
+      max-width: 220px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #7a8699;
+      font: 500 9px/1.4 "Segoe UI", sans-serif;
+      display: block;
+      text-align: center;
+    }
+
+    .open-btn, .delete-btn, .recap-page-btn {
+      border: none;
+      border-radius: 999px;
+      padding: 8px 13px;
+      cursor: pointer;
+      font: 700 10px/1.2 "Segoe UI", sans-serif;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    .open-btn {
+      background: #2f6fed;
+      color: #fff;
+    }
+
+    .delete-btn {
+      background: rgba(217,45,32,0.12);
+      color: #b42318;
+    }
+
+    .open-btn:hover, .delete-btn:hover, .recap-page-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+
+    .recap-pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .recap-page-btn {
+      background: rgba(255,255,255,0.82);
+      color: #27496d;
+    }
+
+    .recap-page-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .recap-page-status {
+      color: var(--text-muted);
+      font: 600 11px/1.3 "Segoe UI", sans-serif;
+    }
+
+    .empty-state {
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      text-align: center;
+      color: var(--text-muted);
+      padding: 36px;
+    }
+
+    .empty-orb {
+      width: 100px;
+      height: 100px;
+      border-radius: 999px;
+      background:
+        radial-gradient(circle at 35% 30%, rgba(255,255,255,0.98), rgba(255,233,183,0.62) 28%, rgba(126,154,255,0.42) 58%, rgba(255,255,255,0.08));
+      box-shadow: 0 18px 36px rgba(49,72,96,0.16);
+    }
+
+    .empty-state h2 {
+      font-size: 22px;
+      color: #18293a;
+    }
+
+    .empty-state p {
+      max-width: 420px;
+      font: 500 12px/1.6 "Segoe UI", sans-serif;
+    }
+
+    @media (max-width: 920px) {
+      .recap-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .recap-sidebar {
+        position: relative;
+      }
+
+      .recap-node.left,
+      .recap-node.right {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      .recap-connector.left,
+      .recap-connector.right {
+        padding-left: 24px;
+        padding-right: 24px;
+      }
+
+      .recap-card {
+        width: 100%;
+        border-radius: 34px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="recap-shell">
+    <div class="recap-titlebar">
+      <button class="recap-btn" id="minimize-btn" title="Minimize">_</button>
+      <button class="recap-btn" id="fullscreen-btn" title="Fullscreen">□</button>
+      <div class="recap-heading">
+        <span class="recap-title">Article Recap</span>
+        <span class="recap-subtitle">Saved articles and linked highlights in a dedicated recap window</span>
+      </div>
+      <button class="recap-btn close-btn" id="close-btn" title="Close">✕</button>
+    </div>
+    <div class="recap-content">
+      <div class="recap-stage" id="recap-stage"></div>
+    </div>
+  </div>
+
+  <script>
+    const stage = document.getElementById('recap-stage');
+    const closeBtn = document.getElementById('close-btn');
+    const minimizeBtn = document.getElementById('minimize-btn');
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    let currentPage = 1;
+    const pageSize = 5;
+    let isFullscreen = false;
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    let savedArticlesCache = [];
+
+    async function getSavedArticles() {
+      try {
+        const articles = await window.recapAPI.getSavedArticles();
+        savedArticlesCache = Array.isArray(articles) ? articles.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)) : [];
+        return savedArticlesCache;
+      } catch (e) {
+        console.warn('Failed to load saved articles', e);
+        return savedArticlesCache;
+      }
+    }
+
+    function getHighlights(url) {
+      if (!url) return [];
+      try {
+        const raw = localStorage.getItem(`highlights_${btoa(url)}`);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.warn('Failed to load highlights', e);
+        return [];
+      }
+    }
+
+    function extractDomainName(url) {
+      try {
+        const hostname = new URL(url).hostname.replace(/^www\./, '');
+        return hostname.charAt(0).toUpperCase() + hostname.slice(1);
+      } catch (e) {
+        return 'Saved page';
+      }
+    }
+
+    function getPagedArticles(allArticles) {
+      const totalPages = Math.max(1, Math.ceil(allArticles.length / pageSize));
+      currentPage = Math.min(Math.max(currentPage, 1), totalPages);
+      const startIndex = (currentPage - 1) * pageSize;
+      return {
+        totalPages,
+        items: allArticles.slice(startIndex, startIndex + pageSize)
+      };
+    }
+
+    function focusCard(articleId) {
+      const target = document.querySelector(`.recap-card[data-article-id="${articleId}"]`);
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.remove('linked');
+      void target.offsetWidth;
+      target.classList.add('linked');
+      window.setTimeout(() => target.classList.remove('linked'), 1800);
+    }
+
+    async function openArticle(articleId) {
+      const article = savedArticlesCache.find((item) => item.id === articleId);
+      if (!article || !article.url) return;
+      try {
+        await window.recapAPI.openReadmodeCard(article.url, article.title || 'Read Mode');
+      } catch (e) {
+        console.error('Failed to open article', e);
+      }
+    }
+
+    async function deleteArticle(articleId) {
+      const next = savedArticlesCache.filter((item) => item.id !== articleId);
+      savedArticlesCache = next;
+      await window.recapAPI.setSavedArticles(next);
+      render();
+    }
+
+    async function render() {
+      const articles = await getSavedArticles();
+
+      if (!articles.length) {
+        stage.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-orb"></div>
+            <h2>No saved articles yet</h2>
+            <p>Save an article in readmode and it will appear here with its connected highlights.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const { totalPages, items } = getPagedArticles(articles);
+      const highlightMap = new Map();
+      items.forEach((article) => highlightMap.set(article.id, getHighlights(article.url)));
+
+      const sidebarItems = items.flatMap((article) => {
+        const highlights = highlightMap.get(article.id) || [];
+        return highlights.map((highlight) => ({
+          articleId: article.id,
+          text: highlight.text || '',
+          source: highlight.source || article.title || 'Saved article',
+          timestamp: highlight.timestamp || 0
+        }));
+      }).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+      const totalHighlights = articles.reduce((count, article) => count + getHighlights(article.url).length, 0);
+      const timelineHtml = items.map((article, index) => {
+        const isLeft = index % 2 === 0;
+        const highlights = highlightMap.get(article.id) || [];
+        const excerpt = (article.excerpt || article.content || '').trim();
+        const preview = excerpt.length > 170 ? `${excerpt.slice(0, 167)}...` : excerpt;
+        const dateLabel = new Date(article.timestamp || Date.now()).toLocaleString([], {
+          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+        });
+
+        return `
+          <div class="recap-node ${isLeft ? 'left' : 'right'} ${index === items.length - 1 ? 'last' : ''}">
+            <article class="recap-card" data-article-id="${article.id}">
+              <div class="card-time-row">
+                <span class="card-time">${escapeHtml(dateLabel)}</span>
+              </div>
+              <h3 class="card-title">${escapeHtml(article.title || 'Untitled Article')}</h3>
+              <p class="card-excerpt">${escapeHtml(preview || 'Open this article to continue reading it in readmode.')}</p>
+              <div class="card-footer">
+                <span class="card-count">${highlights.length} highlight${highlights.length === 1 ? '' : 's'}</span>
+                <span class="card-link">${escapeHtml(article.url || '')}</span>
+              </div>
+              <div class="card-actions">
+                <button class="open-btn" data-open-id="${article.id}">Open Article</button>
+                <button class="delete-btn" data-delete-id="${article.id}">Delete</button>
+              </div>
+            </article>
+            <div class="recap-connector ${isLeft ? 'left' : 'right'}" aria-hidden="true">
+              <svg viewBox="0 0 100 84" preserveAspectRatio="none">
+                ${isLeft
+                  ? '<path d="M8 8 C 54 8, 34 56, 78 56" /><path d="M72 50 L 78 56 L 70 62" />'
+                  : '<path d="M92 8 C 46 8, 66 56, 22 56" /><path d="M28 50 L 22 56 L 30 62" />'}
+              </svg>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const highlightHtml = sidebarItems.length
+        ? sidebarItems.map((item) => `
+            <button class="recap-highlight-chip" data-focus-id="${item.articleId}">
+              <span class="highlight-text">${escapeHtml(item.text || 'Saved highlight')}</span>
+              <span class="highlight-meta">${escapeHtml(item.source)}</span>
+            </button>
+          `).join('')
+        : `<div class="sidebar-text" style="margin-top:14px;">No highlights on this page of saved articles yet.</div>`;
+
+      stage.innerHTML = `
+        <div class="recap-layout">
+          <aside class="recap-sidebar">
+            <span class="eyebrow">Saved Highlights</span>
+            <div class="sidebar-title">${sidebarItems.length} linked highlight${sidebarItems.length === 1 ? '' : 's'}</div>
+            <div class="sidebar-text">Click a highlight and it will point you to the related article oval.</div>
+            <div class="highlight-list">${highlightHtml}</div>
+          </aside>
+          <main class="recap-main">
+            <div class="recap-header">
+              <div>
+                <span class="eyebrow">Latest First</span>
+                <h2>Saved article recap</h2>
+                <p>Your newest saved article stays at the top. Older saved articles move to the next recap page.</p>
+              </div>
+              <div class="recap-summary">
+                <span class="summary-pill">${articles.length} articles</span>
+                <span class="summary-pill">${totalHighlights} highlights</span>
+                <span class="summary-pill">Page ${currentPage} of ${totalPages}</span>
+              </div>
+            </div>
+            <div class="recap-timeline">${timelineHtml}</div>
+            <div class="recap-pagination">
+              <button class="recap-page-btn" data-page="prev" ${currentPage === 1 ? 'disabled' : ''}>Newer</button>
+              <div class="recap-page-status">Showing older saves as you move forward</div>
+              <button class="recap-page-btn" data-page="next" ${currentPage === totalPages ? 'disabled' : ''}>Older</button>
+            </div>
+          </main>
+        </div>
+      `;
+
+      document.querySelectorAll('.recap-card').forEach((card) => {
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('[data-delete-id]')) return;
+          openArticle(parseInt(card.getAttribute('data-article-id'), 10));
+        });
+      });
+
+      document.querySelectorAll('[data-open-id]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openArticle(parseInt(btn.getAttribute('data-open-id'), 10));
+        });
+      });
+
+      document.querySelectorAll('[data-delete-id]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteArticle(parseInt(btn.getAttribute('data-delete-id'), 10));
+        });
+      });
+
+      document.querySelectorAll('[data-focus-id]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          focusCard(parseInt(btn.getAttribute('data-focus-id'), 10));
+        });
+      });
+
+      document.querySelectorAll('[data-page]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const direction = btn.getAttribute('data-page');
+          currentPage += direction === 'next' ? 1 : -1;
+          render();
+        });
+      });
+    }
+
+    closeBtn.addEventListener('click', () => window.recapAPI.closeWindow());
+    minimizeBtn.addEventListener('click', () => window.recapAPI.minimizeWindow());
+    fullscreenBtn.addEventListener('click', async () => {
+      isFullscreen = !isFullscreen;
+      await window.recapAPI.toggleFullscreen(isFullscreen);
+    });
+
+    window.addEventListener('focus', () => render());
+    render();
+  </script>
+</body>
+</html>

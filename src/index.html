@@ -28,6 +28,9 @@
           <div class="card-counter">
             <span id="card-count">0</span> Cards
           </div>
+          <button class="btn" id="recap-btn" title="Recap">
+            Recap
+          </button>
           <button class="btn btn-primary" id="new-card-btn">
             + New
           </button>
@@ -128,6 +131,9 @@
             <button id="settings-tab-bookmarks"
               style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🔖
               Bookmarks</button>
+            <button id="settings-tab-articles"
+              style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">📰
+              Articles</button>
             <button id="settings-tab-downloads"
               style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">⬇
               Downloads</button>
@@ -148,7 +154,7 @@
 
         <!-- History tab content (shown by default) -->
         <div id="settings-history-tab">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <div class="articles-tab-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
             <h3 style="margin: 0; color: white; font-size: 13px;">Browsing History</h3>
             <button id="clear-history-btn" class="btn btn-danger"
               style="padding: 4px 10px; font-size: 11px; background: rgba(255,80,80,0.5); border: none; color: white; border-radius: 6px; cursor: pointer;">🗑
@@ -165,6 +171,20 @@
               Folder</button>
           </div>
           <div id="bookmarks-folders-list" class="bookmarks-folders-list"></div>
+        </div>
+
+        <!-- Articles tab content (hidden by default) -->
+        <div id="settings-articles-tab" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div>
+              <h3 class="articles-tab-title" style="margin: 0; color: white; font-size: 13px;">Saved Articles</h3>
+              <p class="articles-tab-subtitle">Open the recap window to browse saved articles and linked highlights in a dedicated reading view.</p>
+            </div>
+            <button id="clear-articles-btn" class="btn btn-danger"
+              style="padding: 4px 10px; font-size: 11px; background: rgba(255,80,80,0.5); border: none; color: white; border-radius: 6px; cursor: pointer;">🗑
+              Clear All</button>
+          </div>
+          <div id="articles-list" style="max-height: 260px; overflow-y: auto;"></div>
         </div>
 
         <!-- Downloads tab content (hidden by default) -->

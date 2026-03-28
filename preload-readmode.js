@@ -33,6 +33,25 @@ contextBridge.exposeInMainWorld('readmodeAPI', {
   // Toggle fullscreen
   toggleFullscreen: (shouldBeFullscreen) =>
     ipcRenderer.invoke('toggle-readmode-fullscreen', shouldBeFullscreen),
+
+  // Listen for actual BrowserWindow fullscreen transitions
+  onFullscreenChanged: (callback) => {
+    const listener = (event, isFullscreen) => callback(Boolean(isFullscreen));
+    ipcRenderer.on('readmode-fullscreen-changed', listener);
+    return () => ipcRenderer.removeListener('readmode-fullscreen-changed', listener);
+  },
+
+  // Save article to main process
+  saveArticle: (articleData) =>
+    ipcRenderer.invoke('save-article', articleData),
+
+  // Create a Google search card
+  googleSearch: (query) =>
+    ipcRenderer.invoke('google-search', query),
+
+  // Open ChatGPT as a new card
+  openChatGPT: () =>
+    ipcRenderer.invoke('open-chatgpt'),
 });
 
 // Receive URL updates from main process

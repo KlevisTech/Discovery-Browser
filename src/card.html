@@ -132,7 +132,6 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
       padding: 0 12px;
       cursor: default;
       user-select: none;
@@ -178,29 +177,18 @@
       cursor: default;
     }
 
-    .card-primary-controls {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex: 0 0 auto;
-      position: relative;
-      z-index: 15;
-      -webkit-app-region: no-drag;
-    }
-
     .title-text {
       color: white;
       font-size: 14px;
       font-weight: 600;
-      flex: 1 1 auto;
-      min-width: 48px;
+      flex: 1;
+      margin-left: 8px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       opacity: 1;
       text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
       animation: fadeInSlide 0.5s ease 0.2s backwards;
-      pointer-events: none;
     }
 
     @keyframes fadeInSlide {
@@ -217,16 +205,10 @@
 
     .card-controls {
       display: flex;
-      flex: 1 1 auto;
-      min-width: 0;
-      justify-content: flex-end;
-      align-items: center;
       gap: 8px;
       -webkit-app-region: no-drag;
       /* Simplified animation for GPU */
       animation: fadeInSlide 0.3s ease 0.2s backwards;
-      position: relative;
-      z-index: 12;
     }
 
     .card-button {
@@ -246,9 +228,6 @@
       transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
       transform: translateZ(0);
       will-change: transform;
-      position: relative;
-      z-index: 30;
-      pointer-events: auto;
     }
 
     .card-button.size-btn {
@@ -268,6 +247,17 @@
     .card-button.bookmark-btn.bookmarked {
       background: rgba(255, 215, 0, 0.8);
       border-color: rgba(255, 215, 0, 0.9);
+    }
+
+    /* Readmode button - dark blue */
+    .card-button.readmode-btn {
+      background: rgba(30, 90, 160, 0.8);
+    }
+
+    .card-button.readmode-btn:hover {
+      background: rgba(50, 130, 200, 0.95);
+      transform: scale(1.15);
+      box-shadow: 0 4px 12px rgba(50, 130, 200, 0.6);
     }
 
     .card-button:hover {
@@ -298,71 +288,12 @@
       box-shadow: 0 4px 12px rgba(255, 215, 0, 0.6);
     }
 
-    /* Readmode button - cyan/blue gradient for reading */
-    .card-button.readmode-btn {
-      background: linear-gradient(135deg, rgba(0, 198, 255, 0.7), rgba(0, 114, 255, 0.7)) !important;
-      border: 1px solid rgba(0, 198, 255, 0.5) !important;
-    }
-
-    .card-button.readmode-btn:hover {
-      background: linear-gradient(135deg, rgba(0, 198, 255, 0.95), rgba(0, 114, 255, 0.95)) !important;
-      transform: scale(1.15) !important;
-      box-shadow: 0 4px 20px rgba(0, 198, 255, 0.6) !important;
-      border-color: rgba(0, 198, 255, 0.9) !important;
-    }
-
-    .card-button.readmode-btn:focus-visible {
-      outline: 2px solid rgba(125, 230, 255, 0.95);
-      outline-offset: 2px;
-      box-shadow: 0 0 0 4px rgba(0, 198, 255, 0.2), 0 4px 20px rgba(0, 198, 255, 0.45) !important;
-    }
-
     .card-button:active {
       background: rgba(255, 50, 50, 1);
       transform: scale(0.95);
     }
 
-    .card-button.readmode-btn:active {
-      background: linear-gradient(135deg, rgba(0, 230, 255, 1), rgba(0, 140, 255, 1)) !important;
-      transform: scale(1.05) !important;
-    }
-
-    .card-button.readmode-btn.is-busy {
-      background: linear-gradient(135deg, rgba(0, 230, 255, 1), rgba(0, 140, 255, 1)) !important;
-      border-color: rgba(145, 235, 255, 1) !important;
-      box-shadow: 0 0 0 3px rgba(0, 198, 255, 0.18), 0 6px 22px rgba(0, 198, 255, 0.5) !important;
-      transform: scale(1.08) !important;
-    }
-
     /* Download ring styling inside card */
-    .download-ring {
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
-      border: none;
-      background: rgba(255, 255, 255, 0.15);
-      color: white;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      transition: all 0.2s ease;
-      padding: 0;
-    }
-
-    .download-ring:hover {
-      background: rgba(255, 255, 255, 0.25);
-      transform: scale(1.05);
-    }
-
-    .download-ring__svg {
-      position: absolute;
-      inset: 4px;
-      width: calc(100% - 8px);
-      height: calc(100% - 8px);
-    }
-
     .download-ring__bg {
       fill: none;
       stroke: rgba(255, 255, 255, 0.25);
@@ -453,8 +384,6 @@
 
     .url-input {
       flex: 1;
-      min-width: 0;
-      width: clamp(120px, 28vw, 260px);
       height: 32px;
       background: rgba(255, 255, 255, 0.15);
       border: 1px solid rgba(255, 255, 255, 0.25);
@@ -1074,7 +1003,7 @@
   <div class="card-window">
     <!-- Titlebar with navigation and close button -->
     <div class="card-titlebar">
-      <div class="card-primary-controls">
+      <div style="display:flex; align-items:center; gap:8px; -webkit-app-region: no-drag;">
         <button class="card-button" id="back-btn" title="Back">←</button>
         <button class="card-button" id="forward-btn" title="Forward">→</button>
         <button class="card-button" id="reload-btn" title="Reload">↻</button>
@@ -1640,7 +1569,7 @@
     function showSecurityLoadNotice(message) {
       const el = ensureSecurityLoadNotice();
       if (!el) return;
-
+      
       // Create dismissible notice with close button
       el.innerHTML = `
         <div style="display: flex; align-items: flex-start; gap: 10px; justify-content: space-between;">
@@ -1661,7 +1590,7 @@
         </div>
       `;
       el.classList.add('active');
-
+      
       // Add close button handler
       const closeBtn = el.querySelector('#notice-close-btn');
       if (closeBtn) {
@@ -1669,7 +1598,7 @@
           hideSecurityLoadNotice();
         });
       }
-
+      
       // Keep network notices visible until a real connectivity probe confirms recovery.
       if (isNetworkNoticeMessage(message)) {
         setNetworkErrorActive(true);
@@ -1768,14 +1697,14 @@
     // Detect if both videos are currently playing and optimize buffering
     async function optimizeSplitScreenVideoBuffering() {
       if (!isSplitView || !splitWebview) return;
-
+      
       try {
         // Check if both webviews have video playing
         const mainVideoPlaying = mediaPlayingState.get(webview)?.isPlaying && mediaPlayingState.get(webview)?.mediaType === 'video';
         const splitVideoPlaying = mediaPlayingState.get(splitWebview)?.isPlaying && mediaPlayingState.get(splitWebview)?.mediaType === 'video';
-
+        
         if (!mainVideoPlaying || !splitVideoPlaying) return;
-
+        
         // Both videos are playing - apply adaptive quality reduction
         await applyAdaptiveQualityForDualVideo(webview, 'main');
         await applyAdaptiveQualityForDualVideo(splitWebview, 'split');
@@ -1786,7 +1715,7 @@
 
     async function applyAdaptiveQualityForDualVideo(targetWebview, paneLabel) {
       if (!targetWebview || typeof targetWebview.executeJavaScript !== 'function') return;
-
+      
       const script = `
         (() => {
           try {
@@ -1889,7 +1818,7 @@
           }
         })();
       `;
-
+      
       try {
         await runMediaScript(targetWebview, script);
       } catch (e) {
@@ -2295,7 +2224,7 @@
         if (mediaSyncInFlight) return;
         syncMediaControlState();
       }, 2000); // Reduced frequency: 2000ms instead of 1200ms to reduce CPU overhead
-
+      
       // Also start buffering optimization for dual-video scenarios
       startMediaBufferingOptimization();
     }
@@ -2472,12 +2401,10 @@
     }
 
     function updateCardDownloadRing() {
-      console.log('[Card] updateCardDownloadRing called, cardDownloadRingBtn:', !!cardDownloadRingBtn, 'ringDismissed:', ringDismissed, 'cardDownloads.size:', cardDownloads ? cardDownloads.size : 'N/A');
       if (!cardDownloadRingBtn) return;
 
       // Hide if dismissed or no downloads at all
       if (ringDismissed || cardDownloads.size === 0) {
-        console.log('[Card] Hiding download ring - ringDismissed:', ringDismissed, 'downloads:', cardDownloads.size);
         cardDownloadRingBtn.style.display = 'none';
         cardDownloadRingBtn.setAttribute('aria-hidden', 'true');
         cardDownloadRingBtn.classList.remove('indeterminate');
@@ -2485,7 +2412,6 @@
         return;
       }
 
-      console.log('[Card] Showing download ring');
       cardDownloadRingBtn.style.display = 'inline-flex';
       cardDownloadRingBtn.setAttribute('aria-hidden', 'false');
 
@@ -2764,19 +2690,19 @@
 
     function loadSplitUrl(targetUrl) {
       if (!splitWebview || !targetUrl) return;
-
+      
       // Immediately set loading state and start guard timers
       isSplitNavigationLoading = true;
       clearSplitLoadGuard();
       clearSplitAbortTimer();
       startSplitLoadGuard();
-
+      
       // Update the input field
       if (splitUrlInput) {
         splitUrlInput.value = targetUrl;
       }
       currentSplitUrl = targetUrl;
-
+      
       // Set the src attribute on the webview
       try {
         splitWebview.setAttribute('src', targetUrl);
@@ -3420,7 +3346,7 @@
         isSplitView = !isSplitView;
         if (splitContainer) splitContainer.classList.toggle('split-active', isSplitView);
         splitBtn.style.background = isSplitView ? 'rgba(100, 255, 100, 0.8)' : 'rgba(255,255,255,0.08)';
-
+        
         if (!isSplitView && wasEnabled) {
           // Cleanup when disabling split view - cancel any pending loads/timers
           isSplitNavigationLoading = false;
@@ -3433,9 +3359,26 @@
             }
           } catch (e) { }
         }
-
+        
         if (isSplitView && splitUrlInput) {
           splitUrlInput.focus();
+        }
+      });
+    }
+
+    // Readmode button - opens current page in reading mode
+    if (readmodeBtn) {
+      readmodeBtn.addEventListener('click', async () => {
+        try {
+          if (!currentPageUrl) {
+            showSecurityLoadNotice('No page loaded. Navigate to a page first.');
+            return;
+          }
+          // Call the readmode API with current page URL and title
+          await window.cardAPI.openReadmode(currentPageUrl, currentPageTitle, theme);
+        } catch (err) {
+          console.error('Error opening readmode:', err);
+          showSecurityLoadNotice('Failed to open read mode.');
         }
       });
     }
@@ -3670,39 +3613,6 @@
       setTimeout(() => toast.remove(), 2000);
     }
 
-    // Readmode button handler - opens a phone-sized readmode card
-    if (readmodeBtn) {
-      let isOpeningReadmode = false;
-      readmodeBtn.addEventListener('click', async () => {
-        if (isOpeningReadmode) return;
-        isOpeningReadmode = true;
-        readmodeBtn.classList.add('is-busy');
-        readmodeBtn.setAttribute('aria-busy', 'true');
-
-        try {
-          // Get current page URL and title
-          const pageUrl = currentPageUrl;
-          const pageTitle = currentPageTitle || 'Read Mode';
-          
-          console.log('[Readmode] Opening readmode for:', pageUrl, pageTitle);
-          
-          // Call the main process to open readmode card
-          await window.cardAPI.openReadmode(pageUrl, pageTitle, theme);
-          console.log('[Readmode] openReadmode called successfully');
-        } catch (err) {
-          console.error('Error opening readmode:', err);
-        } finally {
-          setTimeout(() => {
-            readmodeBtn.classList.remove('is-busy');
-            readmodeBtn.removeAttribute('aria-busy');
-            isOpeningReadmode = false;
-          }, 180);
-        }
-      });
-    } else {
-      console.error('[Readmode] readmodeBtn element not found');
-    }
-
     function normalizeUrl(raw) {
       const url = (raw || '').trim();
       if (!url) return '';
@@ -3793,11 +3703,8 @@
     setTimeout(checkBookmarkStatus, 1000);
 
     // --- Downloads for this card window ---
-    console.log('[Card] Setting up download handlers, cardAPI exists:', !!window.cardAPI);
     if (window.cardAPI && window.cardAPI.onDownloadStarted) {
-      console.log('[Card] Download handlers being set up');
       window.cardAPI.onDownloadStarted((payload) => {
-        console.log('[Card] Download started received:', payload);
         if (!payload || !payload.id) return;
         // Reset dismissal state when a new download starts
         ringDismissed = false;
@@ -3809,7 +3716,6 @@
       });
 
       window.cardAPI.onDownloadProgress((payload) => {
-        console.log('[Card] Download progress received:', payload);
         if (!payload || !payload.id) return;
         const prev = cardDownloads.get(payload.id) || {};
         cardDownloads.set(payload.id, { ...prev, ...payload });
@@ -3817,7 +3723,6 @@
       });
 
       window.cardAPI.onDownloadDone((payload) => {
-        console.log('[Card] Download done received:', payload);
         if (!payload || !payload.id) return;
         const prev = cardDownloads.get(payload.id) || {};
 
@@ -3833,8 +3738,6 @@
 
         updateCardDownloadRing();
       });
-    } else {
-      console.log('[Card] WARNING: cardAPI.onDownloadStarted is not available!');
     }
 
     // Clean up downloads when card window closes

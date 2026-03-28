@@ -148,6 +148,7 @@ class DiscoveryBrowser {
     // Container references
     this.cardDock = document.getElementById('dock-content');
     this.newCardBtn = document.getElementById('new-card-btn');
+    this.recapBtn = document.getElementById('recap-btn');
     this.cardCountSpan = document.getElementById('card-count');
     this.tabsContainer = document.getElementById('tabs-container');
     this.tabCountSpan = document.getElementById('tab-count');
@@ -194,6 +195,15 @@ class DiscoveryBrowser {
     });
 
     this.newCardBtn.addEventListener('click', () => this.createCard(this.getSearchEngineHomeUrl()));
+    if (this.recapBtn) {
+      this.recapBtn.addEventListener('click', async () => {
+        try {
+          await window.electronAPI.openArticlesRecap();
+        } catch (e) {
+          console.error('Failed to open recap:', e);
+        }
+      });
+    }
 
     // Google search widget handlers
     const runGoogleSearch = () => {
@@ -482,6 +492,13 @@ class DiscoveryBrowser {
     this.loadBookmarks();
     this.loadBookmarkFolders();
 
+    // Article management
+    this.articles = new Map(); // articleId -> { id, url, title, content, timestamp }
+    this.nextArticleId = 1;
+    this.articlePageSize = 4;
+    this.currentArticlePage = 1;
+    this.loadArticles();
+
     // Listen for bookmark toggle from card windows
     window.electronAPI.onToggleBookmark((bookmarkData) => {
       this.toggleBookmark(bookmarkData);
@@ -543,6 +560,16 @@ class DiscoveryBrowser {
       }
     });
 
+    // Listen for article saves from readmode windows
+    window.electronAPI.onSaveArticle((articleData) => {
+      this.saveArticle(articleData);
+    });
+
+    // Listen for search card creation from readmode highlights
+    window.electronAPI.onCreateCardFromSearch((searchUrl) => {
+      this.createCard(searchUrl);
+    });
+
     // Password manager is disabled until secure OS-backed storage is implemented.
     this.passwords = [];
     this.loadPasswords();
@@ -556,6 +583,7 @@ class DiscoveryBrowser {
     // Settings tab switching
     const tabHistory = document.getElementById('settings-tab-history');
     const tabBookmarks = document.getElementById('settings-tab-bookmarks');
+    const tabArticles = document.getElementById('settings-tab-articles');
     const tabDownloads = document.getElementById('settings-tab-downloads');
     const tabSearch = document.getElementById('settings-tab-search');
     const tabWindowSize = document.getElementById('settings-tab-window-size');
@@ -563,6 +591,7 @@ class DiscoveryBrowser {
     const tabDeleteData = document.getElementById('settings-tab-delete-data');
     const paneHistory = document.getElementById('settings-history-tab');
     const paneBookmarks = document.getElementById('settings-bookmarks-tab');
+    const paneArticles = document.getElementById('settings-articles-tab');
     const paneDownloads = document.getElementById('settings-downloads-tab');
     const paneSearch = document.getElementById('settings-search-tab');
     const paneWindowSize = document.getElementById('settings-window-size-tab');
@@ -571,6 +600,9 @@ class DiscoveryBrowser {
     const deleteDataBtn = document.getElementById('delete-data-btn');
     const defaultBrowserBlock = document.getElementById('default-browser-setting');
     const setDefaultBrowserBtn = document.getElementById('set-default-browser-btn');
+
+    if (tabArticles) tabArticles.style.display = 'none';
+    if (paneArticles) paneArticles.style.display = 'none';
 
     // Default browser button: opens Windows Default Apps and tries to register protocols
     if (setDefaultBrowserBtn && window.electronAPI && window.electronAPI.setAsDefaultBrowser) {
@@ -649,6 +681,7 @@ class DiscoveryBrowser {
       setPane(paneDeleteData, tabName === 'delete-data');
 
       if (tabName === 'history') this.renderHistory();
+      if (tabName === 'bookmarks') this.renderBookmarks();
       if (tabName === 'downloads') this.renderDownloadHistory();
       if (tabName === 'window-size') this.renderWindowSizeOptions();
       if (tabName === 'themes') this.renderThemeOptions();
@@ -1829,6 +1862,165 @@ class DiscoveryBrowser {
       folder.expanded = !folder.expanded;
       this.saveBookmarkFolders();
       this.renderBookmarks();
+    }
+  }
+
+  // Article management methods
+  loadArticles() {
+    this.articles.clear();
+    this.nextArticleId = 1;
+    try {
+      const saved = localStorage.getItem('savedArticles');
+      if (saved) {
+        const articlesArray = JSON.parse(saved);
+        articlesArray.forEach(article => {
+          this.articles.set(article.id, article);
+          if (article.id >= this.nextArticleId) {
+            this.nextArticleId = article.id + 1;
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to load articles:', e);
+    }
+  }
+
+  saveArticles() {
+    try {
+      const articlesArray = Array.from(this.articles.values());
+      localStorage.setItem('savedArticles', JSON.stringify(articlesArray));
+    } catch (e) {
+      console.warn('Failed to save articles:', e);
+    }
+  }
+
+  saveArticle(articleData) {
+    // Create a new article with ID and timestamp
+    const article = {
+      id: this.nextArticleId++,
+      url: articleData.url || '',
+      title: articleData.title || 'Untitled Article',
+      content: articleData.content || '',
+      excerpt: articleData.excerpt || '',
+      timestamp: Date.now()
+    };
+
+    this.articles.set(article.id, article);
+    this.currentArticlePage = 1;
+    this.saveArticles();
+    
+    // If the articles tab is currently active, re-render it
+    if (this.currentSettingsTab === 'articles') {
+      this.renderArticles();
+    }
+  }
+
+  escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  getArticleHighlightsByUrl(url) {
+    if (!url) return [];
+    try {
+      const key = `highlights_${btoa(url)}`;
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.warn('Failed to load article highlights:', e);
+      return [];
+    }
+  }
+
+  getArticlePage(pageNumber, totalItems) {
+    const totalPages = Math.max(1, Math.ceil(totalItems / this.articlePageSize));
+    return Math.min(Math.max(pageNumber || 1, 1), totalPages);
+  }
+
+  focusArticleRecapCard(articleId) {
+    const target = document.querySelector(`.article-recap-card[data-article-id="${articleId}"]`);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    target.classList.remove('is-linked');
+    // Force restart so repeated clicks still pulse.
+    void target.offsetWidth;
+    target.classList.add('is-linked');
+    window.setTimeout(() => target.classList.remove('is-linked'), 1800);
+  }
+
+  deleteArticle(articleId) {
+    this.articles.delete(articleId);
+    this.saveArticles();
+    this.renderArticles();
+  }
+
+  clearAllArticles() {
+    if (confirm('Are you sure you want to delete all saved articles? This cannot be undone.')) {
+      this.articles.clear();
+      this.currentArticlePage = 1;
+      this.saveArticles();
+      this.renderArticles();
+    }
+  }
+
+  renderArticles() {
+    const listEl = document.getElementById('articles-list');
+    const clearBtn = document.getElementById('clear-articles-btn');
+
+    if (!listEl) return;
+    this.loadArticles();
+
+    const sortedArticles = Array.from(this.articles.values()).sort((a, b) => b.timestamp - a.timestamp);
+    const latestArticle = sortedArticles[0] || null;
+    const totalHighlights = sortedArticles.reduce((count, article) => {
+      return count + this.getArticleHighlightsByUrl(article.url).length;
+    }, 0);
+    const latestLabel = latestArticle
+      ? `${this.escapeHtml(latestArticle.title || 'Untitled Article')} • ${this.escapeHtml(new Date(latestArticle.timestamp).toLocaleDateString())}`
+      : 'No saved article yet';
+
+    listEl.innerHTML = `
+      <div class="articles-launcher-card">
+        <div class="articles-launcher-card__orb"></div>
+        <div class="articles-launcher-card__content">
+          <div class="articles-launcher-card__eyebrow">Recap Window</div>
+          <h4 class="articles-launcher-card__title">Open your saved-articles recap in its own reading space</h4>
+          <p class="articles-launcher-card__text">This opens a dedicated window, like readmode, where highlights sit in a side area and saved article summaries flow across the main view.</p>
+          <div class="articles-launcher-card__stats">
+            <span>${sortedArticles.length} saved article${sortedArticles.length === 1 ? '' : 's'}</span>
+            <span>${totalHighlights} saved highlight${totalHighlights === 1 ? '' : 's'}</span>
+            <span>Latest: ${latestLabel}</span>
+          </div>
+          <div class="articles-launcher-card__actions">
+            <button id="open-articles-recap-btn" class="btn btn-primary">Open Recap</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const openBtn = document.getElementById('open-articles-recap-btn');
+    if (openBtn) {
+      openBtn.addEventListener('click', async () => {
+        try {
+          await window.electronAPI.openArticlesRecap();
+        } catch (e) {
+          console.error('Failed to open articles recap:', e);
+        }
+      });
+    }
+
+    if (clearBtn) clearBtn.onclick = () => this.clearAllArticles();
+  }
+
+  openArticleInReadmode(article) {
+    // Create a card window with the article URL
+    if (article.url) {
+      this.createCard(article.url, 'readmode');
     }
   }
 

@@ -93,6 +93,11 @@ const electronAPI = {
     ipcRenderer.invoke('sync-bookmark-folders', folders);
   },
 
+  // Article management
+  onSaveArticle: (callback) => {
+    ipcRenderer.on('save-article', (event, articleData) => callback(articleData));
+  },
+
   // Password manager is disabled until secure OS-backed storage is implemented.
   onSavePassword: () => {},
   syncPasswords: async () => ({ success: false, disabled: true }),
@@ -148,7 +153,13 @@ const electronAPI = {
   // Clear all user data
   clearUserData: () => ipcRenderer.invoke('clear-user-data'),
 
-  
+  // Search card creation from readmode
+  onCreateCardFromSearch: (callback) => {
+    ipcRenderer.on('create-card-from-search', (event, searchUrl) => callback(searchUrl));
+  },
+
+  // Articles recap window
+  openArticlesRecap: () => ipcRenderer.invoke('open-articles-recap'),
 };
 // Expose to renderer process
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

@@ -358,6 +358,7 @@ require('events').EventEmitter.defaultMaxListeners = 50;
 
 // Track which webContents have been initialized to prevent duplicate listeners
 const initializedWebContents = new WeakSet();
+let recapWindow = null;
 
 // Function to create and show the context menu
 app.on('web-contents-created', (event, contents) => {
@@ -2133,6 +2134,46 @@ ipcMain.handle('get-card-launch-size-mode', async () => {
   }
 });
 
+// Article saving handler - forward from readmode to main renderer
+ipcMain.handle('save-article', async (event, articleData) => {
+  try {
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('save-article', articleData);
+    }
+    return { success: true };
+  } catch (e) {
+    console.error('Failed to save article:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+// Google search handler - create a new card with Google search
+ipcMain.handle('google-search', async (event, query) => {
+  try {
+    if (mainWindow && mainWindow.webContents) {
+      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+      mainWindow.webContents.send('create-card-from-search', searchUrl);
+    }
+    return { success: true };
+  } catch (e) {
+    console.error('Failed to create search card:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+// Open ChatGPT as a new card
+ipcMain.handle('open-chatgpt', async (event) => {
+  try {
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('create-card-from-search', 'https://chat.openai.com');
+    }
+    return { success: true };
+  } catch (e) {
+    console.error('Failed to create ChatGPT card:', e);
+    return { success: false, error: e.message };
+  }
+});
+
 // Global error handler
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
@@ -3092,7 +3133,7 @@ ipcMain.handle('open-url-as-bubble', async (event, url, meta = {}) => {
 });
 
 // Readmode card - phone-sized reading view
-const READMODE_WIDTH = 380;
+const READMODE_WIDTH = 430;
 const READMODE_HEIGHT = 620;
 const readmodeWindows = new Map(); // readmodeId -> BrowserWindow
 let readmodeIdCounter = 0;
@@ -3156,6 +3197,18 @@ ipcMain.handle('open-readmode-card', async (event, url, title, theme = 'primary'
       readmodeWindows.delete(readmodeId);
     });
 
+    const sendReadmodeFullscreenState = () => {
+      try {
+        if (!readmodeWindow.isDestroyed()) {
+          readmodeWindow.webContents.send('readmode-fullscreen-changed', readmodeWindow.isFullScreen());
+        }
+      } catch (e) { }
+    };
+
+    readmodeWindow.on('enter-full-screen', sendReadmodeFullscreenState);
+    readmodeWindow.on('leave-full-screen', sendReadmodeFullscreenState);
+    readmodeWindow.on('show', sendReadmodeFullscreenState);
+
     // Load the readmode HTML
     const encodedUrl = Buffer.from(url).toString('base64');
     const encodedTitle = Buffer.from(title || 'Read Mode').toString('base64');
@@ -3170,9 +3223,128 @@ ipcMain.handle('open-readmode-card', async (event, url, title, theme = 'primary'
       }
     });
 
+    sendReadmodeFullscreenState();
+
     return { success: true, readmodeId: readmodeId };
   } catch (error) {
     console.error('Error opening readmode card:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('open-articles-recap', async () => {
+  try {
+    if (recapWindow && !recapWindow.isDestroyed()) {
+      recapWindow.show();
+      recapWindow.focus();
+      return { success: true };
+    }
+
+    let finalX = 240;
+    let finalY = 80;
+    try {
+      const { screen } = require('electron');
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+      const { x: workX, y: workY } = primaryDisplay.workArea;
+      const recapWidth = 980;
+      const recapHeight = 600;
+      finalX = workX + Math.floor((screenWidth - recapWidth) / 2);
+      finalY = workY + Math.max(16, Math.floor((screenHeight - recapHeight) / 2));
+    } catch (e) { }
+
+    recapWindow = new BrowserWindow({
+      width: 980,
+      height: 600,
+      minWidth: 860,
+      minHeight: 540,
+      x: finalX,
+      y: finalY,
+      icon: APP_ICON_PATH,
+      frame: false,
+      transparent: false,
+      resizable: true,
+      skipTaskbar: false,
+      show: true,
+      backgroundColor: '#dbe6f2',
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        preload: path.join(__dirname, 'preload-recap.js'),
+        enableWebSQL: false,
+        spellcheck: true,
+        backgroundThrottling: false,
+        partition: 'persist:readmode',
+      },
+    });
+
+    recapWindow.on('closed', () => {
+      recapWindow = null;
+    });
+
+    const recapHtmlPath = path.join(__dirname, 'src', 'recap.html');
+    await recapWindow.loadFile(recapHtmlPath);
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening articles recap:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('close-recap-window', async (event) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) win.close();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('minimize-recap-window', async (event) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) win.minimize();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('toggle-recap-fullscreen', async (event, shouldBeFullscreen) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) win.setFullScreen(Boolean(shouldBeFullscreen));
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-saved-articles-for-recap', async () => {
+  try {
+    if (!mainWindow || mainWindow.isDestroyed()) return [];
+    const raw = await mainWindow.webContents.executeJavaScript("localStorage.getItem('savedArticles')", true);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('Error getting saved articles for recap:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('set-saved-articles-for-recap', async (event, articles) => {
+  try {
+    if (!mainWindow || mainWindow.isDestroyed()) return { success: false, error: 'Main window unavailable' };
+    const serialized = JSON.stringify(Array.isArray(articles) ? articles : []);
+    await mainWindow.webContents.executeJavaScript(
+      `localStorage.setItem('savedArticles', ${JSON.stringify(serialized)});`,
+      true
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error setting saved articles for recap:', error);
     return { success: false, error: error.message };
   }
 });
@@ -3228,7 +3400,8 @@ ipcMain.handle('toggle-readmode-fullscreen', async (event, shouldBeFullscreen) =
   try {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win && !win.isDestroyed()) {
-      win.setFullScreen(shouldBeFullscreen);
+      win.setFullScreen(Boolean(shouldBeFullscreen));
+      win.webContents.send('readmode-fullscreen-changed', Boolean(shouldBeFullscreen));
     }
     return { success: true };
   } catch (error) {
