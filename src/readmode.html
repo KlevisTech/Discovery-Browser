@@ -570,6 +570,13 @@
 
     .reader-empty strong { color: var(--title-color); font-size: 15px; }
 
+    .reader-empty-details {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 6px;
+    }
+
 
     .loading-overlay {
       position: absolute; inset: 0;
@@ -645,6 +652,32 @@
       position: absolute; width: 1280px; height: 2400px;
       opacity: 0; pointer-events: none;
       left: -9999px; top: -9999px;
+    }
+
+    .phone-frame.document-view .reader-stage {
+      display: none;
+    }
+
+    .phone-frame.document-view .source-webview {
+      position: absolute;
+      inset: 14px 12px 10px;
+      width: auto;
+      height: auto;
+      left: auto;
+      top: auto;
+      opacity: 1;
+      pointer-events: auto;
+      border: 1px solid rgba(116,139,165,0.18);
+      border-radius: 24px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.95);
+      box-shadow: var(--paper-shadow);
+    }
+
+    .phone-frame.document-view .loading-overlay,
+    .phone-frame.document-view .highlights-panel,
+    .phone-frame.document-view .highlights-toggle-btn {
+      display: none !important;
     }
 
     /* ══════════════════════════════════════════════════════
@@ -792,6 +825,20 @@
       border-color: rgba(200,155,0,0.5);
       color: #6b4a00;
       box-shadow: 0 0 0 2px rgba(255,210,0,0.22), 0 4px 12px rgba(200,155,0,0.18);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       BOOKMARK BUTTON
+    ═══════════════════════════════════════════════════════════════ */
+    .readmode-btn#bookmark-btn {
+      font-size: 14px;
+    }
+
+    .readmode-btn#bookmark-btn.active {
+      background: rgba(251,191,36,0.28);
+      border-color: rgba(245,158,11,0.5);
+      color: #92400e;
+      box-shadow: 0 0 0 2px rgba(251,191,36,0.22), 0 4px 12px rgba(245,158,11,0.18);
     }
 
     .magic-effects-picker {
@@ -1792,6 +1839,8 @@
       <button class="readmode-btn magic-cursor-btn" id="magic-cursor-btn"
               title="Magic Cursor — hover paragraphs to highlight, ↓↑ to navigate">🖌</button>
 
+      <button class="readmode-btn" id="bookmark-btn" title="Bookmark reading position">🔖</button>
+
       <button class="readmode-btn" id="save-article-btn" title="Save Article">💾</button>
       <button class="readmode-btn" id="fullscreen-btn" title="Fullscreen">⛶</button>
       <button class="readmode-btn close-btn" id="close-btn" title="Close">✕</button>
@@ -1895,6 +1944,8 @@
     let initialTitle = 'Read Mode';
     try { initialTitle = atob(params.get('title') || ''); }
     catch (e) { initialTitle = decodeURIComponent(params.get('title') || ''); }
+    const requestedViewMode = params.get('viewMode') || 'article';
+    const isDocumentView = requestedViewMode === 'document';
 
     /* ─── DOM refs ─── */
     const closeBtn       = document.getElementById('close-btn');
@@ -1903,6 +1954,7 @@
     const refreshBtn     = document.getElementById('refresh-btn');
     const fullscreenBtn  = document.getElementById('fullscreen-btn');
     const saveArticleBtn = document.getElementById('save-article-btn');
+    const bookmarkBtn    = document.getElementById('bookmark-btn');
     const pageTitleEl    = document.getElementById('page-title');
     const pageSubtitleEl = document.getElementById('page-subtitle');
     const progressBar    = document.getElementById('progress-bar');
@@ -1931,7 +1983,23 @@
     let userNavigating       = false;
 
     pageTitleEl.textContent    = initialTitle || 'Read Mode';
-    pageSubtitleEl.textContent = initialUrl   || 'Loading source';
+    pageSubtitleEl.textContent = isLocalFileUrl(initialUrl) ? getReadableFileLabel(initialUrl) : (initialUrl || 'Loading source');
+
+    if (isDocumentView) {
+      phoneFrame.classList.add('document-view');
+      pageSubtitleEl.textContent = 'Uploaded document';
+      wordCountLabel.textContent = 'Document view';
+    }
+
+    function enableDocumentViewMode(label) {
+      phoneFrame.classList.add('document-view');
+      loadingOverlay.classList.add('hidden');
+      pageSubtitleEl.textContent = label || (isLocalFileUrl(currentUrl || initialUrl) ? getReadableFileLabel(currentUrl || initialUrl) : 'Document view');
+      wordCountLabel.textContent = 'Document view';
+      articleRendered = true;
+      extractionInProgress = false;
+      userNavigating = false;
+    }
 
     function refreshDragRegions() {
       [statusBar, readmodeTitlebar].forEach((el) => {
@@ -2001,6 +2069,82 @@
       return el;
     }
 
+    function normalizeExtractionMessage(value) {
+      return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function getExtractionFailureDetails(errorOrPayload, pageUrl) {
+      const details = [];
+      const payload = errorOrPayload && typeof errorOrPayload === 'object' && Array.isArray(errorOrPayload.blocks)
+        ? errorOrPayload
+        : null;
+      const debug = payload?.debug && typeof payload.debug === 'object' ? payload.debug : null;
+      const rawMessage = normalizeExtractionMessage(errorOrPayload?.message);
+      const blockCount = Array.isArray(payload?.blocks) ? payload.blocks.length : 0;
+      const isFile = isLocalFileUrl(pageUrl);
+      const extension = getFileExtensionFromUrl(pageUrl);
+
+      if (rawMessage) {
+        if (/timed out/i.test(rawMessage)) {
+          details.push('Extraction took too long and timed out before readable content was found.');
+        } else if (/executejavascript|javascript execution/i.test(rawMessage)) {
+          details.push('The page blocked the reader script before content could be collected.');
+        } else {
+          details.push(rawMessage);
+        }
+      }
+
+      if (debug?.containerSelector) {
+        details.push(`Reader candidate: ${debug.containerSelector}`);
+      }
+
+      if (typeof debug?.bestScore === 'number' && debug.bestScore < 400) {
+        details.push(`The page did not expose a strong article container (score ${Math.round(debug.bestScore)}).`);
+      }
+
+      if (blockCount === 0) {
+        if (debug?.notes?.length) {
+          debug.notes
+            .map(note => normalizeExtractionMessage(note))
+            .filter(Boolean)
+            .forEach((note) => {
+              if (note === 'no readable blocks found') {
+                details.push('No readable text blocks were found in the extracted page content.');
+              } else if (note === 'images found but not placed into final order') {
+                details.push('Images were detected, but the article text structure could not be assembled.');
+              } else if (note === 'no images survived filtering') {
+                details.push('The page images were decorative or too small to include.');
+              } else {
+                details.push(note);
+              }
+            });
+        } else if (isFile && extension && extension !== 'pdf') {
+          details.push(`The ${extension.toUpperCase()} file opened, but no readable text blocks were found.`);
+        } else if (!rawMessage) {
+          details.push('No readable text blocks were found.');
+        }
+      }
+
+      if (!details.length) {
+        details.push('The page content could not be converted into reader mode.');
+      }
+
+      const unique = [];
+      details.forEach((detail) => {
+        if (detail && !unique.includes(detail)) unique.push(detail);
+      });
+      return unique;
+    }
+
+    function buildExtractionFailureMarkup(errorOrPayload, pageUrl) {
+      const details = getExtractionFailureDetails(errorOrPayload, pageUrl);
+      const intro = details.shift() || 'The page content could not be converted into reader mode.';
+      const items = details.map((detail) => `<li>${escapeHtml(detail)}</li>`).join('');
+      return `<strong>We could not build the reader view.</strong>
+        <p>${escapeHtml(intro)}</p>
+        ${items ? `<ul class="reader-empty-details">${items}</ul>` : ''}`;
+    }
+
     /* ═══════════════════════════════════════════════════════════════
        FONT PICKER ENGINE
     ═══════════════════════════════════════════════════════════════ */
@@ -2019,6 +2163,80 @@
 
     const STORAGE_KEY_FONT = 'readmode_selected_font';
     let activeFontKey = localStorage.getItem(STORAGE_KEY_FONT) || 'georgia';
+
+    /* ═══════════════════════════════════════════════════════════════
+       BOOKMARK SYSTEM
+    ═══════════════════════════════════════════════════════════════ */
+    const BOOKMARK_STORAGE_KEY = 'readmode_bookmarks';
+    let currentUrl = initialUrl;
+
+    function getBookmarkKey(url) {
+      return btoa(url || '').replace(/=/g, '');
+    }
+
+    function getStoredBookmark(url) {
+      try {
+        const key = getBookmarkKey(url);
+        const stored = localStorage.getItem(BOOKMARK_STORAGE_KEY);
+        if (!stored) return null;
+        const bookmarks = JSON.parse(stored);
+        return bookmarks[key] || null;
+      } catch (e) {
+        console.warn('Failed to get bookmark:', e);
+        return null;
+      }
+    }
+
+    function saveBookmark(url, magicActiveIdx) {
+      try {
+        const key = getBookmarkKey(url);
+        const stored = localStorage.getItem(BOOKMARK_STORAGE_KEY);
+        const bookmarks = stored ? JSON.parse(stored) : {};
+        bookmarks[key] = { url, magicActiveIdx, timestamp: Date.now() };
+        localStorage.setItem(BOOKMARK_STORAGE_KEY, JSON.stringify(bookmarks));
+      } catch (e) {
+        console.warn('Failed to save bookmark:', e);
+      }
+    }
+
+    function clearBookmark(url) {
+      try {
+        const key = getBookmarkKey(url);
+        const stored = localStorage.getItem(BOOKMARK_STORAGE_KEY);
+        if (!stored) return;
+        const bookmarks = JSON.parse(stored);
+        delete bookmarks[key];
+        localStorage.setItem(BOOKMARK_STORAGE_KEY, JSON.stringify(bookmarks));
+      } catch (e) {
+        console.warn('Failed to clear bookmark:', e);
+      }
+    }
+
+    function updateBookmarkButtonState() {
+      const bookmark = getStoredBookmark(currentUrl);
+      if (bookmark && bookmark.magicActiveIdx >= 0) {
+        bookmarkBtn.classList.add('active');
+        bookmarkBtn.title = 'Clear bookmark - returns to paragraph ' + (bookmark.magicActiveIdx + 1);
+      } else {
+        bookmarkBtn.classList.remove('active');
+        bookmarkBtn.title = 'Bookmark reading position';
+      }
+    }
+
+    bookmarkBtn.addEventListener('click', () => {
+      const bookmark = getStoredBookmark(currentUrl);
+      if (bookmark && bookmark.magicActiveIdx >= 0) {
+        clearBookmark(currentUrl);
+        bookmarkBtn.classList.remove('active');
+        bookmarkBtn.title = 'Bookmark reading position';
+      } else {
+        if (magicActiveIdx >= 0) {
+          saveBookmark(currentUrl, magicActiveIdx);
+          bookmarkBtn.classList.add('active');
+          bookmarkBtn.title = 'Clear bookmark';
+        }
+      }
+    });
 
     const fontPickerBtn  = document.getElementById('font-picker-btn');
     const fontBtnLabel   = document.getElementById('font-btn-label');
@@ -2254,12 +2472,15 @@
       pageTitleEl.textContent    = title;
       pageSubtitleEl.textContent = sourceUrl || 'Reader view';
       wordCountLabel.textContent = wordCount > 0 ? `${wordCount.toLocaleString()} words` : 'Text view';
+      totalWordCount = wordCount;
+      if (wordCount > 0) {
+        wordCountLabel.dataset.totalWords = String(wordCount);
+      }
 
       if (!blocks.length) {
         const empty = document.createElement('div');
         empty.className = 'reader-empty';
-        empty.innerHTML = `<strong>Readable text was hard to isolate here.</strong>
-          <p>This page may be highly interactive. Try refreshing or opening another article.</p>`;
+        empty.innerHTML = buildExtractionFailureMarkup(payload, sourceUrl);
         readerArticle.appendChild(empty);
         return;
       }
@@ -2398,10 +2619,49 @@
       setProgress(0, 'Starting...');
     }
 
+    function getFileExtensionFromUrl(url) {
+      try {
+        const parsed = new URL(url || '');
+        const pathname = parsed.pathname || '';
+        const idx = pathname.lastIndexOf('.');
+        return idx >= 0 ? pathname.slice(idx + 1).toLowerCase() : '';
+      } catch (e) {
+        const clean = String(url || '').split('?')[0].split('#')[0];
+        const idx = clean.lastIndexOf('.');
+        return idx >= 0 ? clean.slice(idx + 1).toLowerCase() : '';
+      }
+    }
+
+    function isLocalFileUrl(url) {
+      return /^file:/i.test(String(url || ''));
+    }
+
+    function getReadableFileLabel(url) {
+      try {
+        const parsed = new URL(url || '');
+        const raw = (parsed.pathname || '').split('/').pop() || '';
+        return decodeURIComponent(raw) || 'Uploaded document';
+      } catch (e) {
+        return 'Uploaded document';
+      }
+    }
+
     /* ═══════════════════════════════════════════════════════════════
        FAST CONTENT + IMAGE EXTRACTION ENGINE
     ═══════════════════════════════════════════════════════════════ */
     async function extractReadablePayload() {
+      const pageUrl = (() => { try { return sourceWebview.getURL() || initialUrl || ''; } catch(e) { return initialUrl || ''; } })();
+      if (isLocalFileUrl(pageUrl)) {
+        const ext = getFileExtensionFromUrl(pageUrl);
+        if (ext === 'pdf') {
+          const pdfPayload = await extractPdfReadablePayload(pageUrl);
+          if (pdfPayload && (pdfPayload.blocks || []).length) return pdfPayload;
+        } else {
+          const filePayload = await extractLocalDocumentPayload(pageUrl, ext);
+          if (filePayload && (filePayload.blocks || []).length) return filePayload;
+        }
+      }
+
       try {
         const r = await _runExtractScript();
         if (r && (r.blocks || []).length >= 2) return r;
@@ -2415,6 +2675,217 @@
 
       await new Promise(r => setTimeout(r, 700));
       return _runExtractScript();
+    }
+
+    async function extractLocalDocumentPayload(pageUrl, ext) {
+      return sourceWebview.executeJavaScript(`
+        (() => {
+          const pageUrl = ${JSON.stringify(pageUrl)};
+          const effectiveExt = ${JSON.stringify(ext || '')} || (pageUrl.split('.').pop() || '').toLowerCase();
+          const norm = (s) => String(s || '').replace(/\\r/g, '').replace(/[ \\t]+/g, ' ').trim();
+          const titleFromUrl = (() => {
+            try {
+              const parsed = new URL(pageUrl);
+              return decodeURIComponent((parsed.pathname || '').split('/').pop() || 'Uploaded document');
+            } catch (e) {
+              return 'Uploaded document';
+            }
+          })();
+
+          function pushParagraph(blocks, text) {
+            const value = norm(text);
+            if (value) blocks.push({ type: 'p', text: value });
+          }
+
+          function parsePlainText(rawText) {
+            const blocks = [];
+            const text = String(rawText || '').replace(/\\r/g, '');
+            const chunks = text.split(/\\n\\s*\\n+/).map(chunk => chunk.trim()).filter(Boolean);
+            chunks.forEach(chunk => {
+              const lines = chunk.split('\\n').map(line => line.trim()).filter(Boolean);
+              if (!lines.length) return;
+              if (lines.length === 1 && /^#{1,4}\\s+/.test(lines[0])) {
+                const level = Math.min(4, (lines[0].match(/^#+/) || ['#'])[0].length + 1);
+                blocks.push({ type: 'h' + level, text: lines[0].replace(/^#{1,4}\\s+/, '') });
+                return;
+              }
+              if (lines.every(line => /^[-*•]\\s+/.test(line))) {
+                blocks.push({ type: 'ul', items: lines.map(line => line.replace(/^[-*•]\\s+/, '').trim()).filter(Boolean) });
+                return;
+              }
+              if (lines.every(line => /^\\d+[.)]\\s+/.test(line))) {
+                blocks.push({ type: 'ol', items: lines.map(line => line.replace(/^\\d+[.)]\\s+/, '').trim()).filter(Boolean) });
+                return;
+              }
+              if (lines.length <= 2 && lines.join(' ').length <= 90) {
+                blocks.push({ type: 'h2', text: lines.join(' ') });
+                return;
+              }
+              pushParagraph(blocks, lines.join(' '));
+            });
+            return blocks;
+          }
+
+          function parseHtmlDocument() {
+            const blocks = [];
+            const root = document.querySelector('article, main, body') || document.body;
+            const nodes = root.querySelectorAll('h1, h2, h3, h4, p, blockquote, pre, ul, ol');
+            nodes.forEach((node) => {
+              const tag = (node.tagName || '').toLowerCase();
+              if (!tag) return;
+              if (tag === 'ul' || tag === 'ol') {
+                const items = Array.from(node.querySelectorAll(':scope > li')).map(li => norm(li.textContent)).filter(Boolean);
+                if (items.length) blocks.push({ type: tag, items });
+                return;
+              }
+              const text = tag === 'pre' ? String(node.textContent || '').trim() : norm(node.textContent);
+              if (!text) return;
+              blocks.push({ type: tag, text });
+            });
+            return blocks;
+          }
+
+          const rawText = document.body ? (document.body.innerText || document.body.textContent || '') : '';
+          const htmlLike = /^(html|htm|xml)$/i.test(effectiveExt);
+          const blocks = htmlLike ? parseHtmlDocument() : parsePlainText(rawText);
+          const wordCount = blocks.reduce((count, block) => {
+            const source = Array.isArray(block.items) ? block.items.join(' ') : (block.text || '');
+            return count + source.split(/\\s+/).filter(Boolean).length;
+          }, 0);
+
+          return {
+            title: document.title && document.title !== 'about:blank' ? document.title : titleFromUrl,
+            excerpt: blocks.find(block => block.type === 'p')?.text || '',
+            byline: 'Uploaded document',
+            url: pageUrl,
+            wordCount,
+            blocks
+          };
+        })();
+      `);
+    }
+
+    async function extractPdfReadablePayload(pageUrl) {
+      return sourceWebview.executeJavaScript(`
+        (() => {
+          const pageUrl = ${JSON.stringify(pageUrl)};
+          const norm = (s) => String(s || '').replace(/[ \\t]+/g, ' ').replace(/\\s*\\n\\s*/g, ' ').trim();
+
+          function collectRoots(root, roots) {
+            if (!root || roots.includes(root)) return;
+            roots.push(root);
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+            let node;
+            while ((node = walker.nextNode())) {
+              if (node.shadowRoot) collectRoots(node.shadowRoot, roots);
+            }
+          }
+
+          function nearestPageNumber(node) {
+            let cur = node;
+            while (cur) {
+              if (cur.dataset && cur.dataset.pageNumber) return Number(cur.dataset.pageNumber);
+              const attr = cur.getAttribute && (cur.getAttribute('data-page-number') || cur.getAttribute('aria-label'));
+              if (attr) {
+                const match = String(attr).match(/(\\d+)/);
+                if (match) return Number(match[1]);
+              }
+              const id = cur.id || '';
+              const cls = cur.className || '';
+              const match = String(id + ' ' + cls).match(/page[^\\d]*(\\d+)/i);
+              if (match) return Number(match[1]);
+              cur = cur.parentNode || cur.host || null;
+            }
+            return 0;
+          }
+
+          const roots = [];
+          collectRoots(document, roots);
+
+          const textNodes = [];
+          roots.forEach((root) => {
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+              acceptNode(node) {
+                const text = norm(node.textContent);
+                if (!text) return NodeFilter.FILTER_REJECT;
+                const parent = node.parentElement;
+                if (!parent) return NodeFilter.FILTER_REJECT;
+                const style = window.getComputedStyle(parent);
+                if (style && (style.visibility === 'hidden' || style.display === 'none')) return NodeFilter.FILTER_REJECT;
+                return NodeFilter.FILTER_ACCEPT;
+              }
+            });
+            let node;
+            while ((node = walker.nextNode())) {
+              const parent = node.parentElement;
+              const rect = parent.getBoundingClientRect();
+              if (rect.width <= 0 || rect.height <= 0) continue;
+              textNodes.push({
+                text: norm(node.textContent),
+                page: nearestPageNumber(parent),
+                top: Math.round(rect.top + window.scrollY),
+                left: Math.round(rect.left + window.scrollX)
+              });
+            }
+          });
+
+          textNodes.sort((a, b) => (a.page - b.page) || (a.top - b.top) || (a.left - b.left));
+          const blocks = [];
+          let currentPage = -1;
+          let currentParagraph = [];
+          let lastTop = null;
+
+          function flushParagraph() {
+            if (!currentParagraph.length) return;
+            const joined = currentParagraph.join(' ').replace(/\\s+/g, ' ').trim();
+            if (joined) blocks.push({ type: 'p', text: joined });
+            currentParagraph = [];
+          }
+
+          textNodes.forEach((item) => {
+            if (item.page !== currentPage) {
+              flushParagraph();
+              currentPage = item.page;
+              lastTop = null;
+              if (item.page > 0) {
+                blocks.push({ type: 'h2', text: 'Page ' + item.page });
+              }
+            }
+            if (lastTop !== null && Math.abs(item.top - lastTop) > 26) {
+              flushParagraph();
+            }
+            currentParagraph.push(item.text);
+            lastTop = item.top;
+          });
+          flushParagraph();
+
+          if (!blocks.length) {
+            const fallback = norm(document.body ? (document.body.innerText || document.body.textContent || '') : '');
+            fallback.split(/\\n\\s*\\n+/).map(chunk => norm(chunk)).filter(Boolean).forEach((chunk) => {
+              blocks.push({ type: 'p', text: chunk });
+            });
+          }
+
+          const title = (() => {
+            try {
+              const parsed = new URL(pageUrl);
+              return decodeURIComponent((parsed.pathname || '').split('/').pop() || 'Uploaded PDF');
+            } catch (e) {
+              return 'Uploaded PDF';
+            }
+          })();
+
+          const wordCount = blocks.reduce((count, block) => count + String(block.text || '').split(/\\s+/).filter(Boolean).length, 0);
+          return {
+            title,
+            excerpt: blocks.find(block => block.type === 'p')?.text || '',
+            byline: 'Uploaded PDF',
+            url: pageUrl,
+            wordCount,
+            blocks
+          };
+        })();
+      `);
     }
 
     async function _runExtractScript() {
@@ -2765,8 +3236,8 @@
 
     async function runExtraction(reason) {
       if (extractionInProgress && reason !== 'refresh') return;
-      const currentUrl = (() => { try { return sourceWebview.getURL() || ''; } catch(e) { return ''; } })();
-      if (currentUrl && currentUrl === extractedUrl && articleRendered && reason !== 'refresh') {
+      const pageUrl = (() => { try { return sourceWebview.getURL() || ''; } catch(e) { return ''; } })();
+      if (pageUrl && pageUrl === extractedUrl && articleRendered && reason !== 'refresh') {
         setLoadingState(false); return;
       }
 
@@ -2774,6 +3245,22 @@
       const token = ++extractionToken;
       setLoadingState(true, 'Reading article...', 'Extracting content...');
       setProgress(20, 'Parsing page...');
+
+      // Tick progress forward during extraction so it never stalls at 20%
+      let progressTickTimer = null;
+      let tickedProgress = 20;
+      function startProgressTick() {
+        progressTickTimer = setInterval(() => {
+          if (tickedProgress < 72) {
+            tickedProgress += Math.random() * 6 + 2;
+            setProgress(Math.min(72, tickedProgress), 'Extracting content...');
+          }
+        }, 400);
+      }
+      function stopProgressTick() {
+        if (progressTickTimer) { clearInterval(progressTickTimer); progressTickTimer = null; }
+      }
+      startProgressTick();
 
       let timeoutId = null;
       const timeoutPromise = new Promise((_, reject) => {
@@ -2784,26 +3271,65 @@
         const payload = await Promise.race([extractReadablePayload(), timeoutPromise]);
         clearTimeout(timeoutId);
         if (token !== extractionToken) return;
+
+        const pageExt = getFileExtensionFromUrl(pageUrl);
+        if (isLocalFileUrl(pageUrl) && pageExt === 'pdf' && (!payload || !Array.isArray(payload.blocks) || payload.blocks.length === 0)) {
+          stopProgressTick();
+          currentUrl = pageUrl;
+          extractedUrl = pageUrl;
+          enableDocumentViewMode(getReadableFileLabel(pageUrl));
+          updateBookmarkButtonState();
+          return;
+        }
+
+        stopProgressTick();
         setProgress(80, 'Rendering article...');
         renderArticle(payload || {});
-        extractedUrl        = currentUrl;
+        extractedUrl        = pageUrl;
         articleRendered     = true;
         userNavigating      = false;
-        loadHighlights(currentUrl);
+        currentUrl          = pageUrl;
+        loadHighlights(pageUrl);
         setProgress(100, 'Complete!');
         setTimeout(() => {
-          if (magicCursorActive) instrumentMagicParas();
+          const savedBookmark = getStoredBookmark(currentUrl);
+          const hasSavedBookmark = savedBookmark && Number.isInteger(savedBookmark.magicActiveIdx) && savedBookmark.magicActiveIdx >= 0;
+
+          if (hasSavedBookmark) {
+            if (!magicCursorActive) {
+              enableMagicCursor();
+            } else {
+              instrumentMagicParas();
+            }
+          } else if (magicCursorActive) {
+            instrumentMagicParas();
+          }
+
           reapplyHighlights();
           updateHighlightsList();
+          if (hasSavedBookmark && magicParaNodes.length > 0) {
+            if (savedBookmark.magicActiveIdx < magicParaNodes.length) {
+              setMagicActive(savedBookmark.magicActiveIdx, true);
+            }
+          }
+          updateBookmarkButtonState();
         }, 60);
       } catch (err) {
+        stopProgressTick();
         clearTimeout(timeoutId);
         if (token !== extractionToken) return;
+        const pageExt = getFileExtensionFromUrl(pageUrl);
+        if (isLocalFileUrl(pageUrl) && pageExt === 'pdf') {
+          currentUrl = pageUrl;
+          extractedUrl = pageUrl;
+          enableDocumentViewMode(getReadableFileLabel(pageUrl));
+          updateBookmarkButtonState();
+          return;
+        }
         readerArticle.innerHTML = '';
         const fail = document.createElement('div');
         fail.className = 'reader-empty';
-        fail.innerHTML = `<strong>We could not build the reader view.</strong>
-          <p>${escapeHtml(err?.message || 'Unknown error')}</p>`;
+        fail.innerHTML = buildExtractionFailureMarkup(err, pageUrl);
         readerArticle.appendChild(fail);
         wordCountLabel.textContent = 'Unavailable';
         setProgress(0, 'Failed');
@@ -2851,7 +3377,11 @@
       });
     }
 
+    let savingArticle = false;
     saveArticleBtn.addEventListener('click', async () => {
+      if (savingArticle) return;
+      savingArticle = true;
+      saveArticleBtn.disabled = true;
       try {
         const url = (() => { try { return sourceWebview.getURL() || ''; } catch(e) { return ''; } })();
         const title = pageTitleEl.textContent || 'Untitled Article';
@@ -2865,19 +3395,19 @@
           saveArticleBtn.classList.remove('active');
           saveArticleBtn.textContent = '💾';
           saveArticleBtn.title = 'Save Article';
+          saveArticleBtn.disabled = false;
+          savingArticle = false;
         }, 2000);
       } catch (e) {
         console.error('Failed to save article:', e);
         saveArticleBtn.textContent = '✕';
         saveArticleBtn.title = 'Failed to save';
-        setTimeout(() => { saveArticleBtn.textContent = '💾'; saveArticleBtn.title = 'Save Article'; }, 2000);
-      }
-    });
-
-    readerStage.addEventListener('scroll', () => {
-      if (!magicCursorActive) {
-        const max = readerStage.scrollHeight - readerStage.clientHeight;
-        setProgress(max > 0 ? (readerStage.scrollTop / max) * 100 : 0);
+        setTimeout(() => {
+          saveArticleBtn.textContent = '💾';
+          saveArticleBtn.title = 'Save Article';
+          saveArticleBtn.disabled = false;
+          savingArticle = false;
+        }, 2000);
       }
     });
 
@@ -2897,7 +3427,11 @@
       updateNavButtons();
       const url = (() => { try { return sourceWebview.getURL() || ''; } catch(e) { return ''; } })();
       if (!url || url === 'about:blank') return;
-      pageSubtitleEl.textContent = url;
+      pageSubtitleEl.textContent = isLocalFileUrl(url) ? getReadableFileLabel(url) : url;
+      if (isDocumentView) {
+        loadingOverlay.classList.add('hidden');
+        return;
+      }
       if (url === extractedUrl && articleRendered) return;
       scheduleExtraction('dom-ready', 120);
     });
@@ -2912,19 +3446,34 @@
       updateNavButtons();
       const url = (() => { try { return sourceWebview.getURL() || ''; } catch(e) { return ''; } })();
       if (!url || url === 'about:blank') { setLoadingState(false); return; }
-      pageSubtitleEl.textContent = url;
+      pageSubtitleEl.textContent = isLocalFileUrl(url) ? getReadableFileLabel(url) : url;
+      if (isDocumentView) {
+        extractedUrl = url;
+        articleRendered = true;
+        userNavigating = false;
+        loadingOverlay.classList.add('hidden');
+        return;
+      }
       if (url === extractedUrl && articleRendered) return;
       if (!extractionInProgress) scheduleExtraction('finish-load', 60);
     });
 
     sourceWebview.addEventListener('did-navigate', () => {
       const url = (() => { try { return sourceWebview.getURL() || ''; } catch(e) { return ''; } })();
+      if (isDocumentView) {
+        pageSubtitleEl.textContent = isLocalFileUrl(url) ? getReadableFileLabel(url) : url;
+        return;
+      }
       if (url && url !== extractedUrl) { resetForNavigation(); scheduleExtraction('navigate', 150); }
     });
 
     sourceWebview.addEventListener('did-navigate-in-page', (ev) => {
       if (!ev.isMainFrame) return;
       const url = (() => { try { return sourceWebview.getURL() || ''; } catch(e) { return ''; } })();
+      if (isDocumentView) {
+        pageSubtitleEl.textContent = isLocalFileUrl(url) ? getReadableFileLabel(url) : url;
+        return;
+      }
       if (url && url !== extractedUrl) scheduleExtraction('in-page-navigate', 200);
     });
 
@@ -3114,6 +3663,8 @@
       originalApplyDarkMode(dark);
       contextMenu.style.background = dark ? '#1a2332' : '#fff';
       copyMenuItem.style.color = dark ? '#e2e8f0' : '#1e2937';
+      googleMenuItem.style.color = dark ? '#e2e8f0' : '#1e2937';
+      chatgptMenuItem.style.color = dark ? '#e2e8f0' : '#1e2937';
       highlightMenuItem.style.color = dark ? '#e2e8f0' : '#1e2937';
     }
 
@@ -3126,12 +3677,26 @@
     const divider = document.createElement('div');
     divider.style.cssText = `height:1px;background:rgba(0,0,0,0.1);margin:4px 8px;`;
 
+    const googleMenuItem = document.createElement('button');
+    googleMenuItem.textContent = '🔍 Search with Google';
+    googleMenuItem.style.cssText = `display:block;width:100%;padding:8px 16px;border:none;background:transparent;color:#1e2937;text-align:left;cursor:pointer;border-radius:6px;font:inherit;`;
+    googleMenuItem.addEventListener('mouseenter', () => googleMenuItem.style.background = 'rgba(47,111,237,0.1)');
+    googleMenuItem.addEventListener('mouseleave', () => googleMenuItem.style.background = 'transparent');
+
+    const chatgptMenuItem = document.createElement('button');
+    chatgptMenuItem.textContent = '🤖 Ask ChatGPT';
+    chatgptMenuItem.style.cssText = `display:block;width:100%;padding:8px 16px;border:none;background:transparent;color:#1e2937;text-align:left;cursor:pointer;border-radius:6px;font:inherit;`;
+    chatgptMenuItem.addEventListener('mouseenter', () => chatgptMenuItem.style.background = 'rgba(47,111,237,0.1)');
+    chatgptMenuItem.addEventListener('mouseleave', () => chatgptMenuItem.style.background = 'transparent');
+
     highlightMenuItem.textContent = '✎ Highlight & Save';
     highlightMenuItem.style.cssText = `display:block;width:100%;padding:8px 16px;border:none;background:transparent;color:#1e2937;text-align:left;cursor:pointer;border-radius:6px;font:inherit;`;
     highlightMenuItem.addEventListener('mouseenter', () => highlightMenuItem.style.background = 'rgba(47,111,237,0.1)');
     highlightMenuItem.addEventListener('mouseleave', () => highlightMenuItem.style.background = 'transparent');
 
     contextMenu.appendChild(copyMenuItem);
+    contextMenu.appendChild(googleMenuItem);
+    contextMenu.appendChild(chatgptMenuItem);
     contextMenu.appendChild(divider);
     contextMenu.appendChild(highlightMenuItem);
 
@@ -3145,6 +3710,8 @@
       // Update context menu theme on the fly
       contextMenu.style.background = isDarkMode ? '#1a2332' : '#fff';
       copyMenuItem.style.color = isDarkMode ? '#e2e8f0' : '#1e2937';
+      googleMenuItem.style.color = isDarkMode ? '#e2e8f0' : '#1e2937';
+      chatgptMenuItem.style.color = isDarkMode ? '#e2e8f0' : '#1e2937';
       highlightMenuItem.style.color = isDarkMode ? '#e2e8f0' : '#1e2937';
       contextMenu.style.left = e.clientX + 'px';
       contextMenu.style.top  = e.clientY + 'px';
@@ -3153,7 +3720,7 @@
     });
 
     document.addEventListener('click', (e) => {
-      if (e.target !== highlightMenuItem && e.target !== copyMenuItem) contextMenu.style.display = 'none';
+      if (e.target !== highlightMenuItem && e.target !== copyMenuItem && e.target !== googleMenuItem && e.target !== chatgptMenuItem) contextMenu.style.display = 'none';
     });
 
     copyMenuItem.addEventListener('click', async (e) => {
@@ -3162,6 +3729,26 @@
       if (currentSelectionRange) {
         const selectedText = currentSelectionRange.toString().trim();
         if (selectedText) { try { await navigator.clipboard.writeText(selectedText); showCopiedToast(); } catch(err) {} }
+      }
+    });
+
+    googleMenuItem.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      contextMenu.style.display = 'none';
+      if (currentSelectionRange) {
+        const selectedText = currentSelectionRange.toString().trim();
+        if (selectedText) { try { await window.readmodeAPI.googleSearch(selectedText); } catch(err) {} }
+      }
+    });
+
+    chatgptMenuItem.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      contextMenu.style.display = 'none';
+      if (currentSelectionRange) {
+        const selectedText = currentSelectionRange.toString().trim();
+        if (selectedText) {
+          try { await navigator.clipboard.writeText(selectedText); showCopiedToast(); window.readmodeAPI.openChatGPT(); } catch(err) {}
+        }
       }
     });
 
@@ -3242,6 +3829,8 @@
     let activeMagicEffectKey = localStorage.getItem(MAGIC_EFFECTS_STORAGE_KEY) || 'none';
     let magicParaNodes    = [];
     let magicActiveIdx    = -1;
+    let totalWordCount    = 0;
+    let magicParaWordCounts = [];
     let magicHintTimer    = null;
 
     const MAGIC_SCROLL_EDGE = 90;
@@ -3309,7 +3898,7 @@
 
     function instrumentMagicParas() {
       readerArticle.querySelectorAll('.magic-para').forEach(el => el.replaceWith(...el.childNodes));
-      magicParaNodes = []; magicActiveIdx = -1;
+      magicParaNodes = []; magicActiveIdx = -1; magicParaWordCounts = [];
       const targets = readerArticle.querySelectorAll(
         '.reader-title, .reader-excerpt, .reader-body h2, .reader-body h3, .reader-body h4, .reader-body p, .reader-body li, .reader-body blockquote, .reader-body pre'
       );
@@ -3320,12 +3909,12 @@
         wrapper.dataset.magicIdx = String(magicParaNodes.length);
         el.parentNode.insertBefore(wrapper, el);
         wrapper.appendChild(el);
+        const wordCount = el.textContent.trim().split(/\s+/).filter(Boolean).length;
+        magicParaWordCounts.push(wordCount);
         wrapper.addEventListener('mouseenter', () => {
           if (!magicCursorActive) return;
           const idx = parseInt(wrapper.dataset.magicIdx, 10);
-          const shouldScroll = !isAutoScrolling && !isMagicParaFullyVisible(wrapper);
-          setMagicActive(idx, shouldScroll);
-          if (shouldScroll) setAutoScrolling(true);
+          setMagicActive(idx, false);
         });
         wrapper.addEventListener('click', (e) => {
           if (!magicCursorActive) return;
@@ -3334,6 +3923,15 @@
         });
         magicParaNodes.push(wrapper);
       });
+      const calculatedTotal = magicParaWordCounts.reduce((a, b) => a + b, 0);
+      if (totalWordCount === 0 && calculatedTotal > 0) {
+        totalWordCount = calculatedTotal;
+        if (wordCountLabel.dataset.totalWords === '0') {
+          wordCountLabel.dataset.totalWords = String(totalWordCount);
+        }
+      } else {
+        totalWordCount = calculatedTotal;
+      }
     }
 
     function setMagicActive(idx, scroll) {
@@ -3343,8 +3941,15 @@
       magicActiveIdx = idx;
       const activeEl = magicParaNodes[idx];
       activeEl.classList.remove('magic-active'); void activeEl.offsetWidth; activeEl.classList.add('magic-active');
-      setProgress(((idx + 1) / magicParaNodes.length) * 100);
+      if (magicCursorActive) setProgress(((idx + 1) / magicParaNodes.length) * 100);
       if (scroll) scrollMagicIntoView(activeEl);
+      if (totalWordCount > 0 && magicParaWordCounts.length > 0) {
+        const wordsRemaining = magicParaWordCounts.slice(idx).reduce((a, b) => a + b, 0);
+        const wordsRead = totalWordCount - wordsRemaining;
+        wordCountLabel.textContent = `${wordsRemaining.toLocaleString()} words left`;
+        const progressPercent = Math.round((wordsRead / totalWordCount) * 100);
+        setProgress(progressPercent);
+      }
     }
 
     function clearMagicHighlights() { magicParaNodes.forEach(el => el.classList.remove('magic-active','magic-past')); magicActiveIdx = -1; }
@@ -3353,7 +3958,7 @@
       if (!el) return;
       const sr = readerStage.getBoundingClientRect();
       const er = el.getBoundingClientRect();
-      if (er.top < sr.top + 40 || er.bottom > sr.bottom - 40) {
+      if (er.top < sr.top + 60 || er.bottom > sr.bottom - 60) {
         const target = readerStage.scrollTop + er.top - sr.top - sr.height / 2 + er.height / 2;
         readerStage.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
       }
@@ -3417,6 +4022,9 @@
       readerArticle.classList.remove('magic-cursor-active');
       magicCursorEl.classList.remove('visible');
       clearMagicHighlights(); hideMagicHint();
+      if (totalWordCount > 0) {
+        wordCountLabel.textContent = `${totalWordCount.toLocaleString()} words`;
+      }
       readerStage.removeEventListener('mousemove',  onMagicMouseMove);
       readerStage.removeEventListener('mouseleave', onMagicMouseLeave);
       readerStage.removeEventListener('mouseenter', onMagicMouseEnter);
@@ -3439,13 +4047,13 @@
       if (!magicCursorActive) return false;
       if (ev.key === 'ArrowDown') {
         ev.preventDefault();
-        if (magicActiveIdx < magicParaNodes.length - 1) { setMagicActive(magicActiveIdx + 1, false); maybeScrollDownForPara(magicParaNodes[magicActiveIdx]); }
+        if (magicActiveIdx < magicParaNodes.length - 1) { setMagicActive(magicActiveIdx + 1, true); }
         else { readerStage.scrollBy({ top: MAGIC_SCROLL_STEP, behavior: 'smooth' }); }
         return true;
       }
       if (ev.key === 'ArrowUp') {
         ev.preventDefault();
-        if (magicActiveIdx > 0) { setMagicActive(magicActiveIdx - 1, false); maybeScrollUpForPara(magicParaNodes[magicActiveIdx]); }
+        if (magicActiveIdx > 0) { setMagicActive(magicActiveIdx - 1, true); }
         else { readerStage.scrollBy({ top: -MAGIC_SCROLL_STEP, behavior: 'smooth' }); }
         return true;
       }

@@ -75,6 +75,7 @@ class DiscoveryBrowser {
     this.searchEngineKey = 'google';
     this.cardThemeKey = 'primary';
     this.cardLaunchSizeMode = 'normal';
+    this.siteLayoutOverrides = {}; // hostname -> 'normal' | 'wide' | 'fullscreen'
     this.cardThemes = [
       {
         key: 'primary',
@@ -147,7 +148,7 @@ class DiscoveryBrowser {
 
     // Container references
     this.cardDock = document.getElementById('dock-content');
-    this.newCardBtn = document.getElementById('new-card-btn');
+    this.uploadBtn = document.getElementById('upload-btn');
     this.recapBtn = document.getElementById('recap-btn');
     this.cardCountSpan = document.getElementById('card-count');
     this.tabsContainer = document.getElementById('tabs-container');
@@ -194,7 +195,17 @@ class DiscoveryBrowser {
       }
     });
 
-    this.newCardBtn.addEventListener('click', () => this.createCard(this.getSearchEngineHomeUrl()));
+    if (this.uploadBtn) {
+      this.uploadBtn.addEventListener('click', async () => {
+        try {
+          const result = await window.electronAPI.pickReadmodeFile();
+          if (!result || !result.success || result.canceled || !result.fileUrl) return;
+          await window.electronAPI.openReadmodeDocument(result.fileUrl, result.title || 'Uploaded Document');
+        } catch (e) {
+          console.error('Failed to open uploaded document in readmode:', e);
+        }
+      });
+    }
     if (this.recapBtn) {
       this.recapBtn.addEventListener('click', async () => {
         try {
@@ -230,6 +241,7 @@ class DiscoveryBrowser {
     this.loadSearchEngine();
     this.loadCardTheme();
     await this.loadCardLaunchSizeMode();
+    this.loadSiteLayoutOverrides();
     this.applySearchEngineToUI();
     this.renderThemeOptions();
     this.renderWindowSizeOptions();
@@ -239,6 +251,28 @@ class DiscoveryBrowser {
       this.searchEngineSelect.addEventListener('change', () => {
         const nextKey = this.searchEngineSelect.value;
         this.setSearchEngine(nextKey);
+      });
+    }
+
+    // Custom site layout add button
+    const siteLayoutUrlInput = document.getElementById('site-layout-url-input');
+    const siteLayoutModeSelect = document.getElementById('site-layout-mode-select');
+    const addSiteLayoutBtn = document.getElementById('add-site-layout-btn');
+    const addSiteLayout = () => {
+      if (!siteLayoutUrlInput || !siteLayoutModeSelect) return;
+      const domain = siteLayoutUrlInput.value.trim();
+      const mode = siteLayoutModeSelect.value;
+      if (!domain) return;
+      if (this.addSiteLayoutOverride(domain, mode)) {
+        siteLayoutUrlInput.value = '';
+      }
+    };
+    if (addSiteLayoutBtn) {
+      addSiteLayoutBtn.addEventListener('click', addSiteLayout);
+    }
+    if (siteLayoutUrlInput) {
+      siteLayoutUrlInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') addSiteLayout();
       });
     }
 
@@ -262,6 +296,33 @@ class DiscoveryBrowser {
     };
     updateClock();
     setInterval(updateClock, 1000);
+
+    // News widget
+    this.newsContainer = document.getElementById('news-container');
+    this.newsRefreshBtn = document.getElementById('news-refresh-btn');
+    this.newsPrevBtn = document.getElementById('news-prev-btn');
+    this.newsNextBtn = document.getElementById('news-next-btn');
+    this.newsCache = null;
+    this.newsCacheTime = 0;
+    this.newsCacheDuration = 5 * 60 * 1000;
+    this.newsPage = 0;
+
+    if (this.newsRefreshBtn) {
+      this.newsRefreshBtn.addEventListener('click', () => {
+        this.newsPage = 0;
+        this.refreshNews(true);
+      });
+    }
+
+    if (this.newsPrevBtn) {
+      this.newsPrevBtn.addEventListener('click', () => this._changeNewsPage(-1));
+    }
+
+    if (this.newsNextBtn) {
+      this.newsNextBtn.addEventListener('click', () => this._changeNewsPage(1));
+    }
+
+    this.loadNews();
 
     // Extensions and Settings panel elements
     this.extensionsBtn = document.getElementById('extensions-btn');
@@ -936,6 +997,111 @@ class DiscoveryBrowser {
       `;
       item.addEventListener('click', () => this.setCardLaunchSizeMode(mode.key));
       this.windowSizeOptionsEl.appendChild(item);
+    });
+    this.renderSiteLayoutList();
+  }
+
+  loadSiteLayoutOverrides() {
+    try {
+      const saved = localStorage.getItem('siteLayoutOverrides');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          this.siteLayoutOverrides = parsed;
+        }
+      }
+    } catch (e) { }
+    this.syncSiteLayoutOverridesToMain();
+  }
+
+  saveSiteLayoutOverrides() {
+    try {
+      localStorage.setItem('siteLayoutOverrides', JSON.stringify(this.siteLayoutOverrides));
+    } catch (e) { }
+    this.syncSiteLayoutOverridesToMain();
+  }
+
+  async syncSiteLayoutOverridesToMain() {
+    try {
+      if (window.electronAPI && window.electronAPI.setSiteLayoutOverrides) {
+        await window.electronAPI.setSiteLayoutOverrides(this.siteLayoutOverrides);
+      }
+    } catch (e) { }
+  }
+
+  normalizeHostname(input) {
+    try {
+      let raw = String(input || '').trim().toLowerCase();
+      if (!raw) return '';
+      // Strip protocol if present
+      raw = raw.replace(/^https?:\/\//, '');
+      // Strip path, query, hash
+      raw = raw.split('/')[0].split('?')[0].split('#')[0];
+      // Strip port
+      raw = raw.split(':')[0];
+      // Strip www. prefix for consistent matching
+      if (raw.startsWith('www.')) raw = raw.slice(4);
+      return raw;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  addSiteLayoutOverride(domain, mode) {
+    const hostname = this.normalizeHostname(domain);
+    if (!hostname) return false;
+    if (!['normal', 'wide', 'fullscreen'].includes(mode)) return false;
+    this.siteLayoutOverrides[hostname] = mode;
+    this.saveSiteLayoutOverrides();
+    this.renderSiteLayoutList();
+    return true;
+  }
+
+  removeSiteLayoutOverride(domain) {
+    const hostname = this.normalizeHostname(domain);
+    if (!hostname) return;
+    delete this.siteLayoutOverrides[hostname];
+    this.saveSiteLayoutOverrides();
+    this.renderSiteLayoutList();
+  }
+
+  getSiteLayoutForUrl(url) {
+    try {
+      const parsed = new URL(url);
+      let hostname = (parsed.hostname || '').toLowerCase();
+      if (hostname.startsWith('www.')) hostname = hostname.slice(4);
+      return this.siteLayoutOverrides[hostname] || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  renderSiteLayoutList() {
+    const listEl = document.getElementById('site-layout-list');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    const entries = Object.entries(this.siteLayoutOverrides);
+    if (entries.length === 0) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'color: rgba(255,255,255,0.5); font-size: 11px; text-align: center; padding: 12px 0;';
+      empty.textContent = 'No custom site layouts saved yet.';
+      listEl.appendChild(empty);
+      return;
+    }
+    entries.sort((a, b) => a[0].localeCompare(b[0]));
+    entries.forEach(([domain, mode]) => {
+      const row = document.createElement('div');
+      row.className = 'site-layout-item';
+      const modeLabel = mode.charAt(0).toUpperCase() + mode.slice(1);
+      row.innerHTML = `
+        <span class="site-layout-item__domain" title="${domain}">${domain}</span>
+        <span class="site-layout-item__mode">${modeLabel}</span>
+        <button class="site-layout-item__remove" title="Remove">&times;</button>
+      `;
+      row.querySelector('.site-layout-item__remove').addEventListener('click', () => {
+        this.removeSiteLayoutOverride(domain);
+      });
+      listEl.appendChild(row);
     });
   }
 
@@ -1895,6 +2061,25 @@ class DiscoveryBrowser {
   }
 
   saveArticle(articleData) {
+    // Check for duplicate by URL to prevent saving the same article twice
+    const incomingUrl = (articleData.url || '').trim();
+    if (incomingUrl) {
+      for (const [, existing] of this.articles) {
+        if ((existing.url || '').trim() === incomingUrl) {
+          // Update existing article instead of creating a duplicate
+          existing.title = articleData.title || existing.title;
+          existing.content = articleData.content || existing.content;
+          existing.excerpt = articleData.excerpt || existing.excerpt;
+          existing.timestamp = Date.now();
+          this.saveArticles();
+          if (this.currentSettingsTab === 'articles') {
+            this.renderArticles();
+          }
+          return;
+        }
+      }
+    }
+
     // Create a new article with ID and timestamp
     const article = {
       id: this.nextArticleId++,
@@ -2291,6 +2476,7 @@ class DiscoveryBrowser {
     this.bookmarkFolders = new Map();
     this.searchEngineKey = 'google';
     this.cardThemeKey = 'primary';
+    this.siteLayoutOverrides = {};
 
     try {
       if (window.electronAPI && window.electronAPI.syncPasswords) {
@@ -2307,6 +2493,9 @@ class DiscoveryBrowser {
       }
       if (window.electronAPI && window.electronAPI.setCardLaunchSizeMode) {
         window.electronAPI.setCardLaunchSizeMode('normal');
+      }
+      if (window.electronAPI && window.electronAPI.setSiteLayoutOverrides) {
+        window.electronAPI.setSiteLayoutOverrides({});
       }
       const vizToggle = document.getElementById('visualizer-toggle');
       if (vizToggle) vizToggle.checked = false;
@@ -2624,6 +2813,10 @@ class DiscoveryBrowser {
 
     const cardId = this.nextCardId++;
 
+    // Check for per-site layout override
+    const siteLayout = this.getSiteLayoutForUrl(url);
+    const effectiveLaunchMode = siteLayout || this.cardLaunchSizeMode;
+
     // Calculate centered position on screen
     let x = 300;
     let y = 200;
@@ -2631,7 +2824,9 @@ class DiscoveryBrowser {
     try {
       const screenWidth = window.screen.availWidth;
       const screenHeight = window.screen.availHeight;
-      const launchSize = this.getCardLaunchWindowDimensions();
+      const launchSize = effectiveLaunchMode === 'wide'
+        ? { width: 1100, height: 600 }
+        : { width: 800, height: 500 };
 
       x = Math.floor((screenWidth - launchSize.width) / 2);
       y = Math.floor((screenHeight - launchSize.height) / 2) + this.getCardLaunchVerticalOffset();
@@ -2654,7 +2849,7 @@ class DiscoveryBrowser {
     this.cards.set(cardId, cardData);
 
     try {
-      const result = await window.electronAPI.createCard(cardId, url, { x, y }, this.cardThemeKey);
+      const result = await window.electronAPI.createCard(cardId, url, { x, y }, this.cardThemeKey, effectiveLaunchMode);
 
       if (!result || !result.success) {
         this.cards.delete(cardId);
@@ -2818,6 +3013,284 @@ class DiscoveryBrowser {
 
   updateCardCount() {
     this.cardCountSpan.textContent = this.cards.size;
+  }
+
+  // ============================
+  // News Widget
+  // ============================
+
+  async loadNews() {
+    if (!this.newsContainer) return;
+
+    const now = Date.now();
+    if (this.newsCache && (now - this.newsCacheTime) < this.newsCacheDuration) {
+      this.renderNews(this.newsCache);
+      return;
+    }
+
+    this.renderNewsLoading();
+    await this.fetchNews();
+  }
+
+  async refreshNews(force = false) {
+    if (!this.newsContainer) return;
+
+    if (force || !this.newsCache || (Date.now() - this.newsCacheTime) >= this.newsCacheDuration) {
+      this.renderNewsLoading();
+      await this.fetchNews();
+    }
+  }
+
+  async fetchNews() {
+    try {
+      // In Electron, we can fetch RSS XML directly — no proxy or third-party API needed
+      const rssFeeds = [
+        { url: 'https://feeds.bbci.co.uk/news/rss.xml',          source: 'BBC News' },
+        { url: 'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml', source: 'NY Times' },
+        { url: 'https://feeds.skynews.com/feeds/rss/home.xml',   source: 'Sky News' },
+        { url: 'https://www.theguardian.com/world/rss',          source: 'The Guardian' },
+        { url: 'https://feeds.reuters.com/reuters/topNews',      source: 'Reuters' },
+      ];
+
+      for (const feed of rssFeeds) {
+        try {
+          const response = await fetch(feed.url, {
+            cache: 'no-store',
+            headers: { 'Accept': 'application/rss+xml, application/xml, text/xml, */*' }
+          });
+
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+          const xmlText = await response.text();
+          const parser = new DOMParser();
+          const xml = parser.parseFromString(xmlText, 'text/xml');
+
+          // Check for parse errors
+          const parseError = xml.querySelector('parsererror');
+          if (parseError) throw new Error('XML parse error');
+
+          const items = Array.from(xml.querySelectorAll('item'));
+          if (items.length === 0) throw new Error('No items in feed');
+
+          const articles = items.slice(0, 20).map(item => {
+            // Strip HTML tags from description
+            const rawDesc = item.querySelector('description')?.textContent || '';
+            const description = rawDesc.replace(/<[^>]*>/g, '').trim().slice(0, 180);
+
+            // Extract image URL from various RSS image sources
+            let imageUrl = null;
+
+            // Try media:thumbnail or media:content (Media RSS)
+            const mediaThumbnail = item.getElementsByTagNameNS('http://search.yahoo.com/mrss/', 'thumbnail')[0];
+            const mediaContent = item.getElementsByTagNameNS('http://search.yahoo.com/mrss/', 'content')[0];
+            if (mediaThumbnail?.getAttribute('url')) {
+              imageUrl = mediaThumbnail.getAttribute('url');
+            } else if (mediaContent?.getAttribute('url') && mediaContent.getAttribute('type')?.startsWith('image/')) {
+              imageUrl = mediaContent.getAttribute('url');
+            }
+
+            // Try enclosure element
+            if (!imageUrl) {
+              const enclosure = item.querySelector('enclosure');
+              if (enclosure?.getAttribute('type')?.startsWith('image/') && enclosure.getAttribute('url')) {
+                imageUrl = enclosure.getAttribute('url');
+              }
+            }
+
+            // Try extracting <img> from description HTML
+            if (!imageUrl) {
+              const imgMatch = rawDesc.match(/<img[^>]+src=["']([^"']+)["']/i);
+              if (imgMatch) imageUrl = imgMatch[1];
+            }
+
+            // Try content:encoded for images
+            if (!imageUrl) {
+              const contentEncoded = item.querySelector('content\\:encoded, encoded')?.textContent || '';
+              const contentImgMatch = contentEncoded.match(/<img[^>]+src=["']([^"']+)["']/i);
+              if (contentImgMatch) imageUrl = contentImgMatch[1];
+            }
+
+            return {
+              title: item.querySelector('title')?.textContent?.trim() || '',
+              description: description || 'Click to read more...',
+              url: item.querySelector('link')?.textContent?.trim() ||
+                   item.querySelector('guid')?.textContent?.trim() || '',
+              publishedAt: item.querySelector('pubDate')?.textContent || null,
+              source: { name: feed.source },
+              imageUrl: imageUrl,
+            };
+          }).filter(a => a.title && a.title !== '[Removed]');
+
+          if (articles.length === 0) throw new Error('No valid articles');
+
+          this.newsCache = articles;
+          this.newsCacheTime = Date.now();
+          this.renderNews(this.newsCache);
+          return;
+
+        } catch (err) {
+          console.warn(`RSS feed failed (${feed.source}):`, err.message);
+          continue;
+        }
+      }
+
+      throw new Error('All RSS feeds failed');
+
+    } catch (error) {
+      console.error('Failed to fetch news:', error);
+      this.renderNewsError('Unable to load news. Please try again later.');
+    }
+  }
+
+  renderNewsLoading() {
+    if (!this.newsContainer) return;
+    this.newsContainer.innerHTML = '<div class="news-loading">Loading news...</div>';
+  }
+
+  renderNewsError(message) {
+    if (!this.newsContainer) return;
+    this.newsContainer.innerHTML = `<div class="news-error">${message}</div>`;
+  }
+
+  _changeNewsPage(direction) {
+    if (!this.newsCache) return;
+
+    const validArticles = this.newsCache.filter(a => a.title && a.title !== '[Removed]');
+    const maxPage = Math.max(0, Math.floor((validArticles.length - 1) / 4));
+    const newPage = this.newsPage + direction;
+
+    if (newPage < 0 || newPage > maxPage) return;
+
+    this.newsPage = newPage;
+    this.renderNews(this.newsCache);
+  }
+
+  renderNews(articles) {
+    if (!this.newsContainer) return;
+
+    if (!articles || articles.length === 0) {
+      this.newsContainer.innerHTML = '<div class="news-empty">No news available at the moment.</div>';
+      return;
+    }
+
+    this.newsContainer.innerHTML = '';
+
+    const validArticles = articles.filter(a => a.title && a.title !== '[Removed]');
+    const offset = this.newsPage * 4;
+    const featuredArticles = validArticles.slice(offset, offset + 4);
+    const scrollArticles = validArticles.slice(offset + 4, offset + 20);
+
+    // Update pagination button states
+    const maxPage = Math.max(0, Math.floor((validArticles.length - 1) / 4));
+    if (this.newsPrevBtn) this.newsPrevBtn.disabled = this.newsPage <= 0;
+    if (this.newsNextBtn) this.newsNextBtn.disabled = this.newsPage >= maxPage;
+
+    // Featured row (4 large cards)
+    const featuredRow = document.createElement('div');
+    featuredRow.className = 'news-featured-row';
+
+    featuredArticles.forEach(article => {
+      featuredRow.appendChild(this._createNewsCard(article, 'featured'));
+    });
+
+    this.newsContainer.appendChild(featuredRow);
+
+    // Horizontal scroll strip (remaining cards)
+    if (scrollArticles.length > 0) {
+      const scrollRow = document.createElement('div');
+      scrollRow.className = 'news-scroll-row';
+
+      scrollArticles.forEach(article => {
+        scrollRow.appendChild(this._createNewsCard(article, 'scroll'));
+      });
+
+      this.newsContainer.appendChild(scrollRow);
+    }
+  }
+
+  _createNewsCard(article, variant) {
+    const card = document.createElement('div');
+    card.className = `news-card news-card--${variant}`;
+
+    if (article.imageUrl) {
+      const imgWrapper = document.createElement('div');
+      imgWrapper.className = 'news-card-img-wrapper';
+      const img = document.createElement('img');
+      img.className = 'news-card-img';
+      img.src = article.imageUrl;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.onerror = () => {
+        imgWrapper.remove();
+        card.classList.add('news-card-no-img');
+      };
+      imgWrapper.appendChild(img);
+      card.appendChild(imgWrapper);
+    } else {
+      card.classList.add('news-card-no-img');
+    }
+
+    const content = document.createElement('div');
+    content.className = 'news-card-content';
+
+    const title = document.createElement('div');
+    title.className = 'news-card-title';
+    title.textContent = article.title;
+    title.title = article.title;
+
+    if (variant === 'featured') {
+      const desc = document.createElement('div');
+      desc.className = 'news-card-desc';
+      desc.textContent = article.description;
+      content.appendChild(desc);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'news-card-meta';
+
+    const source = document.createElement('span');
+    source.className = 'news-card-source';
+    source.textContent = article.source?.name || 'News';
+
+    const time = document.createElement('span');
+    time.className = 'news-card-time';
+    time.textContent = this.formatNewsTime(article.publishedAt);
+
+    meta.appendChild(source);
+    meta.appendChild(time);
+
+    content.insertBefore(title, content.firstChild);
+    content.appendChild(meta);
+
+    card.appendChild(content);
+
+    if (article.url) {
+      card.addEventListener('click', () => {
+        this.createCard(article.url);
+      });
+    }
+
+    return card;
+  }
+
+  formatNewsTime(dateString) {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diff = now - date;
+      const minutes = Math.floor(diff / 60000);
+      const hours = Math.floor(diff / 3600000);
+      const days = Math.floor(diff / 86400000);
+
+      if (minutes < 60) return `${minutes}m ago`;
+      if (hours < 24) return `${hours}h ago`;
+      if (days < 7) return `${days}d ago`;
+
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } catch (e) {
+      return '';
+    }
   }
 }
 

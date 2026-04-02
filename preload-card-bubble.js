@@ -9,9 +9,14 @@ contextBridge.exposeInMainWorld('cardBubbleAPI', {
   onNotificationUpdate: (callback) => {
     ipcRenderer.on('bubble-notification-update', (event, count) => callback(count));
   },
+
+  onMediaStateUpdate: (callback) => {
+    ipcRenderer.on('bubble-media-state', (event, payload) => callback(payload || {}));
+  },
   
   // Remove notification listener
   removeNotificationListener: () => {
     ipcRenderer.removeAllListeners('bubble-notification-update');
+    ipcRenderer.removeAllListeners('bubble-media-state');
   }
 });

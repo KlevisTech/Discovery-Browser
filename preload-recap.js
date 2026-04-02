@@ -7,4 +7,6 @@ contextBridge.exposeInMainWorld('recapAPI', {
   openReadmodeCard: (url, title) => ipcRenderer.invoke('open-readmode-card', url, title || 'Read Mode'),
   getSavedArticles: () => ipcRenderer.invoke('get-saved-articles-for-recap'),
   setSavedArticles: (articles) => ipcRenderer.invoke('set-saved-articles-for-recap', articles),
+  googleSearch: (query) => ipcRenderer.invoke('google-search', query),
+  openChatGPT: () => ipcRenderer.invoke('open-chatgpt'),
 });

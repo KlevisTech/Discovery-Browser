@@ -11,7 +11,7 @@ const electronAPI = {
   // ========================
   // Card management
   // ========================
-  createCard: (cardId, url, position, themeKey) => ipcRenderer.invoke('create-card', cardId, url, position, themeKey),
+  createCard: (cardId, url, position, themeKey, launchSizeMode) => ipcRenderer.invoke('create-card', cardId, url, position, themeKey, launchSizeMode),
   closeCard: (cardId) => ipcRenderer.invoke('close-card', cardId),
   
   // Card navigation
@@ -149,6 +149,7 @@ const electronAPI = {
   getCardTheme: () => ipcRenderer.invoke('get-card-theme'),
   setCardLaunchSizeMode: (mode) => ipcRenderer.invoke('set-card-launch-size-mode', mode),
   getCardLaunchSizeMode: () => ipcRenderer.invoke('get-card-launch-size-mode'),
+  setSiteLayoutOverrides: (overrides) => ipcRenderer.invoke('set-site-layout-overrides', overrides),
 
   // Clear all user data
   clearUserData: () => ipcRenderer.invoke('clear-user-data'),
@@ -160,6 +161,10 @@ const electronAPI = {
 
   // Articles recap window
   openArticlesRecap: () => ipcRenderer.invoke('open-articles-recap'),
+
+  // Uploaded document reading
+  pickReadmodeFile: () => ipcRenderer.invoke('pick-readmode-file'),
+  openReadmodeDocument: (fileUrl, title) => ipcRenderer.invoke('open-readmode-document', fileUrl, title),
 };
 // Expose to renderer process
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

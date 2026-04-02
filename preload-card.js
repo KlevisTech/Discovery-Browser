@@ -113,6 +113,10 @@ contextBridge.exposeInMainWorld('cardAPI', {
   // Open readmode card - creates a phone-sized reading view
   openReadmode: (url, title, theme) =>
     ipcRenderer.invoke('open-readmode-card', url, title, theme),
+
+  // Cycle through open card windows
+  cycleWindows: (cardId) =>
+    ipcRenderer.invoke('cycle-windows', cardId),
 });
 
 // Receive requests from main to load a URL into this card's webview
@@ -122,6 +126,14 @@ ipcRenderer.on('card-load-url', (event, url) => {
 
 ipcRenderer.on('card-restore-animate', () => {
   window.dispatchEvent(new CustomEvent('card-restore-animate'));
+});
+
+ipcRenderer.on('card-cycle-arriving', () => {
+  window.dispatchEvent(new CustomEvent('card-cycle-arriving'));
+});
+
+ipcRenderer.on('card-cycle-departing', () => {
+  window.dispatchEvent(new CustomEvent('card-cycle-departing'));
 });
 
 ipcRenderer.on('cloudflare-challenge-banner', (event, payload) => {

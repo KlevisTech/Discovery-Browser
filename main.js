@@ -1,8 +1,15 @@
 ﻿// main.js
-const { app, BrowserWindow, ipcMain, session, shell, dialog } = require('electron');
+const electron = require('electron');
+const app = electron.app;
+const BrowserWindow = electron.BrowserWindow;
+const ipcMain = electron.ipcMain;
+const session = electron.session;
+const shell = electron.shell;
+const dialog = electron.dialog;
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { pathToFileURL } = require('url');
 
 const { Menu, MenuItem } = require('electron');
 const APP_ICON_PATH = path.join(__dirname, 'assets', 'discoverybrowser.ico');
@@ -712,9 +719,11 @@ const cardWindows = new Map(); // cardId -> BrowserWindow
 const cardBubbles = new Map(); // cardId -> bubble BrowserWindow
 const bubbleNotifications = new Map(); // cardId -> notification count
 const bubbleNotificationSources = new Map(); // cardId -> 'api' | 'title'
+const bubbleMediaStates = new Map(); // cardId -> { isPlaying, isVideo, isLive }
 let visualizerEnabled = false;
 let currentCardTheme = 'primary'; // Store the user's preferred card theme
 let currentCardLaunchSizeMode = 'normal'; // Store user's preferred launch size for new cards
+let siteLayoutOverrides = {}; // hostname -> 'normal' | 'wide' | 'fullscreen' per-site layout overrides
 const pendingAuthRedirects = new Map(); // requestId -> { authUrl, launchUrl, createdAt }
 const recentAuthRedirects = new Map(); // dedupeKey -> { ts, requestId }
 
@@ -740,6 +749,17 @@ function getLaunchWindowSizeByMode(mode) {
     return { width: 1100, height: 600 };
   }
   return { width: 800, height: 500 };
+}
+
+function getSiteLayoutForUrl(url) {
+  try {
+    const parsed = new URL(url);
+    let hostname = (parsed.hostname || '').toLowerCase();
+    if (hostname.startsWith('www.')) hostname = hostname.slice(4);
+    return siteLayoutOverrides[hostname] || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 const AUTH_EXTERNAL_HOSTS = new Set([
@@ -803,6 +823,21 @@ function incrementBubbleNotification(cardId) {
 // Clear bubble notifications
 function clearBubbleNotifications(cardId) {
   updateBubbleNotification(cardId, 0);
+}
+
+function updateBubbleMediaState(cardId, mediaState = {}) {
+  const nextState = {
+    isPlaying: !!mediaState.isPlaying,
+    isVideo: !!mediaState.isVideo,
+    isLive: !!mediaState.isLive,
+  };
+  bubbleMediaStates.set(cardId, nextState);
+  const bubble = cardBubbles.get(cardId);
+  if (bubble && !bubble.isDestroyed()) {
+    try {
+      bubble.webContents.send('bubble-media-state', nextState);
+    } catch (e) { }
+  }
 }
 
 function deriveBubbleLabel(pageTitle, pageUrl) {
@@ -905,6 +940,8 @@ function createCardBubble(cardId, cardWindow, meta = {}) {
       try {
         const existingCount = bubbleNotifications.get(cardId) || 0;
         bubbleWindow.webContents.send('bubble-notification-update', existingCount);
+        const existingMediaState = bubbleMediaStates.get(cardId) || { isPlaying: false, isVideo: false, isLive: false };
+        bubbleWindow.webContents.send('bubble-media-state', existingMediaState);
       } catch (e) { }
     });
     bubbleWindow.on('closed', () => {
@@ -1404,7 +1441,7 @@ function ensurePrewarmedCardWindow() {
         preload: path.join(__dirname, 'preload-card.js'),
         enableWebSQL: false,
         spellcheck: true,
-        backgroundThrottling: false,
+        backgroundThrottling: true,
         enablePreferredSizeMode: true,
         partition: 'persist:cards',
       },
@@ -1438,7 +1475,8 @@ function createCardDirectly(url, options = {}) {
     // Support both old signature (themeKey as string) and new options object
     const opts = typeof options === 'string' ? { themeKey: options } : options;
     const minimizeAfterShow = opts.minimizeAfterShow === true;
-    const requestedLaunchMode = normalizeCardLaunchSizeMode(opts.launchSizeMode || currentCardLaunchSizeMode);
+    const siteLayout = getSiteLayoutForUrl(url);
+    const requestedLaunchMode = normalizeCardLaunchSizeMode(opts.launchSizeMode || siteLayout || currentCardLaunchSizeMode);
     const launchMode = minimizeAfterShow ? CARD_LAUNCH_MODE_NORMAL : requestedLaunchMode;
     const launchSize = getLaunchWindowSizeByMode(launchMode);
 
@@ -1520,7 +1558,7 @@ function createCardDirectly(url, options = {}) {
           preload: path.join(__dirname, 'preload-card.js'),
           enableWebSQL: false,
           spellcheck: true,
-          backgroundThrottling: false,
+          backgroundThrottling: true,
           enablePreferredSizeMode: true,
           partition: 'persist:cards',
         },
@@ -1659,6 +1697,7 @@ function createCardDirectly(url, options = {}) {
     cardWindow.on('closed', () => {
       clearCardLoadTimeout(cardWindow);
       closeCardBubble(cardId);
+      bubbleMediaStates.delete(cardId);
       cardWindows.delete(cardId);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('card-closed', cardId);
@@ -2134,6 +2173,24 @@ ipcMain.handle('get-card-launch-size-mode', async () => {
   }
 });
 
+ipcMain.handle('set-site-layout-overrides', async (event, overrides) => {
+  try {
+    if (overrides && typeof overrides === 'object' && !Array.isArray(overrides)) {
+      const validModes = new Set(['normal', 'wide', 'fullscreen']);
+      const sanitized = {};
+      for (const [key, value] of Object.entries(overrides)) {
+        if (typeof key === 'string' && validModes.has(String(value || '').toLowerCase())) {
+          sanitized[key.toLowerCase()] = String(value).toLowerCase();
+        }
+      }
+      siteLayoutOverrides = sanitized;
+    }
+    return { success: true, overrides: siteLayoutOverrides };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
 // Article saving handler - forward from readmode to main renderer
 ipcMain.handle('save-article', async (event, articleData) => {
   try {
@@ -2248,9 +2305,9 @@ function createMainWindow() {
   loadPermissionDecisionsFromDisk();
 
   let windowX = 100;
-  let windowY = 20;
-  const CARD_WIDTH = 800;
-  const CARD_HEIGHT = 500;
+  let windowY = 60;
+  const CARD_WIDTH = 1000;
+  const CARD_HEIGHT = 600;
 
   try {
     const { screen } = require('electron');
@@ -2258,7 +2315,7 @@ function createMainWindow() {
     const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
 
     windowX = Math.floor((screenWidth - CARD_WIDTH) / 2);
-    windowY = Math.floor((screenHeight - CARD_HEIGHT) / 2);
+    windowY = Math.max(50, Math.floor((screenHeight - CARD_HEIGHT) / 2));
   } catch (e) {
     console.warn('Could not get screen dimensions, using default position');
   }
@@ -2269,8 +2326,8 @@ function createMainWindow() {
     x: windowX,
     y: windowY,
     icon: APP_ICON_PATH,
-    minWidth: 800,
-    minHeight: 500,
+    minWidth: 860,
+    minHeight: 560,
     show: false, // Don't show until ready - prevents white flash
     backgroundColor: '#1a1a2e', // Match your theme
     webPreferences: {
@@ -2721,7 +2778,7 @@ function setupAddonBlocking() {
 // ========================
 
 // Enhanced create-card handler with beautiful animations
-ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'primary') => {
+ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'primary', launchSizeMode = null) => {
   try {
     const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt']);
     const normalizedTheme = allowedThemes.has(String(themeKey || '').toLowerCase())
@@ -2746,7 +2803,11 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       return { success: false, externalOpened: true, reason: 'auth-url-opened-externally' };
     }
 
-    const launchMode = normalizeCardLaunchSizeMode(currentCardLaunchSizeMode);
+    // Use per-site layout override if provided by renderer, otherwise check main process overrides, otherwise use global default
+    const resolvedMode = launchSizeMode
+      || getSiteLayoutForUrl(targetUrl)
+      || currentCardLaunchSizeMode;
+    const launchMode = normalizeCardLaunchSizeMode(resolvedMode);
     const launchSize = getLaunchWindowSizeByMode(launchMode);
 
     // Calculate center position if not provided
@@ -2790,8 +2851,9 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
         // PERFORMANCE OPTIMIZATIONS:
         enableWebSQL: false,
         spellcheck: true,
-        // Keep card renderers fully responsive for split-screen media playback.
-        backgroundThrottling: false,
+        // Let Chromium throttle background card renderers so hidden cards do not
+        // keep consuming full CPU/GPU while video plays in the active card.
+        backgroundThrottling: true,
         enablePreferredSizeMode: true,
         partition: 'persist:cards',
       },
@@ -2874,6 +2936,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
 
     cardWindow.on('closed', () => {
       closeCardBubble(cardId);
+      bubbleMediaStates.delete(cardId);
       cardWindows.delete(cardId);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('card-closed', cardId);
@@ -3118,6 +3181,56 @@ ipcMain.handle('show-bubble-context-menu', async (event, cardId) => {
   menu.popup({ window: BrowserWindow.fromWebContents(event.sender) });
 });
 
+ipcMain.handle('cycle-windows', async (event, currentCardId) => {
+  const cards = [];
+  for (const [id, win] of cardWindows) {
+    if (win && !win.isDestroyed()) {
+      cards.push({ window: win, cardId: id });
+    }
+  }
+
+  if (cards.length === 0) return { success: true };
+
+  // Single card — cycle to main app instead of looping back to the card
+  if (cards.length === 1) {
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        if (!mainWindow.isVisible()) mainWindow.show();
+        mainWindow.focus();
+      }
+    } catch (e) { }
+    return { success: true };
+  }
+
+  let currentIndex = cards.findIndex(entry => entry.cardId === currentCardId);
+  if (currentIndex === -1) {
+    const senderWin = BrowserWindow.fromWebContents(event.sender);
+    if (senderWin) {
+      currentIndex = cards.findIndex(entry => entry.window === senderWin);
+    }
+  }
+  if (currentIndex === -1) currentIndex = 0;
+
+  const nextIndex = (currentIndex + 1) % cards.length;
+  const target    = cards[nextIndex].window;
+
+  try {
+    if (target.isMinimized()) target.restore();
+    target.show();
+    target.focus();
+    setTimeout(() => {
+      try {
+        if (!target.isDestroyed()) target.webContents.send('card-cycle-arriving');
+      } catch (e) { }
+    }, 40);
+    return { success: true };
+  } catch (e) {
+    console.error('cycle-windows error:', e);
+    return { success: false };
+  }
+});
+
 // Open URL as a bubble (minimized card window)
 ipcMain.handle('open-url-as-bubble', async (event, url, meta = {}) => {
   try {
@@ -3133,13 +3246,12 @@ ipcMain.handle('open-url-as-bubble', async (event, url, meta = {}) => {
 });
 
 // Readmode card - phone-sized reading view
-const READMODE_WIDTH = 430;
-const READMODE_HEIGHT = 620;
+const READMODE_WIDTH = 460;
+const READMODE_HEIGHT = 580;
 const readmodeWindows = new Map(); // readmodeId -> BrowserWindow
 let readmodeIdCounter = 0;
 
-// Open readmode card - creates a phone-sized reading window
-ipcMain.handle('open-readmode-card', async (event, url, title, theme = 'primary') => {
+async function openReadmodeWindow(url, title, theme = 'primary', viewMode = 'article') {
   try {
     const readmodeId = ++readmodeIdCounter;
     
@@ -3219,7 +3331,8 @@ ipcMain.handle('open-readmode-card', async (event, url, title, theme = 'primary'
         readmodeId: String(readmodeId),
         url: encodedUrl,
         title: encodedTitle,
-        theme: theme
+        theme: theme,
+        viewMode: viewMode
       }
     });
 
@@ -3230,6 +3343,75 @@ ipcMain.handle('open-readmode-card', async (event, url, title, theme = 'primary'
     console.error('Error opening readmode card:', error);
     return { success: false, error: error.message };
   }
+}
+
+// Open readmode card - creates a phone-sized reading window
+ipcMain.handle('open-readmode-card', async (event, url, title, theme = 'primary') => {
+  return openReadmodeWindow(url, title, theme, 'article');
+});
+
+ipcMain.handle('pick-readmode-file', async (event) => {
+  try {
+    const owner = BrowserWindow.fromWebContents(event.sender) || mainWindow || undefined;
+    const result = await dialog.showOpenDialog(owner, {
+      properties: ['openFile'],
+      filters: [
+        {
+          name: 'Readable documents',
+          extensions: ['txt', 'md', 'html', 'htm', 'csv', 'json', 'xml', 'log']
+        },
+        {
+          name: 'All files',
+          extensions: ['*']
+        }
+      ]
+    });
+
+    if (result.canceled || !Array.isArray(result.filePaths) || !result.filePaths[0]) {
+      return { success: false, canceled: true };
+    }
+
+    const filePath = result.filePaths[0];
+    return {
+      success: true,
+      canceled: false,
+      filePath,
+      fileUrl: pathToFileURL(filePath).href,
+      title: path.basename(filePath),
+    };
+  } catch (error) {
+    console.error('Error picking readmode file:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('open-readmode-document', async (event, fileUrl, title) => {
+  try {
+    let ext = '';
+    if (fileUrl) {
+      const parsed = new URL(fileUrl);
+      if (parsed.protocol === 'file:') {
+        ext = path.extname(decodeURIComponent(parsed.pathname || '')).toLowerCase();
+      }
+    }
+    if (!ext && title) {
+      ext = path.extname(String(title)).toLowerCase();
+    }
+
+    if (ext === '.pdf') {
+      const owner = BrowserWindow.fromWebContents(event.sender) || mainWindow || undefined;
+      await dialog.showMessageBox(owner, {
+        type: 'info',
+        buttons: ['OK'],
+        title: 'PDF Upload Disabled',
+        message: 'PDF uploads are currently disabled in readmode.',
+        detail: 'Readable document uploads currently support text-based formats. EPUB support can be added later with a dedicated reader pipeline.'
+      });
+      return { success: false, unsupported: true, extension: ext };
+    }
+  } catch (e) { }
+
+  return openReadmodeWindow(fileUrl, title || 'Uploaded Document', 'primary', 'article');
 });
 
 ipcMain.handle('open-articles-recap', async () => {
@@ -3503,6 +3685,21 @@ ipcMain.on('web-notification', (event, payload) => {
     }
   } catch (e) {
     console.error('Error handling web notification:', e);
+  }
+});
+
+ipcMain.on('card-media-state', (event, payload) => {
+  try {
+    const normalized = payload && typeof payload === 'object' ? payload : {};
+    const cardId = Number(normalized.cardId);
+    if (!Number.isFinite(cardId)) return;
+    updateBubbleMediaState(cardId, {
+      isPlaying: !!normalized.isPlaying,
+      isVideo: !!normalized.isVideo,
+      isLive: !!normalized.isLive,
+    });
+  } catch (e) {
+    console.error('Error handling card media state:', e);
   }
 });
 

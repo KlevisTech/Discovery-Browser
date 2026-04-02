@@ -782,6 +782,51 @@
           render();
         });
       });
+
+      // Add context menu for highlight chips
+      document.querySelectorAll('.recap-highlight-chip').forEach((chip) => {
+        chip.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          const highlightText = chip.querySelector('.highlight-text')?.textContent || '';
+          const ctxMenu = document.createElement('div');
+          ctxMenu.style.cssText = `position:fixed;top:${e.clientY}px;left:${e.clientX}px;background:#fff;border:1px solid rgba(0,0,0,0.15);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:10001;min-width:180px;overflow:hidden;`;
+          const copyOpt = document.createElement('button');
+          copyOpt.textContent = '📋 Copy';
+          copyOpt.style.cssText = `display:block;width:100%;padding:10px 14px;border:none;background:transparent;color:#1e2937;text-align:left;cursor:pointer;font-size:13px;`;
+          copyOpt.addEventListener('mouseenter', () => copyOpt.style.background = 'rgba(47,111,237,0.1)');
+          copyOpt.addEventListener('mouseleave', () => copyOpt.style.background = 'transparent');
+          copyOpt.addEventListener('click', async () => {
+            document.body.removeChild(ctxMenu);
+            try { await navigator.clipboard.writeText(highlightText); } catch(err) {}
+          });
+          ctxMenu.appendChild(copyOpt);
+          const searchOpt = document.createElement('button');
+          searchOpt.textContent = '🔍 Search with Google';
+          searchOpt.style.cssText = `display:block;width:100%;padding:10px 14px;border:none;background:transparent;color:#1e2937;text-align:left;cursor:pointer;font-size:13px;`;
+          searchOpt.addEventListener('mouseenter', () => searchOpt.style.background = 'rgba(47,111,237,0.1)');
+          searchOpt.addEventListener('mouseleave', () => searchOpt.style.background = 'transparent');
+          searchOpt.addEventListener('click', async () => {
+            document.body.removeChild(ctxMenu);
+            try { await window.recapAPI.googleSearch(highlightText); } catch(err) {}
+          });
+          ctxMenu.appendChild(searchOpt);
+          const chatgptOpt = document.createElement('button');
+          chatgptOpt.textContent = '🤖 Ask ChatGPT';
+          chatgptOpt.style.cssText = `display:block;width:100%;padding:10px 14px;border:none;background:transparent;color:#1e2937;text-align:left;cursor:pointer;font-size:13px;`;
+          chatgptOpt.addEventListener('mouseenter', () => chatgptOpt.style.background = 'rgba(47,111,237,0.1)');
+          chatgptOpt.addEventListener('mouseleave', () => chatgptOpt.style.background = 'transparent');
+          chatgptOpt.addEventListener('click', async () => {
+            document.body.removeChild(ctxMenu);
+            try { await navigator.clipboard.writeText(highlightText); window.recapAPI.openChatGPT(); } catch(err) {}
+          });
+          ctxMenu.appendChild(chatgptOpt);
+          document.body.appendChild(ctxMenu);
+          const closeMenu = (e) => {
+            if (!ctxMenu.contains(e.target)) { if (document.body.contains(ctxMenu)) document.body.removeChild(ctxMenu); document.removeEventListener('click', closeMenu); }
+          };
+          setTimeout(() => document.addEventListener('click', closeMenu), 0);
+        });
+      });
     }
 
     closeBtn.addEventListener('click', () => window.recapAPI.closeWindow());
