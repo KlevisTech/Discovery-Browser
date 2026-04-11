@@ -19,32 +19,10 @@
       box-sizing: border-box;
     }
 
-    body {
+body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       overflow: hidden;
       background: transparent;
-    }
-
-    /* Spring open/close card motion - simplified for GPU */
-    @keyframes springPopIn {
-      0% {
-        transform: scale(0.28) translateY(34px) translateZ(0);
-        opacity: 0;
-      }
-
-      58% {
-        transform: scale(1.08) translateY(-6px) translateZ(0);
-        opacity: 1;
-      }
-
-      78% {
-        transform: scale(0.96) translateY(2px) translateZ(0);
-      }
-
-      100% {
-        transform: scale(1) translateY(0) translateZ(0);
-        opacity: 1;
-      }
     }
 
     @keyframes springPopOut {
@@ -64,6 +42,90 @@
       }
     }
 
+    @keyframes zoomInExpand {
+      0% {
+        transform: scale(0.7) translateZ(0);
+        opacity: 0;
+      }
+      55% {
+        transform: scale(1.06) translateZ(0);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(1) translateZ(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes tvCloseCollapse {
+      0% {
+        transform: scaleY(1) scaleX(1) translateZ(0);
+        clip-path: inset(0 0 0 0 round 24px);
+        opacity: 1;
+        filter: brightness(1);
+      }
+
+      24% {
+        transform: scaleY(0.84) scaleX(0.99) translateZ(0);
+        clip-path: inset(8% 0 8% 0 round 24px);
+        opacity: 1;
+        filter: brightness(1.04);
+      }
+
+      52% {
+        transform: scaleY(0.56) scaleX(1.01) translateZ(0);
+        clip-path: inset(19% 0 19% 0 round 28px);
+        opacity: 1;
+        filter: brightness(1.12);
+      }
+
+      76% {
+        transform: scaleY(0.08) scaleX(1.02) translateZ(0);
+        clip-path: inset(46.4% 0 46.4% 0 round 999px);
+        opacity: 1;
+        filter: brightness(1.3);
+      }
+
+      100% {
+        transform: scaleY(0.015) scaleX(0.42) translateZ(0);
+        clip-path: inset(49.3% 6% 49.3% 6% round 999px);
+        opacity: 0;
+        filter: brightness(1.82);
+      }
+    }
+
+    @keyframes tvCloseFlash {
+      0% {
+        opacity: 0;
+        transform: translateY(-50%) scaleX(0.15) translateZ(0);
+      }
+
+      52% {
+        opacity: 0.88;
+        transform: translateY(-50%) scaleX(1) translateZ(0);
+      }
+
+      76% {
+        opacity: 0.96;
+        transform: translateY(-50%) scaleX(1.04) translateZ(0);
+      }
+
+      84% {
+        opacity: 0.28;
+        transform: translateY(-50%) scaleX(0.94) translateZ(0);
+      }
+
+      91% {
+        opacity: 1;
+        transform: translateY(-50%) scaleX(1.01) translateZ(0);
+      }
+
+      100% {
+        opacity: 0;
+        transform: translateY(-50%) scaleX(0.42) translateZ(0);
+      }
+    }
+
     @keyframes shimmer {
       0% {
         background-position: -1000px 0;
@@ -79,20 +141,80 @@
       height: 100vh;
       display: flex;
       flex-direction: column;
-      background: linear-gradient(135deg, #667eea 0%, #f093fb 100%);
+      --launch-signal-core: rgba(255, 255, 255, 0.2);
+      --launch-signal-glow: rgba(255, 255, 255, 0.12);
+      --launch-signal-shadow: rgba(0, 0, 0, 0.18);
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+      border: 6px solid rgba(255, 255, 255, 0.35);
       border-radius: 24px;
       box-shadow:
         0 25px 50px rgba(0, 0, 0, 0.3),
         0 0 0 1px rgba(255, 255, 255, 0.1) inset,
         0 50px 100px rgba(102, 126, 234, 0.3);
       overflow: hidden;
-      /* Simplified animation duration for GPU */
-      animation: springPopIn 400ms cubic-bezier(0.19, 1.2, 0.32, 1) both;
       position: relative;
       transform-origin: 50% 50%;
-      will-change: transform, opacity;
+      will-change: transform, opacity, clip-path, filter;
       transform: translateZ(0);
       backface-visibility: hidden;
+    }
+
+    /* Theme-specific card window backgrounds and borders */
+    .card-window.theme-sunset,
+    .card-window.theme-alt {
+      --launch-signal-core: rgba(255, 170, 205, 0.24);
+      --launch-signal-glow: rgba(255, 100, 154, 0.16);
+      --launch-signal-shadow: rgba(70, 10, 30, 0.24);
+      background: linear-gradient(135deg, #ff5096 0%, #ff4646 50%, #ff8a65 100%);
+      border-color: rgba(255, 200, 220, 0.6);
+    }
+
+    .card-window.theme-ocean {
+      --launch-signal-core: rgba(190, 240, 255, 0.24);
+      --launch-signal-glow: rgba(64, 190, 255, 0.16);
+      --launch-signal-shadow: rgba(8, 30, 70, 0.24);
+      background: linear-gradient(135deg, #00c6ff 0%, #0072ff 50%, #00d4ff 100%);
+      border-color: rgba(150, 220, 255, 0.6);
+    }
+
+    .card-window.theme-emerald {
+      --launch-signal-core: rgba(190, 255, 226, 0.24);
+      --launch-signal-glow: rgba(70, 235, 170, 0.16);
+      --launch-signal-shadow: rgba(8, 45, 34, 0.24);
+      background: linear-gradient(135deg, #119988 0%, #38bf7d 50%, #42e695 100%);
+      border-color: rgba(120, 230, 180, 0.6);
+    }
+
+    .card-window.theme-amber {
+      --launch-signal-core: rgba(255, 226, 178, 0.24);
+      --launch-signal-glow: rgba(255, 149, 84, 0.16);
+      --launch-signal-shadow: rgba(72, 28, 8, 0.24);
+      background: linear-gradient(135deg, #ff9933 0%, #ff5e3a 50%, #ffb347 100%);
+      border-color: rgba(255, 200, 150, 0.6);
+    }
+
+    .card-window.theme-midnight {
+      --launch-signal-core: rgba(180, 192, 220, 0.18);
+      --launch-signal-glow: rgba(120, 136, 184, 0.14);
+      --launch-signal-shadow: rgba(0, 0, 0, 0.34);
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
+      border-color: rgba(120, 130, 160, 0.6);
+    }
+
+    .card-window.theme-cocoa {
+      --launch-signal-core: rgba(255, 221, 196, 0.22);
+      --launch-signal-glow: rgba(205, 150, 108, 0.15);
+      --launch-signal-shadow: rgba(42, 20, 8, 0.24);
+      background: linear-gradient(135deg, #6e442c 0%, #a67b5b 50%, #8b5a3c 100%);
+      border-color: rgba(200, 160, 120, 0.6);
+    }
+
+    .card-window.theme-frost {
+      --launch-signal-core: rgba(255, 255, 255, 0.28);
+      --launch-signal-glow: rgba(218, 232, 244, 0.16);
+      --launch-signal-shadow: rgba(96, 112, 126, 0.16);
+      background: linear-gradient(135deg, #c8d2dc 0%, #e6ebf0 55%, #d7e0e8 100%);
+      border-color: rgba(240, 247, 255, 0.78);
     }
 
     /* Shimmer effect on card appearance */
@@ -107,21 +229,75 @@
           transparent,
           rgba(255, 255, 255, 0.3),
           transparent);
-      animation: shimmer 1.5s ease-in-out;
+      animation: shimmer 1.18s ease-out;
       pointer-events: none;
       z-index: 1000;
     }
 
+.card-window::after {
+      content: '';
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      top: 50%;
+      height: 2px;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 1001;
+      transform: translateY(-50%) scaleX(0.15) translateZ(0);
+      transform-origin: center;
+      background: linear-gradient(90deg,
+          rgba(255, 255, 255, 0),
+          rgba(255, 255, 255, 0.98) 18%,
+          rgba(255, 255, 255, 0.98) 82%,
+          rgba(255, 255, 255, 0));
+      box-shadow:
+        0 0 14px rgba(255, 255, 255, 0.95),
+        0 0 32px rgba(255, 255, 255, 0.7);
+    }
+
     .card-window.is-minimizing {
       /* Simplified animation for GPU */
-      animation: springPopOut 200ms ease-out forwards;
+      animation: springPopOut 260ms ease-out forwards;
       pointer-events: none;
     }
 
-    .card-window.is-restoring {
-      /* Simplified animation for GPU */
-      animation: springPopIn 350ms cubic-bezier(0.19, 1.2, 0.32, 1) both;
+.card-window.is-opening-tv {
+      animation: zoomInExpand 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      pointer-events: none;
+    }
+
+    .card-window.is-opening-tv::before,
+    .card-window.is-opening-tv::after {
+      opacity: 0;
+      animation: none;
+    }
+
+    .card-window.is-closing-tv {
+      animation: tvCloseCollapse 520ms cubic-bezier(0.2, 0.72, 0.18, 1) forwards;
+      pointer-events: none;
+      transform-origin: center;
+      will-change: transform, opacity, clip-path, filter;
+    }
+
+    .card-window.is-closing-tv::before {
+      opacity: 0;
+      animation: none;
+    }
+
+    .card-window.is-closing-tv::after {
+      animation: tvCloseFlash 520ms ease-out forwards;
+    }
+
+.card-window.is-restoring {
+      animation: zoomInExpand 250ms cubic-bezier(0.22, 1, 0.36, 1) both;
       pointer-events: auto;
+    }
+
+    .card-window.is-restoring::before,
+    .card-window.is-restoring::after {
+      opacity: 0;
+      animation: none;
     }
 
     .card-titlebar {
@@ -171,6 +347,11 @@
     .theme-cocoa .card-titlebar {
       background: linear-gradient(135deg, rgba(76, 42, 24, 0.92), rgba(132, 78, 46, 0.88));
       border-bottom: 2px solid rgba(255, 220, 190, 0.22);
+    }
+
+    .theme-frost .card-titlebar {
+      background: linear-gradient(135deg, rgba(235, 242, 248, 0.82), rgba(205, 218, 229, 0.72));
+      border-bottom: 2px solid rgba(255, 255, 255, 0.42);
     }
 
     .card-titlebar:active {
@@ -238,10 +419,21 @@
       background: rgba(255, 200, 50, 0.7);
     }
 
-    /* Bookmark button - white/transparent */
+    /* Bookmark button - dark blue */
     .card-button.bookmark-btn {
-      background: rgba(255, 255, 255, 0.2);
+      background: rgba(30, 90, 160, 0.8);
       border: 1px solid rgba(255, 255, 255, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .card-button.bookmark-btn img {
+      width: 14px;
+      height: 14px;
+      pointer-events: none;
+      object-fit: contain;
     }
 
     .card-button.bookmark-btn.bookmarked {
@@ -260,15 +452,15 @@
       box-shadow: 0 4px 12px rgba(50, 130, 200, 0.6);
     }
 
-    /* Cycle button - teal/green */
+    /* Cycle button - dark blue (matching readmode) */
     .card-button.cycle-btn {
-      background: rgba(40, 160, 120, 0.8);
+      background: rgba(30, 90, 160, 0.8);
     }
 
     .card-button.cycle-btn:hover {
-      background: rgba(50, 200, 150, 0.95);
+      background: rgba(50, 130, 200, 0.95);
       transform: scale(1.15);
-      box-shadow: 0 4px 12px rgba(50, 200, 150, 0.6);
+      box-shadow: 0 4px 12px rgba(50, 130, 200, 0.6);
     }
 
     .card-button:hover {
@@ -289,9 +481,9 @@
     }
 
     .card-button.bookmark-btn:hover {
-      background: rgba(255, 255, 255, 0.35);
+      background: rgba(50, 130, 200, 0.95);
       transform: scale(1.15);
-      box-shadow: 0 4px 12px rgba(255, 255, 255, 0.4);
+      box-shadow: 0 4px 12px rgba(50, 130, 200, 0.6);
     }
 
     .card-button.bookmark-btn.bookmarked:hover {
@@ -412,20 +604,193 @@
       color: rgba(255, 255, 255, 0.5);
     }
 
-    .url-input:focus {
+    .url-input:focus,
+    .url-input.active {
       outline: none;
       background: rgba(255, 255, 255, 0.2);
       border-color: rgba(255, 255, 255, 0.4);
-      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1), 0 0 30px rgba(255, 107, 178, 0.6), 0 0 30px rgba(67, 97, 238, 0.6), 0 0 30px rgba(255, 77, 77, 0.6);
       transform: scale(1.02) translateZ(0);
     }
 
     .card-content {
       flex: 1;
       overflow: hidden;
-      background: white;
+      background: #ffffff;
       position: relative;
-      animation: contentFadeIn 0.6s ease 0.3s backwards;
+      isolation: isolate;
+      animation: contentFadeIn 0.46s ease 0.14s backwards;
+    }
+
+    .card-content.is-awaiting-first-content {
+      background: inherit;
+    }
+
+    .card-launch-fill {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      display: none;
+      pointer-events: none;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 48%, var(--launch-signal-core) 0%, transparent 44%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 24%, transparent 76%, rgba(0, 0, 0, 0.12)),
+        inherit;
+      isolation: isolate;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        inset 0 -20px 40px rgba(0, 0, 0, 0.08);
+    }
+
+    .card-launch-fill.active {
+      display: block;
+    }
+
+    .card-launch-fill::before,
+    .card-launch-fill::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .card-launch-fill::before {
+      opacity: 0.95;
+      background:
+        repeating-linear-gradient(0deg,
+          transparent 0 6px,
+          rgba(255, 255, 255, 0.04) 6px 7px),
+        linear-gradient(90deg,
+          transparent 0 6%,
+          rgba(255, 255, 255, 0.08) 6% 10%,
+          transparent 10% 18%,
+          rgba(255, 255, 255, 0.05) 18% 24%,
+          transparent 24% 100%);
+      animation: signalScanlines 220ms steps(6) infinite;
+    }
+
+    .card-launch-fill::after {
+      inset: 12px;
+      opacity: 0.86;
+      background:
+        radial-gradient(circle at 22% 32%, var(--launch-signal-core) 0 8%, transparent 8% 100%),
+        radial-gradient(circle at 70% 24%, var(--launch-signal-glow) 0 6%, transparent 6% 100%),
+        radial-gradient(circle at 54% 72%, var(--launch-signal-core) 0 7%, transparent 7% 100%),
+        linear-gradient(90deg,
+          transparent 0 4%,
+          var(--launch-signal-glow) 4% 7%,
+          transparent 7% 12%,
+          var(--launch-signal-core) 12% 15%,
+          transparent 15% 22%,
+          var(--launch-signal-glow) 22% 26%,
+          transparent 26% 33%,
+          var(--launch-signal-core) 33% 37%,
+          transparent 37% 45%,
+          var(--launch-signal-glow) 45% 48%,
+          transparent 48% 100%),
+        linear-gradient(180deg,
+          transparent 0 5%,
+          var(--launch-signal-shadow) 5% 8%,
+          transparent 8% 16%,
+          var(--launch-signal-core) 16% 20%,
+          transparent 20% 29%,
+          var(--launch-signal-glow) 29% 33%,
+          transparent 33% 42%,
+          var(--launch-signal-shadow) 42% 45%,
+          transparent 45% 100%);
+      background-size:
+        17% 22%,
+        21% 18%,
+        19% 20%,
+        56px 100%,
+        100% 48px;
+      background-position:
+        0 0,
+        100% 0,
+        50% 100%,
+        0 0,
+        0 0;
+      image-rendering: pixelated;
+      filter: saturate(1.12) contrast(1.04);
+      animation: signalPixels 900ms steps(10) infinite;
+    }
+
+    @keyframes signalScanlines {
+      0% {
+        transform: translateY(0) translateZ(0);
+        opacity: 0.82;
+      }
+
+      50% {
+        transform: translateY(1px) translateZ(0);
+        opacity: 0.96;
+      }
+
+      100% {
+        transform: translateY(3px) translateZ(0);
+        opacity: 0.84;
+      }
+    }
+
+    @keyframes signalPixels {
+      0% {
+        transform: translate3d(0, 0, 0) scale(1);
+        background-position:
+          0 0,
+          100% 0,
+          50% 100%,
+          0 0,
+          0 0;
+      }
+
+      25% {
+        transform: translate3d(1px, -1px, 0) scale(1.01);
+        background-position:
+          6px -4px,
+          calc(100% - 8px) 2px,
+          calc(50% + 2px) calc(100% - 6px),
+          8px 0,
+          0 10px;
+      }
+
+      50% {
+        transform: translate3d(-1px, 1px, 0) scale(1.015);
+        background-position:
+          -4px 5px,
+          calc(100% - 2px) -6px,
+          calc(50% - 3px) calc(100% - 2px),
+          18px 0,
+          0 22px;
+      }
+
+      75% {
+        transform: translate3d(2px, 0, 0) scale(1.005);
+        background-position:
+          10px 2px,
+          calc(100% - 14px) 4px,
+          calc(50% + 5px) calc(100% - 8px),
+          26px 0,
+          0 34px;
+      }
+
+      100% {
+        transform: translate3d(0, 0, 0) scale(1);
+        background-position:
+          0 0,
+          100% 0,
+          50% 100%,
+          36px 0,
+          0 46px;
+      }
+    }
+
+    .card-content.is-awaiting-first-content .split-container {
+      opacity: 0;
+    }
+
+    .card-content.is-content-visible .split-container {
+      opacity: 1;
     }
 
     .security-load-notice {
@@ -542,7 +907,7 @@
 
     webview {
       /* Simplified animation for GPU */
-      animation: webviewFadeIn 0.4s ease-out 0.2s backwards;
+      animation: webviewFadeIn 0.36s ease-out 0.14s backwards;
     }
 
     @keyframes webviewFadeIn {
@@ -636,6 +1001,15 @@
       filter: drop-shadow(0 2px 6px rgba(135, 86, 48, 0.52));
     }
 
+    .theme-frost .loading-wave {
+      background:
+        radial-gradient(circle at 12% 50%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.0) 55%) 0 0 / 120px 100%,
+        radial-gradient(circle at 45% 50%, rgba(220, 232, 242, 0.88) 0%, rgba(220, 232, 242, 0.0) 55%) 0 0 / 140px 100%,
+        radial-gradient(circle at 72% 50%, rgba(196, 214, 228, 0.88) 0%, rgba(196, 214, 228, 0.0) 55%) 0 0 / 160px 100%,
+        linear-gradient(90deg, rgba(200, 210, 220, 0.0), rgba(244, 248, 252, 0.82), rgba(200, 210, 220, 0.0)) 0 0 / 220px 100%;
+      filter: drop-shadow(0 2px 6px rgba(200, 210, 220, 0.46));
+    }
+
     .loading-wave.active {
       opacity: 1;
       transform: translateY(0) translateZ(0);
@@ -678,48 +1052,45 @@
     }
 
     .audio-visualizer {
-      height: 24px;
+      height: 20px;
       display: flex;
       align-items: flex-end;
       justify-content: center;
-      gap: 3px;
-      padding: 4px 14px;
-      min-width: 68px;
-      border-radius: 0 0 7px 7px;
-      background: rgba(0, 0, 0, 0.72);
-      border: 1px solid rgba(255, 255, 255, 0.16);
+      gap: 2px;
+      padding: 3px 10px;
+      min-width: 50px;
+      border-radius: 0 0 5px 5px;
+      background: rgba(0, 0, 0, 0.75);
+      border: 1px solid rgba(255, 111, 240, 0.3);
       border-top: none;
-      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 4px 12px rgba(255, 111, 240, 0.15);
       cursor: pointer;
       width: auto;
       align-self: center;
-      /* Simplified transition for GPU */
-      transition: transform 0.15s ease, background 0.15s ease;
+      transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
       -webkit-app-region: no-drag;
-      /* GPU acceleration */
       transform: translateZ(0);
       will-change: transform;
     }
 
     .audio-visualizer:hover,
     .media-hover-control.panel-open .audio-visualizer {
-      background: rgba(10, 20, 30, 0.88);
-      border-color: rgba(124, 247, 255, 0.5);
-      box-shadow: 0 10px 22px rgba(10, 20, 30, 0.55);
+      background: rgba(10, 20, 30, 0.82);
+      border-color: rgba(255, 111, 240, 0.5);
+      box-shadow: 0 6px 16px rgba(255, 111, 240, 0.25);
     }
 
     .audio-visualizer span {
       width: 3px;
-      height: 12px;
+      height: 10px;
       border-radius: 2px;
-      background: linear-gradient(180deg, #7cf7ff 0%, #7b8bff 50%, #ff6ff0 100%);
-      /* Simplified animation for GPU - reduced complexity */
-      animation: audioPulse 1.2s ease-in-out infinite;
+      background: linear-gradient(180deg, #ff6ff0 0%, #7cf7ff 50%, #ff6ff0 100%);
+      animation: audioPulse 2s ease-in-out infinite;
       transform-origin: bottom;
-      /* GPU acceleration - force hardware acceleration */
       transform: translateZ(0);
       will-change: transform, opacity;
       animation-play-state: paused;
+      box-shadow: 0 0 4px rgba(255, 111, 240, 0.5), 0 0 8px rgba(124, 247, 255, 0.3);
     }
 
     .audio-visualizer.playing span {
@@ -731,29 +1102,30 @@
       height: 5px;
       border-radius: 999px;
       animation-name: audioPulseDot;
-      animation-duration: 1.05s;
-      box-shadow: 0 0 8px rgba(124, 247, 255, 0.35);
+      animation-duration: 1.5s;
+      box-shadow: 0 0 6px rgba(255, 111, 240, 0.4), 0 0 10px rgba(124, 247, 255, 0.3);
     }
 
     .audio-visualizer.viz-style-ladder span:nth-child(1) {
-      height: 9px;
-      animation-duration: 0.95s;
+      height: 7px;
+      animation-duration: 1.4s;
     }
 
     .audio-visualizer.viz-style-ladder span:nth-child(2) {
-      height: 14px;
-      animation-duration: 1.25s;
+      height: 10px;
+      animation-duration: 1.6s;
     }
 
     .audio-visualizer.viz-style-ladder span:nth-child(3) {
-      height: 18px;
-      animation-duration: 1.05s;
+      height: 13px;
+      animation-duration: 1.4s;
     }
 
     .audio-visualizer.viz-style-ladder span {
-      width: 4px;
+      width: 3px;
       border-radius: 999px;
       animation-name: audioPulseTall;
+      box-shadow: 0 0 4px rgba(255, 111, 240, 0.4);
     }
 
     .audio-visualizer.viz-style-orbit {
@@ -761,33 +1133,34 @@
     }
 
     .audio-visualizer.viz-style-orbit span {
-      width: 6px;
-      height: 6px;
+      width: 5px;
+      height: 5px;
       border-radius: 999px;
       animation-name: audioOrbit;
-      animation-duration: 1.4s;
+      animation-duration: 2s;
       animation-timing-function: ease-in-out;
-      box-shadow: 0 0 10px rgba(124, 247, 255, 0.3);
+      box-shadow: 0 0 8px rgba(255, 111, 240, 0.4), 0 0 12px rgba(124, 247, 255, 0.3);
     }
 
     .audio-visualizer.video-mode {
-      background: rgba(0, 0, 0, 0.5);
-      border-color: rgba(255, 255, 255, 0.12);
-      box-shadow: none;
+      background: rgba(0, 0, 0, 0.65);
+      border-color: rgba(255, 111, 240, 0.25);
+      box-shadow: 0 4px 10px rgba(255, 111, 240, 0.1);
     }
 
     .audio-visualizer.video-mode:hover,
     .media-hover-control.video-mode.panel-open .audio-visualizer {
-      background: rgba(0, 0, 0, 0.62);
-      border-color: rgba(180, 220, 255, 0.35);
-      box-shadow: none;
+      background: rgba(0, 0, 0, 0.75);
+      border-color: rgba(255, 111, 240, 0.45);
+      box-shadow: 0 6px 14px rgba(255, 111, 240, 0.2);
     }
 
     .audio-visualizer.video-mode span {
-      background: rgba(180, 220, 255, 0.9);
+      background: linear-gradient(180deg, #ff6ff0 0%, #8cb4ff 100%);
       animation-name: audioPulseLite;
-      animation-duration: 1.8s;
-      animation-timing-function: steps(2, end);
+      animation-duration: 2s;
+      animation-timing-function: ease-in-out;
+      box-shadow: 0 0 5px rgba(255, 111, 240, 0.4), 0 0 8px rgba(140, 180, 255, 0.3);
     }
 
     .audio-visualizer span:nth-child(2) {
@@ -901,9 +1274,8 @@
 
       0%,
       100% {
-        /* Use transform: scaleY which is GPU-accelerated */
         transform: scaleY(0.4) translateZ(0);
-        opacity: 0.55;
+        opacity: 0.6;
       }
 
       50% {
@@ -916,13 +1288,13 @@
 
       0%,
       100% {
-        transform: scaleY(0.72) translateZ(0);
-        opacity: 0.75;
+        transform: scaleY(0.7) translateZ(0);
+        opacity: 0.7;
       }
 
       50% {
-        transform: scaleY(0.92) translateZ(0);
-        opacity: 0.92;
+        transform: scaleY(1) translateZ(0);
+        opacity: 1;
       }
     }
 
@@ -930,12 +1302,12 @@
 
       0%,
       100% {
-        transform: translateY(3px) scale(0.85) translateZ(0);
-        opacity: 0.55;
+        transform: translateY(2px) scale(0.85) translateZ(0);
+        opacity: 0.6;
       }
 
       50% {
-        transform: translateY(-2px) scale(1.6) translateZ(0);
+        transform: translateY(-1px) scale(1.3) translateZ(0);
         opacity: 1;
       }
     }
@@ -944,18 +1316,13 @@
 
       0%,
       100% {
-        transform: scaleY(0.38) translateZ(0);
-        opacity: 0.55;
+        transform: scaleY(0.4) translateZ(0);
+        opacity: 0.6;
       }
 
-      35% {
-        transform: scaleY(1.2) translateZ(0);
+      50% {
+        transform: scaleY(1) translateZ(0);
         opacity: 1;
-      }
-
-      70% {
-        transform: scaleY(0.72) translateZ(0);
-        opacity: 0.82;
       }
     }
 
@@ -967,29 +1334,23 @@
         opacity: 0.6;
       }
 
-      33% {
-        transform: translateY(-5px) scale(1.15) translateZ(0);
+      50% {
+        transform: translateY(-3px) scale(1.1) translateZ(0);
         opacity: 1;
       }
-
-      66% {
-        transform: translateY(4px) scale(0.8) translateZ(0);
-        opacity: 0.7;
-      }
     }
 
-    /* Reduce animation overhead when visualizer is not visible */
-    @media (prefers-reduced-motion: reduce) {
-      .audio-visualizer span {
-        animation: none;
-      }
-    }
+    /* Full quality visualizer - always render animations */
+    /* Note: Reduced motion disabled to ensure visualizer shows at full glory */
 
     .split-container {
       width: 100%;
       height: 100%;
       display: flex;
       position: relative;
+      z-index: 1;
+      opacity: 1;
+      transition: opacity 180ms ease;
     }
 
     .split-pane {
@@ -1042,6 +1403,14 @@
       color: white;
       font-size: 11px;
       outline: none;
+      transition: box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .split-url-input:focus,
+    .split-url-input.active {
+      border-color: rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.12);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1), 0 0 30px rgba(255, 107, 178, 0.6), 0 0 30px rgba(67, 97, 238, 0.6), 0 0 30px rgba(255, 77, 77, 0.6);
     }
 
     .split-go-btn {
@@ -1133,7 +1502,7 @@
 </head>
 
 <body>
-  <div class="card-window">
+  <div class="card-window is-opening-tv">
     <!-- Titlebar with navigation and close button -->
     <div class="card-titlebar">
       <div style="display:flex; align-items:center; gap:8px; -webkit-app-region: no-drag;">
@@ -1144,7 +1513,7 @@
         <button class="card-button size-btn" id="wide-btn" title="Wide View (1000px)">⇔</button>
         <button class="card-button size-btn" id="fullscreen-btn" title="Toggle Fullscreen">⛶</button>
         <button class="card-button minimize-btn" id="minimize-btn" title="Minimize">−</button>
-        <button class="card-button bookmark-btn" id="bookmark-btn" title="Bookmark">🔖</button>
+        <button class="card-button bookmark-btn" id="bookmark-btn" title="Bookmark"><img src="../assets/bookmark.png" alt="Bookmark" style="width:14px; height:14px; pointer-events:none;" draggable="false"></button>
         <button class="card-button readmode-btn" id="readmode-btn" title="Read Mode">📖</button>
         <button class="card-button cycle-btn" id="cycle-btn" title="Cycle Windows"><img src="../assets/cycle.png" alt="Cycle" style="width:16px; height:16px; pointer-events:none;" draggable="false"></button>
         <button class="card-button" id="split-btn" title="Split Screen">
@@ -1205,7 +1574,8 @@
     </div>
 
     <!-- Content area: use webview for full site navigation -->
-    <div class="card-content">
+    <div class="card-content is-awaiting-first-content" id="card-content">
+      <div class="card-launch-fill active" id="card-launch-fill" aria-hidden="true"></div>
       <div class="split-container" id="split-container">
         <div class="split-pane split-pane-left">
           <webview id="card-webview" style="width:100%; height:100%;" partition="persist:webview" allowpopups preload=""
@@ -1246,7 +1616,7 @@
     // Apply theme
     const cardWindowEl = document.querySelector('.card-window');
     if (cardWindowEl) {
-      const allThemeClasses = ['theme-alt', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa'];
+      const allThemeClasses = ['theme-alt', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-frost'];
       allThemeClasses.forEach((cls) => cardWindowEl.classList.remove(cls));
       const normalizedTheme = theme === 'alt' ? 'sunset' : theme;
       if (normalizedTheme !== 'primary') {
@@ -1278,7 +1648,8 @@
     const splitGoBtn = document.getElementById('split-go-btn');
     const splitWebview = document.getElementById('split-webview');
     const titlebar = document.querySelector('.card-titlebar');
-    const cardContent = document.querySelector('.card-content');
+    const cardContent = document.getElementById('card-content');
+    const cardLaunchFill = document.getElementById('card-launch-fill');
     const loadingWave = document.getElementById('loading-wave');
     const mediaHoverControl = document.getElementById('media-hover-control');
     const audioVisualizer = document.getElementById('audio-visualizer');
@@ -1325,13 +1696,16 @@
     let mediaRemainingIsPlaying = false;
     let lastBubbleMediaSignature = '';
     let mediaPanelOpen = false;
+    const MEDIA_START_GRACE_MS = 3500;
     const mediaPlayingState = new Map();
     const recentMediaStartAt = new WeakMap();
     const mediaScriptPending = new WeakMap();
+    let mediaSyncDeferredTimer = null;
     let securityLoadNoticeEl = null;
     let networkRecoveryWatcher = null;
     window._networkErrorActive = false;
     let isMinimizingCard = false;
+    let isClosingCard = false;
     function waitForCardAnimationEnd(el, expectedName, fallbackMs) {
       return new Promise((resolve) => {
         if (!el) {
@@ -1403,6 +1777,17 @@
       }
     }
 
+    function setLaunchFillVisible(isActive) {
+      if (!cardLaunchFill) return;
+      cardLaunchFill.classList.toggle('active', !!isActive);
+    }
+
+    function setCardContentVisible(isVisible) {
+      if (!cardContent) return;
+      cardContent.classList.toggle('is-awaiting-first-content', !isVisible);
+      cardContent.classList.toggle('is-content-visible', !!isVisible);
+    }
+
     function clearMainFirstContentFallback() {
       if (!mainFirstContentFallbackTimer) return;
       clearTimeout(mainFirstContentFallbackTimer);
@@ -1414,19 +1799,21 @@
       hideSecurityNoticeWhenAppropriate();
       clearMainLoadGuard();
       clearMainFirstContentFallback();
+      setLaunchFillVisible(false);
+      setCardContentVisible(true);
       if (!loadingWaveVisible) return;
       setTimeout(() => setLoadingWave(false), Math.max(0, Number(delayMs) || 0));
     }
 
     function scheduleMainFirstContentFallback() {
       clearMainFirstContentFallback();
-      // Startup can miss the earliest dom-ready callback on some pages.
-      // Use a short fallback so we don't keep the wave until full stop-loading.
+      // Some pages never emit a clean finish event.
+      // Keep the CRT static up longer, then fall back if the page still hasn't settled.
       mainFirstContentFallbackTimer = setTimeout(() => {
         if (!isMainNavigationLoading || firstContentSeenForMainNav) return;
         firstContentSeenForMainNav = true;
         hideLoadingWaveOnFirstContent(0);
-      }, 1000);
+      }, 2800);
     }
 
     function ensureSecurityLoadNotice() {
@@ -1600,12 +1987,9 @@
       return value.startsWith('http://') || value.startsWith('https://');
     }
 
-    const LOAD_GUARD_TIMEOUT_MS = 12000; // Reduced to 12 seconds to prevent long hangs with bad internet
-    const LOAD_ABORT_TIMEOUT_MS = 20000; // Force abort after 20 seconds of stalled loading
+    const LOAD_GUARD_TIMEOUT_MS = 20000; // Give heavy pages like YouTube more time before surfacing a slow-load notice
     let mainLoadGuardTimer = null;
     let splitLoadGuardTimer = null;
-    let mainAbortTimer = null;
-    let splitAbortTimer = null;
     let isMainNavigationLoading = false;
     let isSplitNavigationLoading = false;
 
@@ -1619,18 +2003,6 @@
       if (!splitLoadGuardTimer) return;
       clearTimeout(splitLoadGuardTimer);
       splitLoadGuardTimer = null;
-    }
-
-    function clearMainAbortTimer() {
-      if (!mainAbortTimer) return;
-      clearTimeout(mainAbortTimer);
-      mainAbortTimer = null;
-    }
-
-    function clearSplitAbortTimer() {
-      if (!splitAbortTimer) return;
-      clearTimeout(splitAbortTimer);
-      splitAbortTimer = null;
     }
 
     async function handleStalledLoad(targetWebview, scopeLabel) {
@@ -1659,34 +2031,9 @@
       if (loadingWaveVisible) {
         setLoadingWave(false);
       }
+      setLaunchFillVisible(false);
+      setCardContentVisible(true);
       pauseMediaSyncForFailure();
-
-      // Schedule force-abort if still loading after showing notice
-      if (isSplitTarget) {
-        clearSplitAbortTimer();
-        splitAbortTimer = setTimeout(() => {
-          try {
-            if (splitWebview && typeof splitWebview.stop === 'function') {
-              console.warn('[Card] Force-stopping split webview after load timeout');
-              splitWebview.stop();
-            }
-          } catch (e) { }
-          clearSplitLoadGuard();
-          isSplitNavigationLoading = false;
-        }, LOAD_ABORT_TIMEOUT_MS - LOAD_GUARD_TIMEOUT_MS);
-      } else {
-        clearMainAbortTimer();
-        mainAbortTimer = setTimeout(() => {
-          try {
-            if (webview && typeof webview.stop === 'function') {
-              console.warn('[Card] Force-stopping webview after load timeout');
-              webview.stop();
-            }
-          } catch (e) { }
-          clearMainLoadGuard();
-          isMainNavigationLoading = false;
-        }, LOAD_ABORT_TIMEOUT_MS - LOAD_GUARD_TIMEOUT_MS);
-      }
     }
 
     function startMainLoadGuard() {
@@ -1849,150 +2196,28 @@
     // Detect if both videos are currently playing and optimize buffering
     async function optimizeSplitScreenVideoBuffering() {
       if (!isSplitView || !splitWebview) return;
-      
-      try {
-        // Check if both webviews have video playing
-        const mainVideoPlaying = mediaPlayingState.get(webview)?.isPlaying && mediaPlayingState.get(webview)?.mediaType === 'video';
-        const splitVideoPlaying = mediaPlayingState.get(splitWebview)?.isPlaying && mediaPlayingState.get(splitWebview)?.mediaType === 'video';
-        
-        if (!mainVideoPlaying || !splitVideoPlaying) return;
-        
-        // Both videos are playing - apply adaptive quality reduction
-        await applyAdaptiveQualityForDualVideo(webview, 'main');
-        await applyAdaptiveQualityForDualVideo(splitWebview, 'split');
-      } catch (e) {
-        console.error('[Card] Error optimizing split-screen video:', e);
-      }
     }
 
     async function applyAdaptiveQualityForDualVideo(targetWebview, paneLabel) {
       if (!targetWebview || typeof targetWebview.executeJavaScript !== 'function') return;
-      
-      const script = `
-        (() => {
-          try {
-            // YouTube quality control
-            if ((location.hostname || '').includes('youtube')) {
-              try {
-                // YouTube: Select 720p or lower when dual-video mode active
-                const ytPlayer = window.yt?.player?.Application?.getActivePlayer?.();
-                if (ytPlayer && typeof ytPlayer.setOption === 'function') {
-                  // Use YouTube's API if available
-                  ytPlayer.setOption('iv', { args: ['player.setQualityRange', { minQuality: 'hd720', maxQuality: 'hd720' }] });
-                }
-                
-                // Fallback: find and click quality menu
-                const settingsButton = document.querySelector('[aria-label*="Settings"], .ytp-settings-button');
-                if (settingsButton) {
-                  // Find quality options in menu
-                  const qualityItems = document.querySelectorAll('[aria-label*="720"], [aria-label*="360"], [aria-label*="480"]');
-                  for (const item of qualityItems) {
-                    const label = (item.textContent || '').toLowerCase();
-                    if (label.includes('720') || label.includes('480')) {
-                      if (!item.getAttribute('aria-checked')) {
-                        item.click();
-                        break;
-                      }
-                    }
-                  }
-                }
-              } catch (e) {}
-            }
-            
-            // Vimeo quality control
-            if ((location.hostname || '').includes('vimeo')) {
-              try {
-                if (window.player && typeof window.player.setQuality === 'function') {
-                  // Get available qualities and select lower one
-                  const qualities = window.player.getQualities?.() || [];
-                  const lowerQuality = qualities.find(q => q.id === '720p' || q.id === '480p' || q.id === '360p');
-                  if (lowerQuality) {
-                    window.player.setQuality(lowerQuality.id);
-                  }
-                }
-              } catch (e) {}
-            }
-            
-            // General video element optimization
-            const videos = document.querySelectorAll('video');
-            for (const video of videos) {
-              if (!video.paused && !video.ended) {
-                // Optimize buffering by adjusting min buffer
-                if (video.buffered && video.buffered.length > 0) {
-                  const bufferedTime = video.buffered.end(video.buffered.length - 1) - video.currentTime;
-                  // Maintain minimum 8-second buffer for dual-video
-                  if (bufferedTime < 8 && video.networkState === 2) {
-                    // Pause briefly to let buffer catch up
-                    const wasPaused = video.paused;
-                    if (!wasPaused) {
-                      // Don't actually pause, just reduce quality perception
-                      video.playbackRate = 0.95; // Slightly slow down to reduce decode pressure
-                    }
-                  } else if (bufferedTime > 12) {
-                    // Resume normal playback
-                    video.playbackRate = 1.0;
-                  }
-                }
-                
-                // Enable hardware acceleration hints
-                video.style.willChange = 'auto';
-                
-                // Set preload to intelligent buffer strategy
-                if (video.preload !== 'auto') {
-                  video.preload = 'auto';
-                }
-              }
-            }
-            
-            // Reduce animation frame rate on other elements to save CPU
-            const observer = window.__bufferingFrameObserver;
-            if (!observer) {
-              let frameCount = 0;
-              let lastFrameUpdate = Date.now();
-              
-              window.__bufferingFrameObserver = {
-                init: () => {
-                  const animatedElements = document.querySelectorAll('[style*="animation"], [class*="animate"]');
-                  animatedElements.forEach(el => {
-                    const currentRate = window.getComputedStyle(el).animationPlayState;
-                    if (currentRate === 'running') {
-                      el.style.animationPlayState = 'running';
-                    }
-                  });
-                }
-              };
-              observer?.init?.();
-            }
-            
-            return true;
-          } catch (e) {
-            return false;
-          }
-        })();
-      `;
-      
-      try {
-        await runMediaScript(targetWebview, script);
-      } catch (e) {
-        console.error('[Card] Error applying dual-video quality for ' + paneLabel + ':', e);
-      }
+      return;
     }
 
     async function installMediaRecoveryHooks(targetWebview) {
       if (!targetWebview || typeof targetWebview.executeJavaScript !== 'function') return;
       const script = `
         (() => {
-          if (window.__discoveryMediaRecoveryInstalled) return true;
-          window.__discoveryMediaRecoveryInstalled = true;
-
-          // YouTube and similar players manage their own adaptive buffering.
-          // Seeking into them mid-stall resets their internal segment queue
-          // and is the primary cause of the infinite loading loop.
           const isYouTubeLike = () => {
             const host = (location.hostname || '').toLowerCase();
             return host.includes('youtube.com') || host.includes('youtu.be') ||
                    !!document.querySelector('.html5-video-player, #movie_player, ytd-player');
           };
+          if (isYouTubeLike()) {
+            // Leave YouTube playback alone and let Chromium handle buffering natively.
+            return true;
+          }
+          if (window.__discoveryMediaRecoveryInstalled) return true;
+          window.__discoveryMediaRecoveryInstalled = true;
 
           const RETRY_BASE_MS = 1200;  // Slower — give the buffer time to fill
           const RETRY_MAX_MS  = 12000; // Much longer cap
@@ -2196,6 +2421,64 @@
       }
     }
 
+    function getMediaProbeDelayRemaining(targetWebview, thresholdMs = MEDIA_START_GRACE_MS) {
+      if (!targetWebview) return 0;
+      try {
+        const startedAt = recentMediaStartAt.get(targetWebview);
+        if (!Number.isFinite(startedAt)) return 0;
+        return Math.max(0, thresholdMs - (Date.now() - startedAt));
+      } catch (e) {
+        return 0;
+      }
+    }
+
+    function clearDeferredMediaSyncStart() {
+      if (!mediaSyncDeferredTimer) return;
+      clearTimeout(mediaSyncDeferredTimer);
+      mediaSyncDeferredTimer = null;
+    }
+
+    function getOptimisticMediaControlState() {
+      const eventDriven = getEventDrivenPlayingTarget();
+      if (!eventDriven || !eventDriven.target || !isMediaTargetVisible(eventDriven.target)) {
+        return null;
+      }
+      const mediaType = String(eventDriven.state?.mediaType || 'unknown').toLowerCase();
+      return {
+        hasMedia: true,
+        isPlaying: true,
+        isVideo: mediaType === 'video',
+        isVisibleMedia: mediaType === 'video',
+        volume: 1,
+        muted: false,
+        hasDuration: false,
+        remainingSeconds: null,
+        isLive: false
+      };
+    }
+
+    function scheduleMediaPanelSyncStart() {
+      clearDeferredMediaSyncStart();
+      if (!mediaPanelOpen) return;
+      const eventDriven = getEventDrivenPlayingTarget();
+      const delayMs = eventDriven && eventDriven.target
+        ? getMediaProbeDelayRemaining(eventDriven.target)
+        : 0;
+
+      if (delayMs > 0) {
+        mediaSyncDeferredTimer = setTimeout(() => {
+          mediaSyncDeferredTimer = null;
+          if (!mediaPanelOpen) return;
+          syncMediaControlState();
+          startMediaSyncLoop();
+        }, delayMs + 50);
+        return;
+      }
+
+      syncMediaControlState();
+      startMediaSyncLoop();
+    }
+
     async function readMediaState(targetWebview) {
       // Return cached state if still valid (reduces DOM queries during playback)
       const now = Date.now();
@@ -2293,6 +2576,33 @@
       applyVisualizerStyle(VISUALIZER_STYLES[nextIndex].key);
     }
 
+    function publishBubbleMediaState(payload) {
+      const bubblePayload = {
+        cardId,
+        isPlaying: !!payload?.isPlaying,
+        isVideo: !!payload?.isPlaying && !!payload?.isVideo,
+        isLive: !!payload?.isPlaying && !!payload?.isLive
+      };
+      const nextSignature = JSON.stringify(bubblePayload);
+      if (nextSignature !== lastBubbleMediaSignature) {
+        lastBubbleMediaSignature = nextSignature;
+        try {
+          if (window.cardAPI && window.cardAPI.sendToMain) {
+            window.cardAPI.sendToMain('card-media-state', bubblePayload);
+          }
+        } catch (e) { }
+      }
+    }
+
+    function publishBubbleStateForMediaType(mediaType, isPlaying) {
+      const normalizedType = String(mediaType || 'unknown').toLowerCase();
+      publishBubbleMediaState({
+        isPlaying: !!isPlaying,
+        isVideo: !!isPlaying && normalizedType === 'video',
+        isLive: !!isPlaying && normalizedType === 'video'
+      });
+    }
+
     function renderMediaControl(state) {
       if (!mediaHoverControl || !audioVisualizer) return;
 
@@ -2311,7 +2621,7 @@
       mediaHoverControl.classList.toggle('active', shouldShow);
       mediaHoverControl.classList.toggle('video-mode', shouldShow && isVideo);
       mediaHoverControl.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
-      audioVisualizer.classList.toggle('playing', shouldShow && isPlaying);
+      audioVisualizer.classList.toggle('playing', shouldShow);
       audioVisualizer.classList.toggle('video-mode', shouldShow && isVideo);
       if (!shouldShow) {
         setMediaPanelOpen(false);
@@ -2349,22 +2659,6 @@
         startMediaRemainingTicker();
       } else {
         stopMediaRemainingTicker();
-      }
-
-      const bubblePayload = {
-        cardId,
-        isPlaying: shouldShow,
-        isVideo: shouldShow && isVideo,
-        isLive: shouldShow && isLive
-      };
-      const nextSignature = JSON.stringify(bubblePayload);
-      if (nextSignature !== lastBubbleMediaSignature) {
-        lastBubbleMediaSignature = nextSignature;
-        try {
-          if (window.cardAPI && window.cardAPI.sendToMain) {
-            window.cardAPI.sendToMain('card-media-state', bubblePayload);
-          }
-        } catch (e) { }
       }
     }
 
@@ -2413,9 +2707,9 @@
       mediaPanelOpen = !!isOpen && canOpen;
       mediaHoverControl.classList.toggle('panel-open', mediaPanelOpen);
       if (mediaPanelOpen) {
-        syncMediaControlState();
-        startMediaSyncLoop();
+        scheduleMediaPanelSyncStart();
       } else {
+        clearDeferredMediaSyncStart();
         stopMediaSyncLoop();
       }
     }
@@ -2470,7 +2764,7 @@
       if (isActive) {
         updateVisualizerPlaybackState();
         if (mediaPanelOpen) {
-          syncMediaControlState();
+          scheduleMediaPanelSyncStart();
         }
       } else {
         renderMediaControl({ hasMedia: false, isPlaying: false, isVideo: false, volume: 1, muted: false });
@@ -2490,6 +2784,7 @@
     }
 
     function stopMediaSyncLoop() {
+      clearDeferredMediaSyncStart();
       if (!mediaSyncTimer) return;
       clearInterval(mediaSyncTimer);
       mediaSyncTimer = null;
@@ -2509,14 +2804,8 @@
       setMediaPanelOpen(false);
       stopMediaSyncLoop();
       stopMediaRemainingTicker();
+      updateBubblePlaybackState();
       updateVisualizerPlaybackState();
-    }
-
-    function isAnyMediaPlaying() {
-      for (const value of mediaPlayingState.values()) {
-        if (value && value.isPlaying) return true;
-      }
-      return false;
     }
 
     function isAnyVideoPlaying() {
@@ -2628,10 +2917,14 @@
     async function refreshMediaPlayingType(targetWebview) {
       if (!targetWebview) return;
       const state = mediaPlayingState.get(targetWebview);
-      if (!state || !state.isPlaying) return;
+      if (!state || !state.isPlaying) {
+        updateBubblePlaybackState();
+        return;
+      }
       const mediaType = await detectPlayingMediaType(targetWebview);
       const nextState = { isPlaying: true, mediaType };
       mediaPlayingState.set(targetWebview, nextState);
+      updateBubblePlaybackState();
       updateVisualizerPlaybackState();
       clearMediaStateCache(targetWebview);
     }
@@ -2643,24 +2936,65 @@
       return false;
     }
 
+    let bubblePlaybackRefreshToken = 0;
+    async function updateBubblePlaybackState() {
+      const token = ++bubblePlaybackRefreshToken;
+      const eventDriven = getEventDrivenPlayingTarget();
+      if (eventDriven && eventDriven.target && isMediaTargetVisible(eventDriven.target)) {
+        let mediaType = String(eventDriven.state?.mediaType || 'unknown').toLowerCase();
+        if (mediaType === 'unknown') {
+          mediaType = await detectPlayingMediaType(eventDriven.target);
+          if (token !== bubblePlaybackRefreshToken) return;
+          if (mediaType !== 'unknown') {
+            mediaPlayingState.set(eventDriven.target, { isPlaying: true, mediaType });
+          }
+        }
+        publishBubbleStateForMediaType(mediaType, true);
+        return;
+      }
+
+      const result = await getBestMediaTarget({ playingOnly: true });
+      if (token !== bubblePlaybackRefreshToken) return;
+      const state = result?.state;
+      if (state && state.isPlaying) {
+        publishBubbleMediaState({
+          isPlaying: true,
+          isVideo: !!state.isVideo,
+          isLive: !!state.isLive || !!state.isVideo
+        });
+        return;
+      }
+      publishBubbleMediaState({ isPlaying: false, isVideo: false, isLive: false });
+    }
+
     let visualizerRefreshToken = 0;
     async function updateVisualizerPlaybackState() {
       const token = ++visualizerRefreshToken;
-      if (!visualizerEnabled) {
-        renderMediaControl({ hasMedia: false, isPlaying: false, isVideo: false, volume: 1, muted: false });
-        return;
-      }
 
       const eventDriven = getEventDrivenPlayingTarget();
       if (eventDriven && eventDriven.target && isMediaTargetVisible(eventDriven.target)) {
         const eventState = eventDriven.state || { isPlaying: true, mediaType: 'unknown' };
-        const shouldTrustRecentEvent = hasRecentMediaStart(eventDriven.target) || eventState.mediaType === 'video';
-        let visibleSurface = null;
+        const optimisticState = getOptimisticMediaControlState();
 
-        if (shouldTrustRecentEvent) {
-          visibleSurface = await detectVisibleMediaSurface(eventDriven.target);
+        if (!visualizerEnabled) {
+          renderMediaControl({ hasMedia: false, isPlaying: false, isVideo: false, volume: 1, muted: false });
+          return;
+        }
+
+        if (!mediaPanelOpen || hasRecentMediaStart(eventDriven.target, MEDIA_START_GRACE_MS)) {
+          if (optimisticState) {
+            renderMediaControl(optimisticState);
+            if (mediaPanelOpen) {
+              scheduleMediaPanelSyncStart();
+            }
+            return;
+          }
+        }
+
+        if (eventState.mediaType === 'video' || eventState.mediaType === 'unknown') {
+          const visibleSurface = await detectVisibleMediaSurface(eventDriven.target);
           if (token !== visualizerRefreshToken) return;
-          const looksLikeVideo = visibleSurface?.hasVisibleSurface || eventState.mediaType === 'video' || eventState.mediaType === 'unknown';
+          const looksLikeVideo = visibleSurface?.hasVisibleSurface || eventState.mediaType === 'video';
           if (looksLikeVideo) {
             renderMediaControl({
               hasMedia: true,
@@ -2676,6 +3010,16 @@
             return;
           }
         }
+
+        if (optimisticState) {
+          renderMediaControl(optimisticState);
+          return;
+        }
+      }
+
+      if (!mediaPanelOpen) {
+        renderMediaControl({ hasMedia: false, isPlaying: false, isVideo: false, volume: 1, muted: false });
+        return;
       }
 
       const result = await getBestMediaTarget({ playingOnly: true });
@@ -2683,6 +3027,11 @@
 
       const state = result?.state || { hasMedia: false, isPlaying: false, isVideo: false, volume: 1, muted: false };
       const shouldShow = !!(state.hasMedia && state.isPlaying && (!state.isVideo || state.isVisibleMedia));
+
+      if (!visualizerEnabled) {
+        renderMediaControl({ hasMedia: false, isPlaying: false, isVideo: false, volume: 1, muted: false });
+        return;
+      }
 
       renderMediaControl({
         ...state,
@@ -2755,7 +3104,9 @@
       if (!script) return;
       await runMediaScript(result.target, script);
       setTimeout(() => {
-        syncMediaControlState();
+        if (mediaPanelOpen) {
+          scheduleMediaPanelSyncStart();
+        }
       }, 80);
     }
 
@@ -2767,9 +3118,6 @@
         if (!mediaHoverControl || !mediaHoverControl.classList.contains('active')) return;
         const nextOpen = !mediaPanelOpen;
         setMediaPanelOpen(nextOpen);
-        if (nextOpen) {
-          syncMediaControlState();
-        }
       });
       audioVisualizer.addEventListener('wheel', (event) => {
         event.preventDefault();
@@ -3131,7 +3479,6 @@
       // Immediately set loading state and start guard timers
       isSplitNavigationLoading = true;
       clearSplitLoadGuard();
-      clearSplitAbortTimer();
       startSplitLoadGuard();
       
       // Update the input field
@@ -3211,6 +3558,8 @@
         hideSecurityNoticeWhenAppropriate();
         resetZoom(webview);
         setLoadingWave(true);
+        setLaunchFillVisible(true);
+        setCardContentVisible(false);
         startMainLoadGuard();
         scheduleMainFirstContentFallback();
         clearMediaStateCache(webview);
@@ -3221,11 +3570,9 @@
 
     // Hide shortly after first paint/DOM is ready instead of waiting for full load
     webview.addEventListener('dom-ready', () => {
-      if (!firstContentSeenForMainNav) {
-        firstContentSeenForMainNav = true;
-        hideLoadingWaveOnFirstContent(120);
-      } else {
-        clearMainFirstContentFallback();
+      clearMainFirstContentFallback();
+      if (isMainNavigationLoading) {
+        scheduleMainFirstContentFallback();
       }
       resetZoom(webview);
     });
@@ -3235,8 +3582,9 @@
       isMainNavigationLoading = false;
       hideSecurityNoticeWhenAppropriate();
       clearMainLoadGuard();
-      clearMainAbortTimer();
       clearMainFirstContentFallback();
+      setLaunchFillVisible(false);
+      setCardContentVisible(true);
       if (loadingWaveVisible) {
         setLoadingWave(false);
       }
@@ -3250,8 +3598,9 @@
         isMainNavigationLoading = false;
       }
       clearMainLoadGuard();
-      clearMainAbortTimer();
       clearMainFirstContentFallback();
+      setLaunchFillVisible(false);
+      setCardContentVisible(true);
       if (loadingWaveVisible) {
         setLoadingWave(false);
       }
@@ -3272,8 +3621,9 @@
       firstContentSeenForMainNav = true;
       isMainNavigationLoading = false;
       clearMainLoadGuard();
-      clearMainAbortTimer();
       clearMainFirstContentFallback();
+      setLaunchFillVisible(false);
+      setCardContentVisible(true);
       pauseMediaSyncForFailure();
       console.log('[Card] Webview crashed');
       showSecurityLoadNotice('This page crashed. Reload to continue.');
@@ -3284,8 +3634,9 @@
       firstContentSeenForMainNav = true;
       isMainNavigationLoading = false;
       clearMainLoadGuard();
-      clearMainAbortTimer();
       clearMainFirstContentFallback();
+      setLaunchFillVisible(false);
+      setCardContentVisible(true);
       pauseMediaSyncForFailure();
       console.log('[Card] Render process gone:', e.reason);
       if (e.reason === 'crashed' || e.reason === 'abnormal') {
@@ -3304,8 +3655,9 @@
       firstContentSeenForMainNav = true;
       isMainNavigationLoading = false;
       clearMainLoadGuard();
-      clearMainAbortTimer();
       clearMainFirstContentFallback();
+      setLaunchFillVisible(false);
+      setCardContentVisible(true);
       if (loadingWaveVisible) {
         setLoadingWave(false);
       }
@@ -3317,6 +3669,8 @@
       hideSecurityNoticeWhenAppropriate();
       clearMainLoadGuard();
       clearMainFirstContentFallback();
+      setLaunchFillVisible(false);
+      setCardContentVisible(true);
       if (loadingWaveVisible) {
         setLoadingWave(false);
       }
@@ -3329,13 +3683,13 @@
       clearMediaStateCache(webview);
       markRecentMediaStart(webview);
       mediaPlayingState.set(webview, { isPlaying: true, mediaType: 'unknown' });
+      updateBubblePlaybackState();
       updateVisualizerPlaybackState();
       refreshMediaPlayingType(webview);
       // Optimize buffering when both videos are playing
       optimizeSplitScreenVideoBuffering();
       if (mediaPanelOpen) {
-        syncMediaControlState();
-        startMediaSyncLoop();
+        scheduleMediaPanelSyncStart();
       }
     });
 
@@ -3343,9 +3697,10 @@
       clearMediaStateCache(webview);
       clearRecentMediaStart(webview);
       mediaPlayingState.set(webview, { isPlaying: false, mediaType: 'unknown' });
+      updateBubblePlaybackState();
       updateVisualizerPlaybackState();
       if (mediaPanelOpen) {
-        syncMediaControlState();
+        scheduleMediaPanelSyncStart();
       }
     });
 
@@ -3383,7 +3738,6 @@
           isSplitNavigationLoading = false;
         }
         clearSplitLoadGuard();
-        clearSplitAbortTimer();
         if (e && e.isMainFrame) {
           pauseMediaSyncForFailure();
           if (isTlsOrCertificateFailure(e.errorCode, e.errorDescription)) {
@@ -3398,7 +3752,6 @@
       splitWebview.addEventListener('crashed', (e) => {
         isSplitNavigationLoading = false;
         clearSplitLoadGuard();
-        clearSplitAbortTimer();
         pauseMediaSyncForFailure();
         showSecurityLoadNotice('Split view page crashed. Reload to continue.');
       });
@@ -3407,7 +3760,6 @@
       splitWebview.addEventListener('render-process-gone', (e) => {
         isSplitNavigationLoading = false;
         clearSplitLoadGuard();
-        clearSplitAbortTimer();
         pauseMediaSyncForFailure();
         if (e.reason === 'crashed' || e.reason === 'abnormal') {
           showSecurityLoadNotice('Split view page crashed. Reload to continue.');
@@ -3417,13 +3769,11 @@
       splitWebview.addEventListener('did-stop-loading', () => {
         isSplitNavigationLoading = false;
         clearSplitLoadGuard();
-        clearSplitAbortTimer();
       });
 
       splitWebview.addEventListener('did-finish-load', () => {
         isSplitNavigationLoading = false;
         clearSplitLoadGuard();
-        clearSplitAbortTimer();
       });
 
       splitWebview.addEventListener('media-started-playing', () => {
@@ -3432,13 +3782,13 @@
         clearMediaStateCache(splitWebview);
         markRecentMediaStart(splitWebview);
         mediaPlayingState.set(splitWebview, { isPlaying: true, mediaType: 'unknown' });
+        updateBubblePlaybackState();
         updateVisualizerPlaybackState();
         refreshMediaPlayingType(splitWebview);
         // Optimize buffering when both videos are playing
         optimizeSplitScreenVideoBuffering();
         if (mediaPanelOpen) {
-          syncMediaControlState();
-          startMediaSyncLoop();
+          scheduleMediaPanelSyncStart();
         }
       });
 
@@ -3446,9 +3796,10 @@
         clearMediaStateCache(splitWebview);
         clearRecentMediaStart(splitWebview);
         mediaPlayingState.set(splitWebview, { isPlaying: false, mediaType: 'unknown' });
+        updateBubblePlaybackState();
         updateVisualizerPlaybackState();
         if (mediaPanelOpen) {
-          syncMediaControlState();
+          scheduleMediaPanelSyncStart();
         }
       });
     }
@@ -3463,8 +3814,7 @@
         }
         updateVisualizerPlaybackState();
         if (mediaPanelOpen) {
-          syncMediaControlState();
-          startMediaSyncLoop();
+          scheduleMediaPanelSyncStart();
         }
       });
     }
@@ -3479,8 +3829,7 @@
         }
         updateVisualizerPlaybackState();
         if (mediaPanelOpen) {
-          syncMediaControlState();
-          startMediaSyncLoop();
+          scheduleMediaPanelSyncStart();
         }
       }).catch(() => { });
     }
@@ -3644,17 +3993,24 @@
 
     // Button click handlers with visual feedback
     closeBtn.addEventListener('click', async () => {
-      // Add exit animation
-      const cardWindow = document.querySelector('.card-window');
-      cardWindow.style.animation = 'slideOut 0.3s ease forwards';
-
-      setTimeout(async () => {
-        try {
-          await window.cardAPI.closeCard(cardId);
-        } catch (err) {
-          console.error('Error closing card:', err);
+      try {
+        if (isClosingCard || isMinimizingCard) return;
+        isClosingCard = true;
+        if (cardWindowEl) {
+          cardWindowEl.classList.remove('is-opening-tv');
+          cardWindowEl.classList.remove('is-minimizing');
+          cardWindowEl.classList.remove('is-restoring');
+          cardWindowEl.classList.remove('is-closing-tv');
+          void cardWindowEl.offsetWidth;
+          cardWindowEl.classList.add('is-closing-tv');
         }
-      }, 300);
+        await waitForCardAnimationEnd(cardWindowEl, 'tvCloseCollapse', 660);
+        await window.cardAPI.closeCard(cardId);
+      } catch (err) {
+        console.error('Error closing card:', err);
+        if (cardWindowEl) cardWindowEl.classList.remove('is-closing-tv');
+        isClosingCard = false;
+      }
     });
 
     backBtn.addEventListener('click', () => {
@@ -3681,6 +4037,8 @@
       }, 600);
 
       setLoadingWave(true);
+      setLaunchFillVisible(true);
+      setCardContentVisible(false);
 
       try {
         webview.reload();
@@ -3796,7 +4154,6 @@
           // Cleanup when disabling split view - cancel any pending loads/timers
           isSplitNavigationLoading = false;
           clearSplitLoadGuard();
-          clearSplitAbortTimer();
           // Stop any ongoing split webview operations
           try {
             if (splitWebview && typeof splitWebview.stop === 'function') {
@@ -3876,7 +4233,6 @@
         // Ensure proper loading state tracking
         isSplitNavigationLoading = true;
         clearSplitLoadGuard();
-        clearSplitAbortTimer();
         startSplitLoadGuard();
         try {
           splitWebview.reload();
@@ -3902,6 +4258,24 @@
             return;
           }
           loadSplitUrl(targetUrl);
+          splitUrlInput.value = '';
+          splitUrlInput.classList.remove('active');
+        }
+      });
+
+      splitUrlInput.addEventListener('focus', () => {
+        splitUrlInput.classList.add('active');
+      });
+
+      splitUrlInput.addEventListener('input', () => {
+        if (splitUrlInput.value.trim()) {
+          splitUrlInput.classList.add('active');
+        }
+      });
+
+      splitUrlInput.addEventListener('blur', () => {
+        if (!splitUrlInput.value.trim()) {
+          splitUrlInput.classList.remove('active');
         }
       });
     }
@@ -3909,9 +4283,11 @@
     // Minimize button handler
     minimizeBtn.addEventListener('click', async () => {
       try {
-        if (isMinimizingCard) return;
+        if (isMinimizingCard || isClosingCard) return;
         isMinimizingCard = true;
         if (cardWindowEl) {
+          cardWindowEl.classList.remove('is-opening-tv');
+          cardWindowEl.classList.remove('is-closing-tv');
           cardWindowEl.classList.remove('is-minimizing');
           cardWindowEl.classList.remove('is-restoring');
           // Restart animation if user rapidly clicks.
@@ -3925,7 +4301,7 @@
           return urlInput && urlInput.value ? urlInput.value : '';
         })();
         const titleForBubble = currentPageTitle || (titleElement ? titleElement.textContent : '') || '';
-        await waitForCardAnimationEnd(cardWindowEl, 'springPopOut', 360);
+      await waitForCardAnimationEnd(cardWindowEl, 'springPopOut', 380);
         await window.cardAPI.minimizeCard(cardId, currentUrlForBubble, titleForBubble, theme);
       } catch (err) {
         console.error('Error minimizing card:', err);
@@ -3937,7 +4313,10 @@
     window.addEventListener('card-restore-animate', () => {
       try {
         isMinimizingCard = false;
+        isClosingCard = false;
         if (!cardWindowEl) return;
+        cardWindowEl.classList.remove('is-opening-tv');
+        cardWindowEl.classList.remove('is-closing-tv');
         cardWindowEl.classList.remove('is-minimizing');
         cardWindowEl.classList.remove('is-restoring');
         void cardWindowEl.offsetWidth;
@@ -3959,6 +4338,16 @@
         });
       } catch (e) { }
     });
+
+    if (cardWindowEl) {
+      cardWindowEl.addEventListener('animationend', (evt) => {
+        if (!evt || evt.target !== cardWindowEl) return;
+        if (evt.animationName === 'zoomInExpand') {
+          cardWindowEl.classList.remove('is-opening-tv');
+          cardWindowEl.classList.remove('is-restoring');
+        }
+      });
+    }
 
     // Zoom buttons
     if (zoomInBtn) {
@@ -4146,6 +4535,7 @@
             }).then(() => {
               // Clear the input after launching as bubble
               urlInput.value = '';
+              urlInput.classList.remove('active');
             }).catch(err => {
               console.error('Failed to open URL as bubble:', err);
               // Fallback: navigate in current card
@@ -4161,11 +4551,30 @@
             try {
               webview.loadURL(targetUrl);
               currentPageUrl = targetUrl;
+              urlInput.value = '';
+              urlInput.classList.remove('active');
             } catch (err) {
               window.cardAPI.navigateCard(cardId, targetUrl);
             }
           }
         }
+      }
+    });
+
+    // Add active class for glow effect when typing
+    urlInput.addEventListener('focus', () => {
+      urlInput.classList.add('active');
+    });
+
+    urlInput.addEventListener('input', () => {
+      if (urlInput.value.trim()) {
+        urlInput.classList.add('active');
+      }
+    });
+
+    urlInput.addEventListener('blur', () => {
+      if (!urlInput.value.trim()) {
+        urlInput.classList.remove('active');
       }
     });
 

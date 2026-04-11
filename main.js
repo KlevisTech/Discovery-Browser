@@ -125,6 +125,12 @@ function triggerWindowHangRecovery(win, windowLabel, reason) {
   const isCardLikeWindow = String(windowLabel || '').startsWith('card-') ||
     String(windowLabel || '').startsWith('direct-card-') ||
     String(windowLabel || '').startsWith('prewarmed-card');
+  if (isCardLikeWindow && String(reason || '').startsWith('render-process-gone:')) {
+    // Streaming pages can transiently lose a renderer under memory/GPU pressure.
+    // Avoid escalating into a crash/reload loop; let the renderer surface the failure.
+    console.warn(`[HangRecovery] ${windowLabel} renderer exited (${reason}); suppressing forced recovery.`);
+    return;
+  }
   if (isCardLikeWindow && reason === 'window-event') {
     // Do not auto-reload card windows on transient unresponsive spikes.
     // Heavy streaming pages can recover on their own; forced reloads make UX worse.
@@ -271,7 +277,7 @@ function attachWindowHangRecovery(win, windowLabel) {
   });
 }
 
-// Setup load timeout for card windows to prevent indefinite loading with bad internet
+// Setup load timeout for card windows to surface slow loads without force-stopping.
 function setupCardLoadTimeout(win, windowLabel) {
   if (!win || win.isDestroyed()) return;
   const wc = win.webContents;
@@ -284,7 +290,7 @@ function setupCardLoadTimeout(win, windowLabel) {
     cardLoadTimeouts.delete(win);
   }
 
-  // Set up a timeout to abort loading if it takes too long
+  // Set up a timeout to log slow loads without interrupting heavy pages such as YouTube.
   const loadTimer = setTimeout(() => {
     if (!win || win.isDestroyed() || !wc || wc.isDestroyed()) return;
 
@@ -294,13 +300,7 @@ function setupCardLoadTimeout(win, windowLabel) {
     } catch (e) { }
 
     if (isStillLoading) {
-      console.warn(`[CardLoadTimeout] ${windowLabel} still loading after ${CARD_LOAD_TIMEOUT_MS}ms, forcing stop`);
-      try {
-        wc.stop();
-      } catch (e) { }
-
-      // Trigger recovery
-      triggerWindowHangRecovery(win, windowLabel, 'load-timeout');
+      console.warn(`[CardLoadTimeout] ${windowLabel} still loading after ${CARD_LOAD_TIMEOUT_MS}ms; leaving load in progress.`);
     }
 
     cardLoadTimeouts.delete(win);
@@ -319,13 +319,13 @@ function clearCardLoadTimeout(win) {
 }
 
 // GPU stability flags
+// Keep the video stack close to stock Chromium behavior for streaming sites.
+// Forcing unsupported decoder paths tends to hurt YouTube stability over time.
 // Keep GPU sandbox enabled by default. Allow disabling only in development for troubleshooting.
 if (!app.isPackaged && process.env.DISCOVERY_DISABLE_GPU_SANDBOX === '1') {
   app.commandLine.appendSwitch('disable-gpu-sandbox');
 }
-app.commandLine.appendSwitch('ignore-gpu-blocklist'); // Updated flag name (ignore-gpu-blacklist is deprecated)
 app.commandLine.appendSwitch('use-angle', 'd3d11'); // Use D3D11 ANGLE backend for Windows stability
-app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder'); // Hardware video decode
 // QUIC/HTTP3 can cause ERR_QUIC_PROTOCOL_ERROR in some environments.
 app.commandLine.appendSwitch('disable-quic');
 app.commandLine.appendSwitch('disable-http3');
@@ -726,11 +726,13 @@ let currentCardLaunchSizeMode = 'normal'; // Store user's preferred launch size 
 let siteLayoutOverrides = {}; // hostname -> 'normal' | 'wide' | 'fullscreen' per-site layout overrides
 const pendingAuthRedirects = new Map(); // requestId -> { authUrl, launchUrl, createdAt }
 const recentAuthRedirects = new Map(); // dedupeKey -> { ts, requestId }
+const recentExternalCardLaunches = new Map(); // normalizedUrl -> timestamp
 
 const CARD_LAUNCH_MODE_NORMAL = 'normal';
 const CARD_LAUNCH_MODE_WIDE = 'wide';
 const CARD_LAUNCH_MODE_FULLSCREEN = 'fullscreen';
 const CARD_LAUNCH_VERTICAL_OFFSET = 36;
+const EXTERNAL_CARD_LAUNCH_DEDUPE_MS = 2500;
 const CARD_LAUNCH_SIZE_MODES = new Set([
   CARD_LAUNCH_MODE_NORMAL,
   CARD_LAUNCH_MODE_WIDE,
@@ -836,6 +838,37 @@ function updateBubbleMediaState(cardId, mediaState = {}) {
   if (bubble && !bubble.isDestroyed()) {
     try {
       bubble.webContents.send('bubble-media-state', nextState);
+    } catch (e) { }
+  }
+}
+
+function bringBubbleWindowsToFront() {
+  for (const [, bubble] of cardBubbles) {
+    if (!bubble || bubble.isDestroyed()) continue;
+    try {
+      if (!bubble.isVisible()) bubble.showInactive();
+      try {
+        bubble.setAlwaysOnTop(true, 'screen-saver');
+      } catch (e) {
+        try { bubble.setAlwaysOnTop(true, 'pop-up-menu'); } catch (inner) { bubble.setAlwaysOnTop(true); }
+      }
+      if (typeof bubble.moveTop === 'function') {
+        bubble.moveTop();
+      }
+      setTimeout(() => {
+        try {
+          if (!bubble.isDestroyed()) {
+            try {
+              bubble.setAlwaysOnTop(true, 'floating');
+            } catch (e) {
+              bubble.setAlwaysOnTop(true);
+            }
+            if (typeof bubble.moveTop === 'function') {
+              bubble.moveTop();
+            }
+          }
+        } catch (e) { }
+      }, 120);
     } catch (e) { }
   }
 }
@@ -1030,6 +1063,37 @@ function normalizeTypedNavigationTarget(rawInput) {
   }
 
   return `https://www.google.com/search?q=${encodeURIComponent(input)}`;
+}
+
+function shouldSuppressExternalCardLaunch(rawUrl) {
+  const normalizedUrl = normalizeTypedNavigationTarget(rawUrl);
+  if (!normalizedUrl || !isHttpUrl(normalizedUrl)) return { suppress: false, normalizedUrl };
+
+  const now = Date.now();
+  for (const [url, timestamp] of recentExternalCardLaunches) {
+    if (!timestamp || (now - timestamp) > EXTERNAL_CARD_LAUNCH_DEDUPE_MS) {
+      recentExternalCardLaunches.delete(url);
+    }
+  }
+
+  const previousLaunchAt = recentExternalCardLaunches.get(normalizedUrl) || 0;
+  if (previousLaunchAt > 0 && (now - previousLaunchAt) < EXTERNAL_CARD_LAUNCH_DEDUPE_MS) {
+    return { suppress: true, normalizedUrl };
+  }
+
+  recentExternalCardLaunches.set(normalizedUrl, now);
+  return { suppress: false, normalizedUrl };
+}
+
+function launchExternalCardUrlOnce(rawUrl, options = {}) {
+  const { suppress, normalizedUrl } = shouldSuppressExternalCardLaunch(rawUrl);
+  if (suppress) {
+    try {
+      console.warn('[ExternalLaunch] Suppressed duplicate card launch for', normalizedUrl);
+    } catch (e) { }
+    return null;
+  }
+  return createCardDirectly(normalizedUrl, options);
 }
 
 const PROMPTABLE_SITE_PERMISSIONS = new Set([
@@ -1387,85 +1451,6 @@ function queueAuthRedirectExternally(authUrl, context = {}) {
 
 // Counter for generating unique card IDs for direct creation
 let directCardIdCounter = 100000;
-let prewarmedCardWindow = null;
-let prewarmInProgress = false;
-let prewarmTimer = null;
-
-function cleanupPrewarmedCardWindow() {
-  if (prewarmTimer) {
-    clearTimeout(prewarmTimer);
-    prewarmTimer = null;
-  }
-  if (prewarmedCardWindow && !prewarmedCardWindow.isDestroyed()) {
-    try {
-      prewarmedCardWindow.destroy();
-    } catch (e) { }
-  }
-  prewarmedCardWindow = null;
-  prewarmInProgress = false;
-}
-
-function scheduleCardPrewarm(delayMs = 1200) {
-  if (prewarmTimer) return;
-  prewarmTimer = setTimeout(() => {
-    prewarmTimer = null;
-    ensurePrewarmedCardWindow();
-  }, delayMs);
-}
-
-function ensurePrewarmedCardWindow() {
-  if (prewarmedCardWindow && !prewarmedCardWindow.isDestroyed()) return;
-  if (prewarmInProgress) return;
-  prewarmInProgress = true;
-  try {
-    const prewarmMode = currentCardLaunchSizeMode === CARD_LAUNCH_MODE_FULLSCREEN
-      ? CARD_LAUNCH_MODE_NORMAL
-      : currentCardLaunchSizeMode;
-    const prewarmSize = getLaunchWindowSizeByMode(prewarmMode);
-    const cardHtmlPath = path.join(__dirname, 'src', 'card.html');
-    const win = new BrowserWindow({
-      width: prewarmSize.width,
-      height: prewarmSize.height,
-      icon: APP_ICON_PATH,
-      frame: false,
-      transparent: true,
-      resizable: true,
-      skipTaskbar: true,
-      show: false,
-      backgroundColor: '#00000000',
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        sandbox: true,
-        webviewTag: true,
-        preload: path.join(__dirname, 'preload-card.js'),
-        enableWebSQL: false,
-        spellcheck: true,
-        backgroundThrottling: true,
-        enablePreferredSizeMode: true,
-        partition: 'persist:cards',
-      },
-    });
-    attachWindowHangRecovery(win, 'prewarmed-card');
-    prewarmedCardWindow = win;
-    win.loadFile(cardHtmlPath, {
-      query: {
-        cardId: '0',
-        url: '',
-        theme: currentCardTheme,
-      }
-    }).catch(() => { });
-    win.on('closed', () => {
-      if (prewarmedCardWindow === win) {
-        prewarmedCardWindow = null;
-      }
-    });
-  } catch (e) {
-    prewarmedCardWindow = null;
-  } finally {
-    prewarmInProgress = false;
-  }
-}
 
 // Direct card creation function - creates card window immediately without renderer round-trip
 // This ensures instant visual feedback when external apps call the browser
@@ -1491,7 +1476,7 @@ function createCardDirectly(url, options = {}) {
     }
 
     // Use provided theme or fall back to current saved theme
-    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt']);
+    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'frost']);
     const effectiveTheme = opts.themeKey || currentCardTheme;
     const normalizedTheme = allowedThemes.has(String(effectiveTheme || '').toLowerCase())
       ? String(effectiveTheme || '').toLowerCase()
@@ -1518,52 +1503,32 @@ function createCardDirectly(url, options = {}) {
       }
     } catch (e) { }
 
-    let cardWindow = null;
-    if (prewarmedCardWindow && !prewarmedCardWindow.isDestroyed()) {
-      cardWindow = prewarmedCardWindow;
-      prewarmedCardWindow = null;
-      try {
-        cardWindow.setSkipTaskbar(minimizeAfterShow);
-        try { cardWindow.setFullScreen(false); } catch (e) { }
-        cardWindow.setBounds({
-          x: finalX,
-          y: finalY,
-          width: launchSize.width,
-          height: launchSize.height,
-        });
-        cardWindow.show();
-      } catch (e) { }
-      scheduleCardPrewarm(1500);
-    }
-
     // Create floating card window with visible background for instant display
-    if (!cardWindow) {
-      cardWindow = new BrowserWindow({
-        width: launchSize.width,
-        height: launchSize.height,
-        x: finalX,
-        y: finalY,
-        icon: APP_ICON_PATH,
-        frame: false,
-        transparent: true,
-        resizable: true,
-        skipTaskbar: minimizeAfterShow, // Hide from taskbar when opening as bubble
-        show: true, // Always show initially
-        backgroundColor: '#00000000', // Transparent for rounded corners from HTML
-        webPreferences: {
-          nodeIntegration: false,
-          contextIsolation: true,
-          sandbox: true,
-          webviewTag: true,
-          preload: path.join(__dirname, 'preload-card.js'),
-          enableWebSQL: false,
-          spellcheck: true,
-          backgroundThrottling: true,
-          enablePreferredSizeMode: true,
-          partition: 'persist:cards',
-        },
-      });
-    }
+    const cardWindow = new BrowserWindow({
+      width: launchSize.width,
+      height: launchSize.height,
+      x: finalX,
+      y: finalY,
+      icon: APP_ICON_PATH,
+      frame: false,
+      transparent: true,
+      resizable: true,
+      skipTaskbar: minimizeAfterShow, // Hide from taskbar when opening as bubble
+      show: true, // Always show initially
+      backgroundColor: '#00000000', // Transparent for rounded corners from HTML
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        webviewTag: true,
+        preload: path.join(__dirname, 'preload-card.js'),
+        enableWebSQL: false,
+        spellcheck: true,
+        backgroundThrottling: true,
+        enablePreferredSizeMode: true,
+        partition: 'persist:cards',
+      },
+    });
     attachWindowHangRecovery(cardWindow, `direct-card-${cardId}`);
 
     if (launchMode === CARD_LAUNCH_MODE_FULLSCREEN && !minimizeAfterShow) {
@@ -1644,13 +1609,39 @@ function createCardDirectly(url, options = {}) {
       });
     } catch (e) { }
 
-    // Setup event listeners
+// Setup event listeners
     cardWindow.webContents.on('did-start-loading', () => {
-      // Setup load timeout for card - will force-stop if loading takes too long
       setupCardLoadTimeout(cardWindow, `direct-card-${cardId}`);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('card-loading-start', cardId);
+    });
+
+    let lastReportedUrl = '';
+    cardWindow.webContents.on('did-navigate', (event, navUrl) => {
+      if (navUrl === lastReportedUrl) return;
+      lastReportedUrl = navUrl;
+      if (mainWindow && !mainWindow.isDestroyed() && cardWindow && !cardWindow.isDestroyed()) {
+        mainWindow.webContents.send('card-url-updated', cardId, navUrl);
+        mainWindow.webContents.send('card-title-updated', cardId, cardWindow.webContents.getTitle());
       }
+    });
+
+    let titleDebounceTimer = null;
+    cardWindow.webContents.on('page-title-updated', (event, title) => {
+      clearTimeout(titleDebounceTimer);
+      titleDebounceTimer = setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('card-title-updated', cardId, title);
+        }
+        try {
+          if (cardBubbles.has(cardId)) {
+            const parsedCount = extractTitleNotificationCount(title);
+            if (parsedCount !== null) {
+              updateBubbleNotification(cardId, parsedCount, 'title');
+            } else if (bubbleNotificationSources.get(cardId) === 'title') {
+              updateBubbleNotification(cardId, 0, 'title');
+            }
+          }
+        } catch (e) { }
+      }, 400);
     });
 
     cardWindow.webContents.on('did-finish-load', () => {
@@ -1658,6 +1649,11 @@ function createCardDirectly(url, options = {}) {
       if (mainWindow && !mainWindow.isDestroyed() && cardWindow && !cardWindow.isDestroyed()) {
         const pageTitle = cardWindow.webContents.getTitle();
         const currentUrl = cardWindow.webContents.getURL();
+        mainWindow.webContents.send('external-card-created', {
+          cardId,
+          url: currentUrl || targetUrl,
+          title: pageTitle || (() => { try { return new URL(targetUrl).hostname; } catch(e) { return 'Loading...'; } })()
+        });
         mainWindow.webContents.send('card-loading-finish', cardId, pageTitle, currentUrl);
       }
       try {
@@ -1704,25 +1700,6 @@ function createCardDirectly(url, options = {}) {
       }
     });
 
-    // Notify renderer about the new card so it can update its state
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      try {
-        const parsedUrl = new URL(targetUrl);
-        const domain = parsedUrl.hostname || 'Loading...';
-        mainWindow.webContents.send('external-card-created', {
-          cardId,
-          url: targetUrl,
-          title: domain
-        });
-      } catch (e) {
-        mainWindow.webContents.send('external-card-created', {
-          cardId,
-          url: targetUrl,
-          title: 'Loading...'
-        });
-      }
-    }
-
     return { cardId, cardWindow };
   } catch (error) {
     console.error('Error creating card directly:', error);
@@ -1744,7 +1721,7 @@ function openUrlInCard(url, context = {}) {
 
     // Create card directly for instant visual feedback
     // This bypasses the renderer round-trip for external URLs
-    createCardDirectly(targetUrl);
+    launchExternalCardUrlOnce(targetUrl);
   } catch (e) {
     // ignore
   }
@@ -2141,7 +2118,7 @@ ipcMain.handle('get-visualizer-enabled', async () => {
 // Card theme management - store user's preferred theme for external URL cards
 ipcMain.handle('set-card-theme', async (event, themeKey) => {
   try {
-    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt']);
+    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'frost']);
     if (allowedThemes.has(String(themeKey || '').toLowerCase())) {
       currentCardTheme = String(themeKey || '').toLowerCase();
       if (currentCardTheme === 'alt') currentCardTheme = 'sunset';
@@ -2248,11 +2225,9 @@ app.on('ready', () => {
 
 app.on('before-quit', () => {
   flushPermissionDecisionPersist();
-  cleanupPrewarmedCardWindow();
 });
 
 app.on('window-all-closed', () => {
-  cleanupPrewarmedCardWindow();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -2267,8 +2242,7 @@ app.on('activate', () => {
 // Handle protocol URLs when app is already running
 app.on('open-url', (event, url) => {
   event.preventDefault();
-  // Create card directly for instant visual feedback
-  createCardDirectly(url);
+  launchExternalCardUrlOnce(url);
 });
 
 // Handle when launched with a URL (Windows)
@@ -2288,8 +2262,7 @@ if (!gotTheLock) {
 
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (url) {
-        // Create card directly for instant visual feedback
-        createCardDirectly(url);
+        launchExternalCardUrlOnce(url);
         return;
       }
 
@@ -2388,8 +2361,7 @@ function createMainWindow() {
 
   mainWindow.webContents.on('did-finish-load', () => {
     if (pendingStartupUrl) {
-      // Create card directly for instant visual feedback
-      createCardDirectly(pendingStartupUrl);
+      launchExternalCardUrlOnce(pendingStartupUrl);
       pendingStartupUrl = null;
     }
   });
@@ -2401,10 +2373,7 @@ function createMainWindow() {
         window.close();
       }
     });
-    cleanupPrewarmedCardWindow();
   });
-
-  scheduleCardPrewarm();
 }
 
 // ========================
@@ -2780,7 +2749,7 @@ function setupAddonBlocking() {
 // Enhanced create-card handler with beautiful animations
 ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'primary', launchSizeMode = null) => {
   try {
-    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt']);
+    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'frost']);
     const normalizedTheme = allowedThemes.has(String(themeKey || '').toLowerCase())
       ? String(themeKey || '').toLowerCase()
       : 'primary';
@@ -3219,6 +3188,9 @@ ipcMain.handle('cycle-windows', async (event, currentCardId) => {
     if (target.isMinimized()) target.restore();
     target.show();
     target.focus();
+    bringBubbleWindowsToFront();
+    setTimeout(() => bringBubbleWindowsToFront(), 80);
+    setTimeout(() => bringBubbleWindowsToFront(), 180);
     setTimeout(() => {
       try {
         if (!target.isDestroyed()) target.webContents.send('card-cycle-arriving');

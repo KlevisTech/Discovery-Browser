@@ -161,12 +161,15 @@
     .dark-mode .highlight-item-text { color: #cbd5e1; }
 
     .dark-mode .highlights-toggle-btn {
-      background: rgba(17, 24, 39, 0.9);
+      background: rgba(17, 24, 39, 0.7);
       border-color: rgba(55, 75, 100, 0.35);
+      color: #4ade80;
+      opacity: 0.5;
     }
 
     .dark-mode .highlights-toggle-btn:hover {
-      background: rgba(26, 35, 50, 1);
+      background: rgba(26, 35, 50, 0.95);
+      opacity: 1;
     }
 
     .dark-mode .font-dropdown {
@@ -831,7 +834,19 @@
        BOOKMARK BUTTON
     ═══════════════════════════════════════════════════════════════ */
     .readmode-btn#bookmark-btn {
-      font-size: 14px;
+      background: rgba(30, 90, 160, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .readmode-btn#bookmark-btn img {
+      width: 14px;
+      height: 14px;
+      pointer-events: none;
+      object-fit: contain;
     }
 
     .readmode-btn#bookmark-btn.active {
@@ -1051,32 +1066,6 @@
       animation: magicGlow 18s ease-in-out infinite;
     }
 
-    .reader-article.magic-effects-style-ember .magic-para.magic-active {
-      background:
-        linear-gradient(135deg, rgba(255,250,243,0.92), rgba(255,239,221,0.88)) !important;
-      box-shadow:
-        0 0 14px 2px rgba(255,140,66,0.34),
-        0 0 28px 4px rgba(255,94,0,0.18),
-        0 0 0 2px rgba(255,149,0,0.22),
-        inset 4px 0 0 0 rgba(175,86,0,0.62) !important;
-      text-shadow: 0 0 8px rgba(255,244,224,0.54), 0 0 14px rgba(255,122,0,0.24);
-      filter: brightness(1.02) saturate(1.02);
-      animation: emberGlow 14s ease-in-out infinite;
-    }
-
-    .reader-article.magic-effects-style-frost .magic-para.magic-active {
-      background:
-        linear-gradient(135deg, rgba(251,254,255,0.96), rgba(232,245,255,0.90)) !important;
-      box-shadow:
-        0 0 16px 2px rgba(125,211,252,0.30),
-        0 0 30px 6px rgba(59,130,246,0.14),
-        0 0 0 2px rgba(147,197,253,0.22),
-        inset 4px 0 0 0 rgba(3,105,161,0.42) !important;
-      text-shadow: 0 0 10px rgba(255,255,255,0.96), 0 0 16px rgba(56,189,248,0.18);
-      filter: brightness(1.02) saturate(0.98);
-      animation: frostGlow 14s ease-in-out infinite;
-    }
-
     @keyframes magicGlow {
       0% {
         background-color: rgba(255,213,0,0.5);
@@ -1127,78 +1116,6 @@
           inset 4px 0 0 0 rgba(195,140,0,0.65);
         text-shadow: 0 0 4px rgba(255,220,0,0.4), 0 0 8px rgba(255,180,0,0.2);
         filter: brightness(1.08) hue-rotate(0deg);
-      }
-    }
-
-    @keyframes emberGlow {
-      0%, 100% {
-        background:
-          linear-gradient(135deg, rgba(255,250,243,0.92), rgba(255,239,221,0.88));
-        box-shadow:
-          0 0 10px 1px rgba(255,184,108,0.16),
-          0 0 18px 2px rgba(255,122,0,0.08),
-          0 0 0 2px rgba(255,214,170,0.16),
-          inset 4px 0 0 0 rgba(175,86,0,0.62);
-        text-shadow: 0 0 4px rgba(255,249,240,0.55), 0 0 8px rgba(255,184,108,0.10);
-        filter: brightness(1.01) saturate(1.0);
-      }
-      35% {
-        background:
-          linear-gradient(135deg, rgba(255,236,205,0.94), rgba(255,200,132,0.76));
-        box-shadow:
-          0 0 18px 3px rgba(255,170,74,0.28),
-          0 0 30px 6px rgba(251,146,60,0.16),
-          0 0 0 2px rgba(251,191,36,0.22),
-          inset 4px 0 0 0 rgba(180,101,22,0.66);
-        text-shadow: 0 0 10px rgba(255,245,224,0.66), 0 0 16px rgba(251,191,36,0.24);
-        filter: brightness(1.05) saturate(1.06);
-      }
-      70% {
-        background:
-          linear-gradient(135deg, rgba(255,222,184,0.96), rgba(251,146,60,0.58));
-        box-shadow:
-          0 0 24px 4px rgba(251,146,60,0.40),
-          0 0 42px 8px rgba(234,88,12,0.24),
-          0 0 0 2px rgba(249,115,22,0.24),
-          inset 4px 0 0 0 rgba(154,52,18,0.68);
-        text-shadow: 0 0 12px rgba(255,241,214,0.72), 0 0 20px rgba(249,115,22,0.32);
-        filter: brightness(1.08) saturate(1.10);
-      }
-    }
-
-    @keyframes frostGlow {
-      0%, 100% {
-        background:
-          linear-gradient(135deg, rgba(251,254,255,0.96), rgba(232,245,255,0.90));
-        box-shadow:
-          0 0 10px 1px rgba(191,219,254,0.14),
-          0 0 18px 3px rgba(96,165,250,0.06),
-          0 0 0 2px rgba(219,234,254,0.18),
-          inset 4px 0 0 0 rgba(3,105,161,0.38);
-        text-shadow: 0 0 6px rgba(255,255,255,0.78), 0 0 12px rgba(186,230,253,0.12);
-        filter: brightness(1.01) saturate(0.98);
-      }
-      35% {
-        background:
-          linear-gradient(135deg, rgba(239,249,255,0.96), rgba(186,230,253,0.70));
-        box-shadow:
-          0 0 18px 3px rgba(125,211,252,0.24),
-          0 0 30px 6px rgba(56,189,248,0.12),
-          0 0 0 2px rgba(147,197,253,0.20),
-          inset 4px 0 0 0 rgba(2,132,199,0.42);
-        text-shadow: 0 0 10px rgba(255,255,255,0.90), 0 0 16px rgba(125,211,252,0.22);
-        filter: brightness(1.04) saturate(1.0);
-      }
-      70% {
-        background:
-          linear-gradient(135deg, rgba(224,242,254,0.98), rgba(96,165,250,0.44));
-        box-shadow:
-          0 0 24px 4px rgba(125,211,252,0.34),
-          0 0 42px 8px rgba(59,130,246,0.18),
-          0 0 0 2px rgba(96,165,250,0.22),
-          inset 4px 0 0 0 rgba(3,105,161,0.50);
-        text-shadow: 0 0 12px rgba(255,255,255,0.96), 0 0 20px rgba(96,165,250,0.28);
-        filter: brightness(1.07) saturate(1.03);
       }
     }
 
@@ -1316,7 +1233,7 @@
     .highlights-panel {
       position: fixed;
       left: 0; top: 0; bottom: 0;
-      width: 200px;
+      width: 160px;
       background: rgba(255,255,255,0.95);
       backdrop-filter: blur(12px);
       border-right: 1px solid rgba(88,120,156,0.18);
@@ -1401,26 +1318,29 @@
     }
 
     .highlights-toggle-btn {
-      position: fixed; left: 10px; top: 50%;
+      position: fixed; left: 0px; top: 50%;
       transform: translateY(-50%);
-      width: 32px; height: 64px;
-      background: rgba(255,255,255,0.9);
+      width: 18px; height: 48px;
+      background: rgba(255,255,255,0.75);
       backdrop-filter: blur(8px);
       border: 1px solid rgba(88,120,156,0.18);
-      border-radius: 0 8px 8px 0;
+      border-radius: 0 6px 6px 0;
+      border-left: none;
       cursor: pointer; z-index: 99;
       display: flex; align-items: center; justify-content: center;
-      color: #4ade80; font-size: 16px;
-      box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+      color: #4ade80; font-size: 11px;
+      box-shadow: 1px 0 4px rgba(0,0,0,0.08);
       transition: all 0.2s ease;
+      opacity: 0.5;
     }
 
     .highlights-toggle-btn:hover {
-      background: #fff;
-      box-shadow: 2px 0 12px rgba(0,0,0,0.15);
+      background: rgba(255,255,255,0.95);
+      box-shadow: 1px 0 8px rgba(0,0,0,0.12);
+      opacity: 1;
     }
 
-    .highlights-toggle-btn.panel-visible { left: 210px; }
+    .highlights-toggle-btn.panel-visible { left: 200px; opacity: 1; }
     .phone-frame.highlights-open { margin-left: 200px; }
 
     /* ═══════════════════════════════════════════════════════════════
@@ -1839,7 +1759,7 @@
       <button class="readmode-btn magic-cursor-btn" id="magic-cursor-btn"
               title="Magic Cursor — hover paragraphs to highlight, ↓↑ to navigate">🖌</button>
 
-      <button class="readmode-btn" id="bookmark-btn" title="Bookmark reading position">🔖</button>
+      <button class="readmode-btn" id="bookmark-btn" title="Bookmark reading position"><img src="../assets/bookmark.png" alt="Bookmark" style="width:14px; height:14px; pointer-events:none; display:inline-block; vertical-align:middle;" draggable="false"></button>
 
       <button class="readmode-btn" id="save-article-btn" title="Save Article">💾</button>
       <button class="readmode-btn" id="fullscreen-btn" title="Fullscreen">⛶</button>
@@ -2143,6 +2063,35 @@
       return `<strong>We could not build the reader view.</strong>
         <p>${escapeHtml(intro)}</p>
         ${items ? `<ul class="reader-empty-details">${items}</ul>` : ''}`;
+    }
+
+    function isOfflineExtractionPayload(payload) {
+      if (!payload || typeof payload !== 'object') return false;
+      if (String(payload.errorType || '').toLowerCase() === 'offline') return true;
+
+      const signalText = [
+        payload.message,
+        payload.title,
+        payload.excerpt,
+        ...(Array.isArray(payload?.debug?.notes) ? payload.debug.notes : [])
+      ]
+        .map((value) => normalizeExtractionMessage(value).toLowerCase())
+        .filter(Boolean)
+        .join(' ');
+
+      return /no internet|internet disconnected|err_internet_disconnected|check your network|network settings/.test(signalText);
+    }
+
+    function showReaderFailureState(title, message, statusLabel = title) {
+      readerArticle.innerHTML = '';
+      const fail = document.createElement('div');
+      fail.className = 'reader-empty';
+      fail.innerHTML = `<strong>${escapeHtml(title)}</strong>
+        <p>${escapeHtml(message)}</p>`;
+      readerArticle.appendChild(fail);
+      wordCountLabel.textContent = statusLabel;
+      setProgress(0, statusLabel);
+      loadingOverlay.classList.add('hidden');
     }
 
     /* ═══════════════════════════════════════════════════════════════
@@ -2459,6 +2408,11 @@
     function renderArticle(payload) {
       readerArticle.innerHTML = '';
       lightboxImages = [];
+
+      if (isOfflineExtractionPayload(payload)) {
+        showReaderFailureState('No internet connection', 'Check your network and try again.', 'No internet');
+        return;
+      }
 
       const blocks    = Array.isArray(payload?.blocks) ? payload.blocks : [];
       const imgBlocks = Array.isArray(payload?.images) ? payload.images : [];
@@ -2893,6 +2847,26 @@
         (() => {
           'use strict';
           const norm = s => s ? s.replace(/\\s+/g, ' ').trim() : '';
+          const titleText = norm(document.title || '');
+          const bodyText = norm(document.body ? (document.body.innerText || document.body.textContent || '') : '');
+          const offlinePagePattern = /no internet|internet disconnected|err_internet_disconnected|check your network|network settings|check your internet connection/i;
+          if (offlinePagePattern.test(titleText) || offlinePagePattern.test(bodyText)) {
+            return {
+              title: 'No internet connection',
+              excerpt: '',
+              byline: '',
+              url: location.href,
+              wordCount: 0,
+              blocks: [],
+              errorType: 'offline',
+              message: 'Check your network and try again.',
+              debug: {
+                reason: 'offline-error-page',
+                url: location.href,
+                notes: ['browser offline error page detected']
+              }
+            };
+          }
           const resolveImageSrc = (imgEl) => {
             if (!imgEl) return '';
             return imgEl.currentSrc ||
@@ -3272,6 +3246,15 @@
         clearTimeout(timeoutId);
         if (token !== extractionToken) return;
 
+        if (isOfflineExtractionPayload(payload)) {
+          stopProgressTick();
+          articleRendered = false;
+          userNavigating = false;
+          currentUrl = pageUrl;
+          showReaderFailureState('No internet connection', 'Check your network and try again.', 'No internet');
+          return;
+        }
+
         const pageExt = getFileExtensionFromUrl(pageUrl);
         if (isLocalFileUrl(pageUrl) && pageExt === 'pdf' && (!payload || !Array.isArray(payload.blocks) || payload.blocks.length === 0)) {
           stopProgressTick();
@@ -3318,8 +3301,17 @@
         stopProgressTick();
         clearTimeout(timeoutId);
         if (token !== extractionToken) return;
+
+        const errMsg = String(err?.message || '').toUpperCase();
+        const isNetErr = /NETWORK|INTERNET|CONNECTION|TIMED OUT|DNS|ADDRESS|REACHABLE|RESET|DISCONNECTED|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_FAILED|ERR_INTERNET_DISCONNECTED/i.test(errMsg);
         const pageExt = getFileExtensionFromUrl(pageUrl);
-        if (isLocalFileUrl(pageUrl) && pageExt === 'pdf') {
+        if (isNetErr || (isLocalFileUrl(pageUrl) && pageExt === 'pdf')) {
+          if (isNetErr) {
+            articleRendered = false;
+            userNavigating = false;
+            showReaderFailureState('No internet connection', 'Check your network and try again.', 'No internet');
+            return;
+          }
           currentUrl = pageUrl;
           extractedUrl = pageUrl;
           enableDocumentViewMode(getReadableFileLabel(pageUrl));
@@ -3477,20 +3469,33 @@
       if (url && url !== extractedUrl) scheduleExtraction('in-page-navigate', 200);
     });
 
+function isNetworkFailure(code, desc) {
+      const c = Number(code);
+      const d = String(desc || '').toUpperCase();
+      if (d.includes('INTERNET') || d.includes('NETWORK') ||
+        d.includes('CONNECTION') || d.includes('TIMED OUT') ||
+        d.includes('DNS') || d.includes('ADDRESS') || d.includes('REACHABLE') ||
+        d.includes('RESET') || d.includes('DISCONNECTED')) {
+        return true;
+      }
+      const networkCodes = new Set([-2, -6, -7, -17, -101, -105, -118, -109, -200]);
+      return networkCodes.has(c);
+    }
+
     sourceWebview.addEventListener('did-fail-load', (ev) => {
       if (ev?.isMainFrame === false) return;
       if (ev?.errorCode === -3 || ev?.errorCode === -18 || ev?.errorCode === -27) return;
       extractionInProgress = false; userNavigating = false;
       if (extractionTimer) { clearTimeout(extractionTimer); extractionTimer = null; }
-      readerArticle.innerHTML = '';
-      const fail = document.createElement('div');
-      fail.className = 'reader-empty';
-      fail.innerHTML = `<strong>This page could not load in read mode.</strong>
-        <p>${escapeHtml(ev?.errorDescription || 'The content failed to load.')}</p>`;
-      readerArticle.appendChild(fail);
-      wordCountLabel.textContent = 'Load failed';
-      setProgress(0, 'Load failed');
-      loadingOverlay.classList.add('hidden');
+      let message = ev?.errorDescription || 'The content failed to load.';
+      let title = 'This page could not load in read mode.';
+      let statusLabel = title;
+      if (isNetworkFailure(ev?.errorCode, ev?.errorDescription)) {
+        title = 'No internet connection';
+        message = 'Check your network and try again.';
+        statusLabel = 'No internet';
+      }
+      showReaderFailureState(title, message, statusLabel);
     });
 
     /* ═══════════════════════════════════════════════════════════════
@@ -3800,8 +3805,6 @@
     const MAGIC_EFFECTS = [
       { key: 'none',      label: 'None',      description: 'Use the default Magic Cursor highlight only.',       swatch: 'linear-gradient(135deg, rgba(255,255,255,0.85), rgba(226,232,240,0.92))' },
       { key: 'prismatic', label: 'Prismatic', description: 'Animated rainbow glow across the active paragraph.', swatch: 'linear-gradient(135deg, #ffd54f 0%, #fb7185 38%, #60a5fa 70%, #c084fc 100%)' },
-      { key: 'ember',     label: 'Ember',     description: 'Warm amber and firelight pulse.',                    swatch: 'linear-gradient(135deg, #ffe082 0%, #fb923c 48%, #f97316 100%)' },
-      { key: 'frost',     label: 'Frost',     description: 'Cool icy shimmer with soft blue edges.',             swatch: 'linear-gradient(135deg, #f0f9ff 0%, #7dd3fc 50%, #60a5fa 100%)' },
     ];
 
     const magicEffectsPicker = document.createElement('div');
@@ -3859,7 +3862,7 @@
     function closeMagicEffectsMenu() { magicEffectsMenuOpen = false; magicEffectsMenu.classList.remove('open'); magicEffectsBtn.classList.remove('open'); magicEffectsBtn.setAttribute('aria-expanded','false'); }
 
     function applyMagicEffectsState() {
-      readerArticle.classList.remove('magic-effects-style-prismatic','magic-effects-style-ember','magic-effects-style-frost');
+      readerArticle.classList.remove('magic-effects-style-prismatic');
       if (activeMagicEffectKey !== 'none') readerArticle.classList.add(`magic-effects-style-${activeMagicEffectKey}`);
       magicEffectsBtn.classList.toggle('active', activeMagicEffectKey !== 'none');
       magicEffectsBtn.setAttribute('aria-pressed', String(activeMagicEffectKey !== 'none'));

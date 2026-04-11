@@ -14,6 +14,7 @@ class DiscoveryBrowser {
     // Tab management
     this.visitedTabs = new Map(); // url -> tabData
     this.maxTabs = 8;
+    this.maxFavoriteBookmarks = 8;
 
     // History management
     this.history = []; // Array of {url, title, timestamp, favicon}
@@ -119,6 +120,12 @@ class DiscoveryBrowser {
         description: 'Brown espresso with warm bronze blend.',
         preview: 'linear-gradient(135deg, rgba(110,72,44,0.62), rgba(166,123,91,0.56))',
       },
+      {
+        key: 'frost',
+        name: 'Frosted Glass',
+        description: 'Foggy frosted glass with cool icy sheen.',
+        preview: 'linear-gradient(135deg, rgba(200,210,220,0.55), rgba(230,235,240,0.5))',
+      },
     ];
     this.cardLaunchSizeModes = [
       {
@@ -191,7 +198,26 @@ class DiscoveryBrowser {
           url = this.normalizeUrl(url); // Add https:// if missing
           this.createCard(url);
           searchInput.value = ''; // Clear input after creating card
+          searchInput.classList.remove('active'); // Remove glow
         }
+      }
+    });
+
+    // Add active class when user focuses or starts typing
+    searchInput.addEventListener('focus', () => {
+      searchInput.classList.add('active');
+    });
+
+    searchInput.addEventListener('input', () => {
+      if (searchInput.value.trim()) {
+        searchInput.classList.add('active');
+      }
+    });
+
+    // Remove active class when input loses focus (if empty)
+    searchInput.addEventListener('blur', () => {
+      if (!searchInput.value.trim()) {
+        searchInput.classList.remove('active');
       }
     });
 
@@ -224,12 +250,29 @@ class DiscoveryBrowser {
       const searchUrl = this.buildSearchUrl(query);
       this.createCard(searchUrl);
       googleSearchInput.value = '';
+      googleSearchInput.classList.remove('active');
     };
 
     if (googleSearchInput) {
       googleSearchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           runGoogleSearch();
+        }
+      });
+
+      googleSearchInput.addEventListener('focus', () => {
+        googleSearchInput.classList.add('active');
+      });
+
+      googleSearchInput.addEventListener('input', () => {
+        if (googleSearchInput.value.trim()) {
+          googleSearchInput.classList.add('active');
+        }
+      });
+
+      googleSearchInput.addEventListener('blur', () => {
+        if (!googleSearchInput.value.trim()) {
+          googleSearchInput.classList.remove('active');
         }
       });
     }
@@ -549,9 +592,12 @@ class DiscoveryBrowser {
     // Bookmark management
     this.bookmarks = new Map(); // url -> bookmark data
     this.bookmarkFolders = new Map(); // folderId -> { name, bookmarks: [] }
+    this.favoriteBookmarks = [];
     this.nextFolderId = 1;
     this.loadBookmarks();
     this.loadBookmarkFolders();
+    this.loadFavoriteBookmarks();
+    this.renderFavoritesTray();
 
     // Article management
     this.articles = new Map(); // articleId -> { id, url, title, content, timestamp }
@@ -1909,6 +1955,7 @@ class DiscoveryBrowser {
     try {
       const foldersArray = Array.from(this.bookmarkFolders.values());
       localStorage.setItem('bookmarkFolders', JSON.stringify(foldersArray));
+      this.syncFavoriteBookmarksWithFolders();
       // Sync to main process so card windows can read directly
       if (window.electronAPI && window.electronAPI.syncBookmarkFolders) {
         window.electronAPI.syncBookmarkFolders(foldersArray);
@@ -2217,10 +2264,355 @@ class DiscoveryBrowser {
     // Legacy support - folders are saved instead
   }
 
+  loadFavoriteBookmarks() {
+    try {
+      const saved = localStorage.getItem('favoriteBookmarks');
+      const parsed = saved ? JSON.parse(saved) : [];
+      this.favoriteBookmarks = Array.isArray(parsed) ? parsed.slice(0, this.maxFavoriteBookmarks) : [];
+      this.syncFavoriteBookmarksWithFolders();
+    } catch (e) {
+      console.warn('Failed to load favorite bookmarks:', e);
+      this.favoriteBookmarks = [];
+    }
+  }
+
+  saveFavoriteBookmarks() {
+    try {
+      this.favoriteBookmarks = this.favoriteBookmarks.slice(0, this.maxFavoriteBookmarks);
+      localStorage.setItem('favoriteBookmarks', JSON.stringify(this.favoriteBookmarks));
+    } catch (e) {
+      console.warn('Failed to save favorite bookmarks:', e);
+    }
+  }
+
+  getBookmarkByUrl(url) {
+    if (!url) return null;
+    for (const folder of this.bookmarkFolders.values()) {
+      if (!Array.isArray(folder.bookmarks)) continue;
+      const match = folder.bookmarks.find((bookmark) => bookmark.url === url);
+      if (match) return match;
+    }
+    return null;
+  }
+
+  isFavoriteBookmark(url) {
+    return this.favoriteBookmarks.some((bookmark) => bookmark.url === url);
+  }
+
+  removeFavoriteBookmark(url) {
+    if (!url) return false;
+    const existingIndex = this.favoriteBookmarks.findIndex((bookmark) => bookmark.url === url);
+    if (existingIndex === -1) return false;
+
+    this.favoriteBookmarks.splice(existingIndex, 1);
+    this.saveFavoriteBookmarks();
+    this.renderFavoritesTray();
+    this.renderBookmarks();
+    return true;
+  }
+
+  syncFavoriteBookmarksWithFolders() {
+    const syncedFavorites = this.favoriteBookmarks
+      .map((favorite) => this.getBookmarkByUrl(favorite.url))
+      .filter(Boolean)
+      .slice(0, this.maxFavoriteBookmarks);
+    const changed = JSON.stringify(syncedFavorites) !== JSON.stringify(this.favoriteBookmarks);
+    this.favoriteBookmarks = syncedFavorites;
+    if (changed) {
+      this.saveFavoriteBookmarks();
+    }
+    this.renderFavoritesTray();
+  }
+
+  toggleFavoriteBookmark(bookmarkData) {
+    const url = bookmarkData && bookmarkData.url;
+    if (!url) return false;
+
+    const existingIndex = this.favoriteBookmarks.findIndex((bookmark) => bookmark.url === url);
+    if (existingIndex !== -1) {
+      this.favoriteBookmarks.splice(existingIndex, 1);
+      this.saveFavoriteBookmarks();
+      this.renderFavoritesTray();
+      this.renderBookmarks();
+      return true;
+    }
+
+    if (this.favoriteBookmarks.length >= this.maxFavoriteBookmarks) {
+      window.alert(`You can only keep ${this.maxFavoriteBookmarks} favorite sites.`);
+      return false;
+    }
+
+    this.favoriteBookmarks.push({
+      url: bookmarkData.url,
+      title: bookmarkData.title || bookmarkData.url,
+      timestamp: bookmarkData.timestamp || Date.now()
+    });
+    this.saveFavoriteBookmarks();
+    this.renderFavoritesTray();
+    this.renderBookmarks();
+    return true;
+  }
+
+  renderFavoritesTray() {
+    const trayList = document.getElementById('favorites-tray-list');
+    const countEl = document.getElementById('favorites-count');
+    if (!trayList || !countEl) return;
+
+    this.closeFavoriteContextMenu();
+
+    const favorites = this.favoriteBookmarks.slice(0, this.maxFavoriteBookmarks);
+    countEl.textContent = `${favorites.length}/${this.maxFavoriteBookmarks}`;
+    trayList.innerHTML = '';
+
+    favorites.forEach((bookmark) => {
+      const favoriteBtn = document.createElement('button');
+      favoriteBtn.className = 'favorite-site';
+      favoriteBtn.type = 'button';
+      favoriteBtn.title = bookmark.title || bookmark.url || 'Favorite site';
+
+      const faviconUrl = this.getFaviconUrl(bookmark.url);
+      const shortLabel = (bookmark.title || bookmark.url || '?').trim().charAt(0).toUpperCase() || '?';
+      favoriteBtn.innerHTML = `
+        <img class="favorite-site__icon" src="${this.escapeHtml(faviconUrl)}" alt="">
+        <span class="favorite-site__fallback">${this.escapeHtml(shortLabel)}</span>
+      `;
+
+      const icon = favoriteBtn.querySelector('.favorite-site__icon');
+      const fallback = favoriteBtn.querySelector('.favorite-site__fallback');
+      if (icon) {
+        icon.addEventListener('error', () => {
+          icon.style.display = 'none';
+          if (fallback) fallback.style.display = 'flex';
+        });
+        icon.addEventListener('load', () => {
+          icon.style.display = 'block';
+          if (fallback) fallback.style.display = 'none';
+        });
+      }
+
+      favoriteBtn.addEventListener('click', () => {
+        if (bookmark.url) {
+          this.createCard(bookmark.url);
+        }
+      });
+
+      favoriteBtn.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.showFavoriteContextMenu(event.clientX, event.clientY, bookmark);
+      });
+
+      trayList.appendChild(favoriteBtn);
+    });
+
+    for (let i = favorites.length; i < this.maxFavoriteBookmarks; i++) {
+      const emptySlot = document.createElement('button');
+      emptySlot.className = 'favorite-site favorite-site--empty';
+      emptySlot.type = 'button';
+      emptySlot.title = 'Add favorite site';
+      emptySlot.setAttribute('aria-label', 'Add favorite site');
+      emptySlot.innerHTML = `
+        <span class="favorite-site__plus" aria-hidden="true">+</span>
+        <span class="favorite-site__empty-label">Add</span>
+      `;
+      emptySlot.addEventListener('click', () => this.promptAddFavorite());
+      trayList.appendChild(emptySlot);
+    }
+  }
+
+  promptAddFavorite() {
+    const modal = document.getElementById('favorite-modal');
+    const overlay = modal ? modal.querySelector('.favorite-modal__overlay') : null;
+    const closeBtn = document.getElementById('favorite-modal-close');
+    const cancelBtn = document.getElementById('favorite-modal-cancel');
+    const saveBtn = document.getElementById('favorite-modal-save');
+    const urlInput = document.getElementById('favorite-url-input');
+    const titleInput = document.getElementById('favorite-title-input');
+    const errorEl = document.getElementById('favorite-modal-error');
+
+    if (!modal || !overlay || !closeBtn || !cancelBtn || !saveBtn || !urlInput || !titleInput || !errorEl) {
+      console.error('Favorite modal elements not found');
+      return;
+    }
+
+    const closeModal = () => {
+      modal.setAttribute('aria-hidden', 'true');
+      urlInput.value = '';
+      titleInput.value = '';
+      errorEl.textContent = '';
+      urlInput.removeEventListener('keydown', handleKeydown);
+      titleInput.removeEventListener('keydown', handleKeydown);
+    };
+
+    const submit = () => {
+      const rawUrl = urlInput.value.trim();
+      if (!rawUrl) {
+        errorEl.textContent = 'Enter a site URL to add it to your favorites.';
+        urlInput.focus();
+        return;
+      }
+
+      const normalizedUrl = this.normalizeUrl(rawUrl);
+
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(normalizedUrl);
+      } catch (e) {
+        errorEl.textContent = 'Please enter a valid website address, like google.com.';
+        urlInput.focus();
+        return;
+      }
+
+      if (!/^https?:$/i.test(parsedUrl.protocol)) {
+        errorEl.textContent = 'Only http and https sites can be added to favorites.';
+        urlInput.focus();
+        return;
+      }
+
+      const suggestedTitle = parsedUrl.hostname.replace(/^www\./i, '');
+      const added = this.addToFavorites({
+        url: parsedUrl.toString(),
+        title: titleInput.value.trim() || suggestedTitle,
+        timestamp: Date.now()
+      });
+      if (added) {
+        closeModal();
+      }
+    };
+
+    const handleKeydown = (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        submit();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        closeModal();
+      }
+    };
+
+    const bindOneShotClick = (element, handler) => {
+      const cloned = element.cloneNode(true);
+      element.parentNode.replaceChild(cloned, element);
+      cloned.addEventListener('click', handler);
+      return cloned;
+    };
+
+    modal.setAttribute('aria-hidden', 'false');
+    errorEl.textContent = '';
+    urlInput.value = '';
+    titleInput.value = '';
+
+    const boundOverlay = bindOneShotClick(overlay, closeModal);
+    const boundCloseBtn = bindOneShotClick(closeBtn, closeModal);
+    const boundCancelBtn = bindOneShotClick(cancelBtn, closeModal);
+    const boundSaveBtn = bindOneShotClick(saveBtn, submit);
+    void boundOverlay;
+    void boundCloseBtn;
+    void boundCancelBtn;
+    void boundSaveBtn;
+
+    urlInput.addEventListener('keydown', handleKeydown);
+    titleInput.addEventListener('keydown', handleKeydown);
+    setTimeout(() => urlInput.focus(), 0);
+  }
+
+  showFavoriteContextMenu(x, y, bookmark) {
+    this.closeFavoriteContextMenu();
+
+    if (!bookmark || !bookmark.url) return;
+
+    const menu = document.createElement('div');
+    menu.className = 'favorite-context-menu';
+    menu.setAttribute('role', 'menu');
+
+    const removeItem = document.createElement('button');
+    removeItem.className = 'favorite-context-menu__item favorite-context-menu__item--danger';
+    removeItem.type = 'button';
+    removeItem.setAttribute('role', 'menuitem');
+    removeItem.innerHTML = '<span aria-hidden="true">×</span><span>Remove from favorites</span>';
+    removeItem.addEventListener('click', () => {
+      this.removeFavoriteBookmark(bookmark.url);
+      this.closeFavoriteContextMenu();
+    });
+
+    menu.appendChild(removeItem);
+    document.body.appendChild(menu);
+
+    const menuRect = menu.getBoundingClientRect();
+    const maxLeft = Math.max(8, window.innerWidth - menuRect.width - 8);
+    const maxTop = Math.max(8, window.innerHeight - menuRect.height - 8);
+    menu.style.left = `${Math.min(x, maxLeft)}px`;
+    menu.style.top = `${Math.min(y, maxTop)}px`;
+
+    const closeOnPointer = (event) => {
+      if (!menu.contains(event.target)) {
+        this.closeFavoriteContextMenu();
+      }
+    };
+
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') {
+        this.closeFavoriteContextMenu();
+      }
+    };
+
+    this.favoriteContextMenuCleanup = () => {
+      document.removeEventListener('mousedown', closeOnPointer);
+      document.removeEventListener('scroll', closeOnPointer, true);
+      document.removeEventListener('keydown', closeOnEscape);
+      if (menu.parentNode) {
+        menu.parentNode.removeChild(menu);
+      }
+      this.favoriteContextMenuCleanup = null;
+    };
+
+    setTimeout(() => {
+      document.addEventListener('mousedown', closeOnPointer);
+      document.addEventListener('scroll', closeOnPointer, true);
+      document.addEventListener('keydown', closeOnEscape);
+    }, 0);
+  }
+
+  closeFavoriteContextMenu() {
+    if (typeof this.favoriteContextMenuCleanup === 'function') {
+      this.favoriteContextMenuCleanup();
+    }
+  }
+
+  addToFavorites(bookmarkData) {
+    const url = bookmarkData.url;
+    
+    if (this.favoriteBookmarks.some(b => b.url === url)) {
+      alert('This site is already in your favorites!');
+      return false;
+    }
+    
+    if (this.favoriteBookmarks.length >= this.maxFavoriteBookmarks) {
+      alert(`You can only keep ${this.maxFavoriteBookmarks} favorite sites.`);
+      return false;
+    }
+
+    this.favoriteBookmarks.unshift({
+      url: bookmarkData.url,
+      title: bookmarkData.title || bookmarkData.url,
+      timestamp: Date.now()
+    });
+
+    this.saveFavoriteBookmarks();
+    this.renderFavoritesTray();
+    return true;
+  }
+
   toggleBookmark(bookmarkData) {
     const url = bookmarkData.url;
 
-    // This is now only called to REMOVE a bookmark (card handles add flow)
+    const favIndex = this.favoriteBookmarks.findIndex(b => b.url === url);
+    if (favIndex !== -1) {
+      this.favoriteBookmarks.splice(favIndex, 1);
+      this.saveFavoriteBookmarks();
+      this.renderFavoritesTray();
+    }
+
     for (const [folderId, folder] of this.bookmarkFolders) {
       const index = folder.bookmarks.findIndex(b => b.url === url);
       if (index !== -1) {
@@ -2314,16 +2706,18 @@ class DiscoveryBrowser {
     const bookmarkItem = document.createElement('div');
     bookmarkItem.className = 'bookmark-item';
     bookmarkItem.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; margin-bottom: 4px; transition: all 0.2s ease; cursor: pointer;';
+    const isFavorite = this.isFavoriteBookmark(bookmark.url);
 
     bookmarkItem.innerHTML = `
       <div class="bookmark-info" style="flex: 1; min-width: 0;">
         <div class="bookmark-title" style="color: white; font-weight: 600; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-          ${bookmark.title || 'Untitled'}
+          ${this.escapeHtml(bookmark.title || 'Untitled')}
         </div>
         <div class="bookmark-url" style="color: rgba(255,255,255,0.6); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: monospace;">
-          ${bookmark.url}
+          ${this.escapeHtml(bookmark.url)}
         </div>
       </div>
+      <button class="bookmark-favorite-btn${isFavorite ? ' is-active' : ''}" style="background: ${isFavorite ? 'rgba(255, 209, 102, 0.28)' : 'rgba(255,255,255,0.12)'}; color: ${isFavorite ? '#ffd166' : 'white'}; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; flex-shrink: 0;" title="${isFavorite ? 'Remove from favorites' : 'Add to favorites'}">&#9733;</button>
       <button class="bookmark-remove-btn" style="background: rgba(255,100,100,0.8); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; flex-shrink: 0;" title="Remove bookmark">X</button>
     `;
 
@@ -2344,7 +2738,12 @@ class DiscoveryBrowser {
       this.createCard(bookmark.url);
     });
 
-    // Remove bookmark
+    const favoriteBtn = bookmarkItem.querySelector('.bookmark-favorite-btn');
+    favoriteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleFavoriteBookmark(bookmark);
+    });
+
     const removeBtn = bookmarkItem.querySelector('.bookmark-remove-btn');
     removeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -2367,6 +2766,14 @@ class DiscoveryBrowser {
     removeBtn.addEventListener('mouseleave', () => {
       removeBtn.style.background = 'rgba(255, 100, 100, 0.8)';
       removeBtn.style.transform = 'scale(1)';
+    });
+
+    favoriteBtn.addEventListener('mouseenter', () => {
+      favoriteBtn.style.transform = 'scale(1.05)';
+    });
+
+    favoriteBtn.addEventListener('mouseleave', () => {
+      favoriteBtn.style.transform = 'scale(1)';
     });
 
     return bookmarkItem;
@@ -2474,6 +2881,7 @@ class DiscoveryBrowser {
     this.notifications = [];
     this.installedAddons = new Map();
     this.bookmarkFolders = new Map();
+    this.favoriteBookmarks = [];
     this.searchEngineKey = 'google';
     this.cardThemeKey = 'primary';
     this.siteLayoutOverrides = {};
@@ -2506,6 +2914,7 @@ class DiscoveryBrowser {
     this.renderTabs();
     this.renderHistory();
     this.renderBookmarks();
+    this.renderFavoritesTray();
     this.renderDownloadHistory();
     this.renderNotifications();
     this.renderAddons();

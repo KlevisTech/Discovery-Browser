@@ -46,7 +46,24 @@ class DiscoveryBrowser {
         if (url) {
           this.createCard(url);
           searchInput.value = '';
+          searchInput.classList.remove('active');
         }
+      }
+    });
+
+    searchInput.addEventListener('focus', () => {
+      searchInput.classList.add('active');
+    });
+
+    searchInput.addEventListener('input', () => {
+      if (searchInput.value.trim()) {
+        searchInput.classList.add('active');
+      }
+    });
+
+    searchInput.addEventListener('blur', () => {
+      if (!searchInput.value.trim()) {
+        searchInput.classList.remove('active');
       }
     });
 

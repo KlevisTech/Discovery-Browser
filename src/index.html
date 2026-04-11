@@ -69,6 +69,13 @@
     </div>
 
     <div class="clock-row">
+      <div class="favorites-tray" aria-label="Favorite sites">
+        <div class="favorites-tray__header">
+          <span class="favorites-tray__title">Favorites</span>
+          <span class="favorites-tray__count" id="favorites-count">0/8</span>
+        </div>
+        <div class="favorites-tray__list" id="favorites-tray-list"></div>
+      </div>
       <div class="clock-widget" aria-live="polite">
         <div class="clock-time" id="clock-time">--:--</div>
         <div class="clock-date" id="clock-date">Loading date...</div>
@@ -114,7 +121,7 @@
 
     <!-- Settings panel (hidden by default) -->
     <div id="settings-panel" class="settings-panel" aria-hidden="true">
-      <div class="settings-content" style="padding: 12px; max-height: 350px; overflow-y: auto;">
+      <div class="settings-content" style="padding: 12px; max-height: calc(100vh - 148px); overflow-y: auto;">
         <!-- Default browser quick setting (always visible, above tabs) -->
         <div id="default-browser-setting"
           style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 10px; margin-bottom:12px; border-radius:10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.18);">
@@ -300,6 +307,32 @@
           <button id="folder-modal-cancel" class="btn"
             style="padding: 6px 12px; font-size: 11px; background: rgba(255,255,255,0.2);">Cancel</button>
           <button id="folder-modal-ok" class="btn btn-primary" style="padding: 6px 12px; font-size: 11px;">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="favorite-modal" class="favorite-modal" aria-hidden="true">
+      <div class="favorite-modal__overlay"></div>
+      <div class="favorite-modal__content" role="dialog" aria-modal="true" aria-labelledby="favorite-modal-title">
+        <div class="favorite-modal__header">
+          <div>
+            <h3 id="favorite-modal-title">Add Favorite Site</h3>
+            <p>Pin a site to your tray for one-click access.</p>
+          </div>
+          <button id="favorite-modal-close" class="favorite-modal__close" type="button" aria-label="Close add favorite dialog">×</button>
+        </div>
+        <label class="favorite-modal__field" for="favorite-url-input">
+          <span>Site URL</span>
+          <input id="favorite-url-input" type="text" placeholder="example.com" autocomplete="off">
+        </label>
+        <label class="favorite-modal__field" for="favorite-title-input">
+          <span>Title</span>
+          <input id="favorite-title-input" type="text" placeholder="Optional label" autocomplete="off">
+        </label>
+        <p id="favorite-modal-error" class="favorite-modal__error" aria-live="polite"></p>
+        <div class="favorite-modal__actions">
+          <button id="favorite-modal-cancel" class="btn" type="button">Cancel</button>
+          <button id="favorite-modal-save" class="btn btn-primary" type="button">Add Site</button>
         </div>
       </div>
     </div>
