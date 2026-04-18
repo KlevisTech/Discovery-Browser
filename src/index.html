@@ -51,6 +51,9 @@
           <button class="btn btn-icon" id="settings-btn" title="Settings">
               <img src="../assets/settings.png" alt="Settings" class="btn-icon-img" />
             </button>
+            <button class="btn btn-icon" id="support-btn" title="Support">
+              <img src="../assets/support.png" alt="Support" class="btn-icon-img" />
+            </button>
 
 
         </div>
@@ -139,8 +142,8 @@
           title="Experimental: This feature uses additional resources. Turn it off if videos become choppy or laggy while playing.">
           <div style="display:flex; flex-direction:column; gap:2px;">
             <span style="color:white; font-size:13px; font-weight:600;">Audio Visualizer</span>
-            <span style="color:rgba(255,255,255,0.7); font-size:11px;">Show the animated equalizer in card
-              headers.</span>
+            <span style="color:rgba(255,255,255,0.7); font-size:11px;">Show the animated equalizer in the centered card
+              title bar.</span>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="visualizer-toggle" />
@@ -292,6 +295,46 @@
             now</button>
         </div>
         <div id="notification-list" class="notification-list"></div>
+      </div>
+    </div>
+
+    <!-- Support panel (hidden by default) -->
+    <div id="support-panel" class="settings-panel" aria-hidden="true">
+      <div class="settings-content" style="padding: 12px; max-height: 280px; overflow-y: auto;">
+        <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom:10px;">
+          <h3 style="margin: 0; color: white; font-size: 13px;">Support Developer</h3>
+          <button id="close-support-btn" class="btn"
+            style="padding: 4px 10px; font-size: 11px; background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 6px; cursor: pointer;">✕</button>
+        </div>
+        
+        <!-- Email -->
+        <div style="margin-bottom: 12px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18);">
+          <div style="color: rgba(255,255,255,0.7); font-size: 11px; margin-bottom: 4px;">Support Email (Reach Out)</div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="color: white; font-size: 12px; font-weight: 500;">Moderntech.ken@gmail.com</span>
+            <button class="copy-btn" data-copy="Moderntech.ken@gmail.com" style="padding: 3px 8px; font-size: 10px; background: rgba(80,200,120,0.7); border: none; color: white; border-radius: 4px; cursor: pointer;">Copy</button>
+          </div>
+        </div>
+
+        <!-- PayPal -->
+        <div style="margin-bottom: 12px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18);">
+          <div style="color: rgba(255,255,255,0.7); font-size: 11px; margin-bottom: 4px;">PayPal (Support)</div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="color: white; font-size: 12px; font-weight: 500;">officialthemartins@gmail.com</span>
+            <button class="copy-btn" data-copy="officialthemartins@gmail.com" style="padding: 3px 8px; font-size: 10px; background: rgba(80,200,120,0.7); border: none; color: white; border-radius: 4px; cursor: pointer;">Copy</button>
+          </div>
+        </div>
+
+        <!-- M-Pesa -->
+        <div style="padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18);">
+          <div style="color: rgba(255,255,255,0.7); font-size: 11px; margin-bottom: 4px;">M-Pesa (Support)</div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="color: white; font-size: 12px; font-weight: 500;">0708095340</span>
+            <button class="copy-btn" data-copy="0708095340" style="padding: 3px 8px; font-size: 10px; background: rgba(80,200,120,0.7); border: none; color: white; border-radius: 4px; cursor: pointer;">Copy</button>
+          </div>
+        </div>
+
+        <div id="support-copy-toast" style="display: none; margin-top: 10px; padding: 8px; text-align: center; background: rgba(80,200,120,0.8); color: white; border-radius: 6px; font-size: 11px;">Copied to clipboard!</div>
       </div>
     </div>
 

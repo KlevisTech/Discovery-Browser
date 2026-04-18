@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld('cardAPI', {
   closeCard: (cardId) =>
     ipcRenderer.invoke('close-card', cardId),
 
+  // Hide the visualizer immediately while the card close animation runs
+  hideVisualizerNow: (cardId) =>
+    ipcRenderer.invoke('hide-visualizer-now', cardId),
+
   // Resize card
   resizeCard: (cardId, x, y, width, height) =>
     ipcRenderer.invoke('resize-card', cardId, x, y, width, height),
@@ -124,8 +128,8 @@ ipcRenderer.on('card-load-url', (event, url) => {
   window.dispatchEvent(new CustomEvent('card-load-url', { detail: url }));
 });
 
-ipcRenderer.on('card-restore-animate', () => {
-  window.dispatchEvent(new CustomEvent('card-restore-animate'));
+ipcRenderer.on('card-restore-animate', (event, payload = {}) => {
+  window.dispatchEvent(new CustomEvent('card-restore-animate', { detail: payload }));
 });
 
 ipcRenderer.on('card-cycle-arriving', () => {
@@ -134,6 +138,10 @@ ipcRenderer.on('card-cycle-arriving', () => {
 
 ipcRenderer.on('card-cycle-departing', () => {
   window.dispatchEvent(new CustomEvent('card-cycle-departing'));
+});
+
+ipcRenderer.on('visualizer-widget-command', (event, payload = {}) => {
+  window.dispatchEvent(new CustomEvent('visualizer-widget-command', { detail: payload || {} }));
 });
 
 ipcRenderer.on('cloudflare-challenge-banner', (event, payload) => {

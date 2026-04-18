@@ -27,6 +27,7 @@
       "main.js",
       "preload.js",
       "preload-card.js",
+      "preload-visualizer-widget.js",
       "preload-card-bubble.js",
       "preload-card-overlay.js",
       "preload-webview.js",

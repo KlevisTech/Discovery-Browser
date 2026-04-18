@@ -6,6 +6,7 @@ const ipcMain = electron.ipcMain;
 const session = electron.session;
 const shell = electron.shell;
 const dialog = electron.dialog;
+const { clipboard } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -717,9 +718,15 @@ if (require('electron').app.isPackaged) {
 let mainWindow;
 const cardWindows = new Map(); // cardId -> BrowserWindow
 const cardBubbles = new Map(); // cardId -> bubble BrowserWindow
+const visualizerWidgets = new Map(); // cardId -> visualizer BrowserWindow
 const bubbleNotifications = new Map(); // cardId -> notification count
 const bubbleNotificationSources = new Map(); // cardId -> 'api' | 'title'
 const bubbleMediaStates = new Map(); // cardId -> { isPlaying, isVideo, isLive }
+const visualizerWidgetStates = new Map(); // cardId -> { isPlaying, isVideo, isLive, visualizerStyle, themeKey }
+const visualizerWidgetLockStates = new Map(); // cardId -> boolean
+const visualizerRestoreBoosts = new Map(); // cardId -> timestamp until widget may remain attached during restore handoff
+const visualizerRestoreSuppressions = new Map(); // cardId -> timestamp until widget must remain hidden during restore animation
+let activeVisualizerCardId = null;
 let visualizerEnabled = false;
 let currentCardTheme = 'primary'; // Store the user's preferred card theme
 let currentCardLaunchSizeMode = 'normal'; // Store user's preferred launch size for new cards
@@ -732,12 +739,37 @@ const CARD_LAUNCH_MODE_NORMAL = 'normal';
 const CARD_LAUNCH_MODE_WIDE = 'wide';
 const CARD_LAUNCH_MODE_FULLSCREEN = 'fullscreen';
 const CARD_LAUNCH_VERTICAL_OFFSET = 36;
+const CARD_PSEUDO_FULLSCREEN_TOP_GAP = 28;
+const CARD_PSEUDO_FULLSCREEN_SIDE_GAP = 12;
+const CARD_PSEUDO_FULLSCREEN_BOTTOM_GAP = 4;
 const EXTERNAL_CARD_LAUNCH_DEDUPE_MS = 2500;
+const VISUALIZER_WIDGET_WIDTH = 352;
+const VISUALIZER_WIDGET_HEIGHT = 220;
+const CARD_TITLEBAR_HEIGHT = 48;
+const VISUALIZER_WIDGET_SHELL_HEIGHT = 26;
+const VISUALIZER_WIDGET_TOP_INSET = 6;
+const VISUALIZER_WIDGET_CLOSE_LEAD_MS = 42;
+const VISUALIZER_WIDGET_MINIMIZE_LEAD_MS = 42;
+const VISUALIZER_WIDGET_RESTORE_DELAY_MS = 590;
+const VISUALIZER_WIDGET_RESTORE_BOOST_MS = 220;
+const VISUALIZER_STYLE_KEYS = new Set(['bars', 'pulse', 'ladder', 'orbit']);
+const CARD_THEME_KEYS = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'frost']);
 const CARD_LAUNCH_SIZE_MODES = new Set([
   CARD_LAUNCH_MODE_NORMAL,
   CARD_LAUNCH_MODE_WIDE,
   CARD_LAUNCH_MODE_FULLSCREEN,
 ]);
+
+function normalizeCardThemeKey(themeKey) {
+  const candidate = String(themeKey || '').trim().toLowerCase();
+  if (!CARD_THEME_KEYS.has(candidate)) return 'primary';
+  return candidate === 'alt' ? 'sunset' : candidate;
+}
+
+function normalizeVisualizerStyleKey(styleKey) {
+  const candidate = String(styleKey || '').trim().toLowerCase();
+  return VISUALIZER_STYLE_KEYS.has(candidate) ? candidate : 'bars';
+}
 
 function normalizeCardLaunchSizeMode(mode) {
   const candidate = String(mode || '').trim().toLowerCase();
@@ -750,7 +782,45 @@ function getLaunchWindowSizeByMode(mode) {
   if (normalized === CARD_LAUNCH_MODE_WIDE) {
     return { width: 1100, height: 600 };
   }
-  return { width: 800, height: 500 };
+  return { width: 840, height: 500 };
+}
+
+function getCardPseudoFullscreenBounds(cardWindow) {
+  let display = null;
+  try {
+    if (cardWindow && !cardWindow.isDestroyed()) {
+      display = electron.screen.getDisplayMatching(cardWindow.getBounds());
+    }
+  } catch (e) { }
+
+  if (!display) {
+    try {
+      display = electron.screen.getPrimaryDisplay();
+    } catch (e) { }
+  }
+
+  const workArea = display && display.workArea
+    ? display.workArea
+    : { x: 0, y: 0, width: 1280, height: 720 };
+
+  const x = Math.round(workArea.x + CARD_PSEUDO_FULLSCREEN_SIDE_GAP);
+  const y = Math.round(workArea.y + CARD_PSEUDO_FULLSCREEN_TOP_GAP);
+  const width = Math.max(640, Math.round(workArea.width - (CARD_PSEUDO_FULLSCREEN_SIDE_GAP * 2)));
+  const height = Math.max(420, Math.round(workArea.height - CARD_PSEUDO_FULLSCREEN_TOP_GAP - CARD_PSEUDO_FULLSCREEN_BOTTOM_GAP));
+
+  return { x, y, width, height };
+}
+
+function applyCardPseudoFullscreen(cardWindow) {
+  if (!cardWindow || cardWindow.isDestroyed()) return;
+  try {
+    if (typeof cardWindow.setFullScreen === 'function') {
+      cardWindow.setFullScreen(false);
+    }
+  } catch (e) { }
+  try {
+    cardWindow.setBounds(getCardPseudoFullscreenBounds(cardWindow));
+  } catch (e) { }
 }
 
 function getSiteLayoutForUrl(url) {
@@ -827,19 +897,344 @@ function clearBubbleNotifications(cardId) {
   updateBubbleNotification(cardId, 0);
 }
 
-function updateBubbleMediaState(cardId, mediaState = {}) {
-  const nextState = {
-    isPlaying: !!mediaState.isPlaying,
-    isVideo: !!mediaState.isVideo,
-    isLive: !!mediaState.isLive,
-  };
-  bubbleMediaStates.set(cardId, nextState);
-  const bubble = cardBubbles.get(cardId);
-  if (bubble && !bubble.isDestroyed()) {
-    try {
-      bubble.webContents.send('bubble-media-state', nextState);
-    } catch (e) { }
+ function updateBubbleMediaState(cardId, mediaState = {}) {
+   const cardWindow = cardWindows.get(cardId);
+   const existingWidgetState = visualizerWidgetStates.get(cardId) || {};
+   const nextState = {
+     isPlaying: !!mediaState.isPlaying,
+     hasMedia: !!mediaState.hasMedia,
+     isVideo: !!mediaState.isVideo,
+     isLive: !!mediaState.isLive,
+     hasDuration: !!mediaState.hasDuration,
+     remainingSeconds: Number.isFinite(Number(mediaState.remainingSeconds))
+       ? Math.max(0, Number(mediaState.remainingSeconds))
+       : null,
+     muted: typeof mediaState.muted === 'boolean' ? !!mediaState.muted : !!existingWidgetState.muted,
+     volume: Number.isFinite(Number(mediaState.volume))
+       ? Math.max(0, Math.min(1, Number(mediaState.volume)))
+       : (Number.isFinite(Number(existingWidgetState.volume)) ? Math.max(0, Math.min(1, Number(existingWidgetState.volume))) : 1),
+     visualizerStyle: normalizeVisualizerStyleKey(mediaState.visualizerStyle || existingWidgetState.visualizerStyle),
+     themeKey: normalizeCardThemeKey(
+       mediaState.themeKey
+       || existingWidgetState.themeKey
+       || (cardWindow && cardWindow.__cardTheme)
+       || currentCardTheme
+     ),
+   };
+   bubbleMediaStates.set(cardId, nextState);
+   visualizerWidgetStates.set(cardId, nextState);
+   const bubble = cardBubbles.get(cardId);
+   if (bubble && !bubble.isDestroyed()) {
+     try {
+       bubble.webContents.send('bubble-media-state', nextState);
+     } catch (e) { }
   }
+  syncVisualizerWidget(cardId);
+}
+
+function closeVisualizerWidget(cardId) {
+  const widget = visualizerWidgets.get(cardId);
+  if (!widget) return;
+  try {
+    if (!widget.isDestroyed()) widget.close();
+  } catch (e) { }
+  visualizerWidgets.delete(cardId);
+  visualizerWidgetLockStates.delete(Number(cardId));
+  visualizerRestoreBoosts.delete(cardId);
+  visualizerRestoreSuppressions.delete(Number(cardId));
+}
+
+function hideVisualizerWidget(cardId) {
+  const widget = visualizerWidgets.get(cardId);
+  visualizerRestoreBoosts.delete(cardId);
+  visualizerRestoreSuppressions.delete(Number(cardId));
+  if (!widget || widget.isDestroyed()) return;
+  try {
+    if (widget.isVisible()) widget.hide();
+  } catch (e) { }
+}
+
+function markVisualizerRestoreBoost(cardId, durationMs = VISUALIZER_WIDGET_RESTORE_BOOST_MS) {
+  const numericCardId = Number(cardId);
+  if (!Number.isFinite(numericCardId)) return;
+  visualizerRestoreBoosts.set(numericCardId, Date.now() + Math.max(0, Number(durationMs) || 0));
+}
+
+function hasVisualizerRestoreBoost(cardId) {
+  const until = visualizerRestoreBoosts.get(cardId);
+  if (!until) return false;
+  if (until <= Date.now()) {
+    visualizerRestoreBoosts.delete(cardId);
+    return false;
+  }
+  return true;
+}
+
+function getVisualizerWidgetBounds(cardWindow) {
+  if (!cardWindow || cardWindow.isDestroyed()) {
+    return {
+      x: 0,
+      y: 0,
+      width: VISUALIZER_WIDGET_WIDTH,
+      height: VISUALIZER_WIDGET_HEIGHT,
+    };
+  }
+  const bounds = cardWindow.getBounds();
+  const cardId = Number(cardWindow.__cardId);
+  const isLocked = visualizerWidgetLockStates.get(cardId) === true;
+  if (isLocked) {
+    return {
+      x: Math.round(bounds.x),
+      y: Math.round(bounds.y),
+      width: Math.round(bounds.width),
+      height: Math.round(bounds.height),
+    };
+  }
+  const centeredTitlebarOffset = VISUALIZER_WIDGET_TOP_INSET
+    + Math.round((CARD_TITLEBAR_HEIGHT - VISUALIZER_WIDGET_SHELL_HEIGHT) / 2);
+  return {
+    x: Math.round(bounds.x + ((bounds.width - VISUALIZER_WIDGET_WIDTH) / 2)),
+    y: Math.round(bounds.y + centeredTitlebarOffset),
+    width: VISUALIZER_WIDGET_WIDTH,
+    height: VISUALIZER_WIDGET_HEIGHT,
+  };
+}
+
+function sendVisualizerWidgetState(cardId) {
+  const widget = visualizerWidgets.get(cardId);
+  const state = visualizerWidgetStates.get(cardId);
+  if (!widget || widget.isDestroyed() || !state) return;
+  try {
+    if (widget.webContents && !widget.webContents.isDestroyed()) {
+      widget.webContents.send('visualizer-widget-state', {
+        ...state,
+        visualLock: visualizerWidgetLockStates.get(Number(cardId)) === true,
+      });
+    }
+  } catch (e) { }
+}
+
+function syncAllVisualizerWidgets() {
+  for (const [cardId] of visualizerWidgetStates) {
+    syncVisualizerWidget(cardId);
+  }
+}
+
+function setActiveVisualizerCard(cardId) {
+  const numericCardId = Number(cardId);
+  activeVisualizerCardId = Number.isFinite(numericCardId) ? numericCardId : null;
+}
+
+function clearActiveVisualizerCard(cardId) {
+  const numericCardId = Number(cardId);
+  if (activeVisualizerCardId === numericCardId) {
+    activeVisualizerCardId = null;
+  }
+}
+
+function isPausedVisualizerForeground(cardId, cardWindow) {
+  if (!cardWindow || cardWindow.isDestroyed()) return false;
+  try {
+    const widget = visualizerWidgets.get(cardId);
+    const focusedWindow = BrowserWindow.getFocusedWindow();
+    if (!focusedWindow || focusedWindow.isDestroyed()) return false;
+    if (focusedWindow === cardWindow) return true;
+    if (widget && !widget.isDestroyed() && focusedWindow === widget) return true;
+  } catch (e) {
+    return false;
+  }
+  return false;
+}
+
+function suppressVisualizerUntil(cardId, durationMs) {
+  const numericCardId = Number(cardId);
+  if (!Number.isFinite(numericCardId)) return;
+  visualizerRestoreSuppressions.set(
+    numericCardId,
+    Date.now() + Math.max(0, Number(durationMs) || 0)
+  );
+}
+
+function isVisualizerSuppressed(cardId) {
+  const until = visualizerRestoreSuppressions.get(Number(cardId));
+  if (!until) return false;
+  if (until <= Date.now()) {
+    visualizerRestoreSuppressions.delete(Number(cardId));
+    return false;
+  }
+  return true;
+}
+
+function shouldShowVisualizerWidget(cardId, cardWindow) {
+  const state = visualizerWidgetStates.get(cardId);
+  const isLocked = visualizerWidgetLockStates.get(Number(cardId)) === true;
+  if (!visualizerEnabled || !state || (!state.hasMedia && state.isPlaying !== false)) return false;
+  if (!cardWindow || cardWindow.isDestroyed()) return false;
+  if (cardBubbles.has(cardId)) return false;
+  if (isVisualizerSuppressed(cardId)) return false;
+  const restoreBoostActive = hasVisualizerRestoreBoost(cardId);
+  try {
+    if (cardWindow.isMinimized()) return false;
+    if (!cardWindow.isVisible()) return false;
+    if (isLocked) return true;
+    if (state.isPlaying === false && !restoreBoostActive && !isPausedVisualizerForeground(cardId, cardWindow)) {
+      return false;
+    }
+     if (!restoreBoostActive && activeVisualizerCardId !== Number(cardId)) return false;
+     if (!restoreBoostActive && mainWindow && !mainWindow.isDestroyed() && typeof mainWindow.isFocused === 'function' && mainWindow.isFocused()) {
+       return false;
+     }
+   } catch (e) {
+     return false;
+   }
+   return true;
+ }
+
+function ensureVisualizerWidget(cardId, cardWindow) {
+  const existing = visualizerWidgets.get(cardId);
+  if (existing && !existing.isDestroyed()) {
+    return existing;
+  }
+  if (!cardWindow || cardWindow.isDestroyed()) return null;
+
+  const widgetBounds = getVisualizerWidgetBounds(cardWindow);
+  const widget = new BrowserWindow({
+    width: widgetBounds.width,
+    height: widgetBounds.height,
+    x: widgetBounds.x,
+    y: widgetBounds.y,
+    parent: cardWindow,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    focusable: true,
+    show: false,
+    hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload-visualizer-widget.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false,
+    },
+  });
+
+  try {
+    widget.setAlwaysOnTop(true, 'floating');
+  } catch (e) {
+    widget.setAlwaysOnTop(true);
+  }
+
+  const widgetState = visualizerWidgetStates.get(cardId) || {};
+  const widgetPath = path.join(__dirname, 'src', 'visualizer-widget.html');
+  widget.loadFile(widgetPath, {
+    query: {
+      cardId: String(cardId),
+      theme: normalizeCardThemeKey(widgetState.themeKey || cardWindow.__cardTheme || currentCardTheme),
+    }
+  }).catch((err) => {
+    console.error('Error loading visualizer widget:', err);
+  });
+  widget.webContents.on('did-finish-load', () => {
+    sendVisualizerWidgetState(cardId);
+  });
+  widget.on('focus', () => {
+    setActiveVisualizerCard(cardId);
+    syncAllVisualizerWidgets();
+    syncVisualizerWidget(cardId);
+  });
+  widget.on('blur', () => {
+    setTimeout(() => syncVisualizerWidget(cardId), 60);
+  });
+  widget.on('closed', () => {
+    visualizerWidgets.delete(cardId);
+  });
+
+  visualizerWidgets.set(cardId, widget);
+  return widget;
+}
+
+function syncVisualizerWidget(cardId) {
+  const cardWindow = cardWindows.get(cardId);
+  if (!cardWindow || cardWindow.isDestroyed()) {
+    closeVisualizerWidget(cardId);
+    return;
+  }
+
+  const state = visualizerWidgetStates.get(cardId);
+  if (!state) {
+    closeVisualizerWidget(cardId);
+    return;
+  }
+
+  const widget = ensureVisualizerWidget(cardId, cardWindow);
+  if (!widget || widget.isDestroyed()) return;
+
+  try {
+    const nextBounds = getVisualizerWidgetBounds(cardWindow);
+    widget.setBounds(nextBounds, false);
+  } catch (e) { }
+
+  sendVisualizerWidgetState(cardId);
+
+  const shouldShow = shouldShowVisualizerWidget(cardId, cardWindow);
+  const isLocked = visualizerWidgetLockStates.get(Number(cardId)) === true;
+  try {
+    if (shouldShow) {
+      if (!widget.isVisible()) widget.show();
+      if (state.isPlaying === false && !isLocked) {
+        widget.setAlwaysOnTop(false);
+      } else {
+        try {
+          widget.setAlwaysOnTop(true, 'floating');
+        } catch (e) {
+          widget.setAlwaysOnTop(true);
+        }
+      }
+    } else if (widget.isVisible()) {
+      widget.hide();
+    }
+  } catch (e) { }
+}
+
+function registerVisualizerWidgetLifecycle(cardId, cardWindow, themeKey) {
+  if (!cardWindow || cardWindow.isDestroyed()) return;
+  cardWindow.__cardId = Number(cardId);
+  cardWindow.__cardTheme = normalizeCardThemeKey(themeKey || currentCardTheme);
+
+  const sync = () => {
+    setActiveVisualizerCard(cardId);
+    syncAllVisualizerWidgets();
+    syncVisualizerWidget(cardId);
+  };
+  const deferSync = () => {
+    setTimeout(() => syncVisualizerWidget(cardId), 40);
+  };
+  const hideNow = () => {
+    clearActiveVisualizerCard(cardId);
+    hideVisualizerWidget(cardId);
+    setTimeout(() => syncAllVisualizerWidgets(), 16);
+  };
+
+  cardWindow.on('show', sync);
+  cardWindow.on('restore', sync);
+  cardWindow.on('focus', sync);
+  cardWindow.on('blur', deferSync);
+  cardWindow.on('move', sync);
+  cardWindow.on('resize', sync);
+  cardWindow.on('enter-full-screen', sync);
+  cardWindow.on('leave-full-screen', sync);
+  cardWindow.on('hide', hideNow);
+  cardWindow.on('minimize', hideNow);
+  cardWindow.on('close', () => {
+    clearActiveVisualizerCard(cardId);
+    hideVisualizerWidget(cardId);
+    closeVisualizerWidget(cardId);
+  });
 }
 
 function bringBubbleWindowsToFront() {
@@ -1001,19 +1396,30 @@ function restoreCardFromBubble(cardId) {
   try {
     // Clear notifications when restoring
     clearBubbleNotifications(cardId);
+    hideVisualizerWidget(cardId);
+    suppressVisualizerUntil(cardId, VISUALIZER_WIDGET_RESTORE_DELAY_MS);
+
+    closeCardBubble(cardId);
 
     if (cardWindow.isMinimized()) cardWindow.restore();
     cardWindow.show();
     cardWindow.focus();
-    try {
-      if (cardWindow.webContents && !cardWindow.webContents.isDestroyed()) {
-        cardWindow.webContents.send('card-restore-animate');
-      }
-    } catch (e) { }
+    setTimeout(() => {
+      markVisualizerRestoreBoost(cardId);
+      syncVisualizerWidget(cardId);
+    }, VISUALIZER_WIDGET_RESTORE_DELAY_MS);
+
+    // Send restore animation after a brief delay so the window
+    // is visible before the animation fires
+    setTimeout(() => {
+      try {
+        if (!cardWindow.isDestroyed() && cardWindow.webContents && !cardWindow.webContents.isDestroyed()) {
+          cardWindow.webContents.send('card-restore-animate', { source: 'bubble' });
+        }
+      } catch (e) { }
+    }, 30);
   } catch (e) {
     return { success: false, error: e.message };
-  } finally {
-    closeCardBubble(cardId);
   }
 
   return { success: true };
@@ -1027,7 +1433,18 @@ function broadcastVisualizerSetting(enabled) {
       }
     } catch (e) { }
   }
+  syncAllVisualizerWidgets();
 }
+
+app.on('browser-window-focus', () => {
+  syncAllVisualizerWidgets();
+  setTimeout(() => syncAllVisualizerWidgets(), 16);
+});
+
+app.on('browser-window-blur', () => {
+  syncAllVisualizerWidgets();
+  setTimeout(() => syncAllVisualizerWidgets(), 16);
+});
 
 function isHttpUrl(rawUrl) {
   try {
@@ -1460,6 +1877,7 @@ function createCardDirectly(url, options = {}) {
     // Support both old signature (themeKey as string) and new options object
     const opts = typeof options === 'string' ? { themeKey: options } : options;
     const minimizeAfterShow = opts.minimizeAfterShow === true;
+    const isBubbleMode = opts.bubble === true || minimizeAfterShow;
     const siteLayout = getSiteLayoutForUrl(url);
     const requestedLaunchMode = normalizeCardLaunchSizeMode(opts.launchSizeMode || siteLayout || currentCardLaunchSizeMode);
     const launchMode = minimizeAfterShow ? CARD_LAUNCH_MODE_NORMAL : requestedLaunchMode;
@@ -1530,12 +1948,13 @@ function createCardDirectly(url, options = {}) {
       },
     });
     attachWindowHangRecovery(cardWindow, `direct-card-${cardId}`);
+    registerVisualizerWidgetLifecycle(cardId, cardWindow, cardTheme);
 
     if (launchMode === CARD_LAUNCH_MODE_FULLSCREEN && !minimizeAfterShow) {
       const applyFullscreen = () => {
         try {
           if (cardWindow && !cardWindow.isDestroyed()) {
-            cardWindow.setFullScreen(true);
+            applyCardPseudoFullscreen(cardWindow);
           }
         } catch (e) { }
       };
@@ -1591,7 +2010,8 @@ function createCardDirectly(url, options = {}) {
       query: {
         cardId: String(cardId),
         url: encodedUrl,
-        theme: cardTheme
+        theme: cardTheme,
+        bubble: isBubbleMode ? '1' : '0'
       }
     }).catch((err) => {
       console.error('Error loading card HTML:', err);
@@ -1609,7 +2029,7 @@ function createCardDirectly(url, options = {}) {
       });
     } catch (e) { }
 
-// Setup event listeners
+    // Setup event listeners
     cardWindow.webContents.on('did-start-loading', () => {
       setupCardLoadTimeout(cardWindow, `direct-card-${cardId}`);
     });
@@ -1652,7 +2072,7 @@ function createCardDirectly(url, options = {}) {
         mainWindow.webContents.send('external-card-created', {
           cardId,
           url: currentUrl || targetUrl,
-          title: pageTitle || (() => { try { return new URL(targetUrl).hostname; } catch(e) { return 'Loading...'; } })()
+          title: pageTitle || (() => { try { return new URL(targetUrl).hostname; } catch (e) { return 'Loading...'; } })()
         });
         mainWindow.webContents.send('card-loading-finish', cardId, pageTitle, currentUrl);
       }
@@ -1688,12 +2108,15 @@ function createCardDirectly(url, options = {}) {
 
     cardWindow.on('show', () => {
       closeCardBubble(cardId);
+      syncVisualizerWidget(cardId);
     });
 
     cardWindow.on('closed', () => {
       clearCardLoadTimeout(cardWindow);
       closeCardBubble(cardId);
+      closeVisualizerWidget(cardId);
       bubbleMediaStates.delete(cardId);
+      visualizerWidgetStates.delete(cardId);
       cardWindows.delete(cardId);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('card-closed', cardId);
@@ -1719,9 +2142,8 @@ function openUrlInCard(url, context = {}) {
       return;
     }
 
-    // Create card directly for instant visual feedback
-    // This bypasses the renderer round-trip for external URLs
-    launchExternalCardUrlOnce(targetUrl);
+    // Pass currentCardTheme so external launches always use the correct theme
+    launchExternalCardUrlOnce(targetUrl, { themeKey: currentCardTheme });
   } catch (e) {
     // ignore
   }
@@ -1742,7 +2164,7 @@ function openUrlAsBubble(url, meta = {}) {
     }
 
     // Create the card window normally, then minimize it
-    const result = createCardDirectly(targetUrl, { minimizeAfterShow: true });
+    const result = createCardDirectly(targetUrl, { minimizeAfterShow: true, bubble: true });
     if (!result || !result.cardWindow) {
       return null;
     }
@@ -2088,6 +2510,15 @@ ipcMain.handle('show-item-in-folder', async (event, filePath) => {
   }
 });
 
+ipcMain.handle('copy-to-clipboard', async (event, text) => {
+  try {
+    clipboard.writeText(text);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
 ipcMain.handle('set-visualizer-enabled', async (event, enabled) => {
   try {
     visualizerEnabled = !!enabled;
@@ -2171,10 +2602,28 @@ ipcMain.handle('set-site-layout-overrides', async (event, overrides) => {
 // Article saving handler - forward from readmode to main renderer
 ipcMain.handle('save-article', async (event, articleData) => {
   try {
-    if (mainWindow && mainWindow.webContents) {
-      mainWindow.webContents.send('save-article', articleData);
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) {
+      return { success: false, error: 'Main window unavailable' };
     }
-    return { success: true };
+
+    const serializedArticleData = JSON.stringify(articleData || {});
+    const result = await mainWindow.webContents.executeJavaScript(
+      `(function() {
+        try {
+          const articleData = ${serializedArticleData};
+          if (window.discoveryBrowser && typeof window.discoveryBrowser.saveArticle === 'function') {
+            const saved = window.discoveryBrowser.saveArticle(articleData);
+            return { success: true, article: saved || null };
+          }
+          return { success: false, error: 'Discovery browser unavailable' };
+        } catch (err) {
+          return { success: false, error: err && err.message ? err.message : String(err) };
+        }
+      })()`,
+      true
+    );
+
+    return result && typeof result === 'object' ? result : { success: false, error: 'Unexpected save result' };
   } catch (e) {
     console.error('Failed to save article:', e);
     return { success: false, error: e.message };
@@ -2225,6 +2674,7 @@ app.on('ready', () => {
 
 app.on('before-quit', () => {
   flushPermissionDecisionPersist();
+  saveFavoritesToDisk();
 });
 
 app.on('window-all-closed', () => {
@@ -2276,6 +2726,7 @@ if (!gotTheLock) {
 function createMainWindow() {
   console.log('[App] createMainWindow called');
   loadPermissionDecisionsFromDisk();
+  loadFavoritesFromDisk();
 
   let windowX = 100;
   let windowY = 60;
@@ -2747,7 +3198,7 @@ function setupAddonBlocking() {
 // ========================
 
 // Enhanced create-card handler with beautiful animations
-ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'primary', launchSizeMode = null) => {
+ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'primary', launchSizeMode = null, isBubbleMode = null) => {
   try {
     const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'frost']);
     const normalizedTheme = allowedThemes.has(String(themeKey || '').toLowerCase())
@@ -2828,11 +3279,12 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       },
     });
     attachWindowHangRecovery(cardWindow, `card-${cardId}`);
+    registerVisualizerWidgetLifecycle(cardId, cardWindow, cardTheme);
 
     if (launchMode === CARD_LAUNCH_MODE_FULLSCREEN) {
       cardWindow.once('ready-to-show', () => {
         try {
-          if (!cardWindow.isDestroyed()) cardWindow.setFullScreen(true);
+          if (!cardWindow.isDestroyed()) applyCardPseudoFullscreen(cardWindow);
         } catch (e) { }
       });
     }
@@ -2860,7 +3312,8 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       query: {
         cardId: String(cardId),
         url: encodedUrl,
-        theme: cardTheme
+        theme: cardTheme,
+        bubble: isBubbleMode ? '1' : '0'
       }
     }).catch((err) => {
       console.error('Error loading card HTML:', err);
@@ -2901,11 +3354,14 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
 
     cardWindow.on('show', () => {
       closeCardBubble(cardId);
+      syncVisualizerWidget(cardId);
     });
 
     cardWindow.on('closed', () => {
       closeCardBubble(cardId);
+      closeVisualizerWidget(cardId);
       bubbleMediaStates.delete(cardId);
+      visualizerWidgetStates.delete(cardId);
       cardWindows.delete(cardId);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('card-closed', cardId);
@@ -2989,10 +3445,29 @@ ipcMain.handle('close-card', async (event, cardId) => {
       return { success: false, error: 'Card window not found' };
     }
 
+    closeVisualizerWidget(cardId);
+    await new Promise((resolve) => setTimeout(resolve, VISUALIZER_WIDGET_CLOSE_LEAD_MS));
     cardWindow.close();
     return { success: true };
   } catch (error) {
     console.error('Error closing card:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('hide-visualizer-now', async (event, cardId) => {
+  try {
+    const numericCardId = Number(cardId);
+    const cardWindow = cardWindows.get(numericCardId);
+    if (!cardWindow || cardWindow.isDestroyed()) {
+      return { success: false, error: 'Card window not found' };
+    }
+
+    clearActiveVisualizerCard(numericCardId);
+    hideVisualizerWidget(numericCardId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error hiding visualizer immediately:', error);
     return { success: false, error: error.message };
   }
 });
@@ -3079,7 +3554,11 @@ ipcMain.handle('toggle-fullscreen', async (event, cardId, shouldBeFullscreen) =>
       return { success: false, error: 'Card window not found' };
     }
 
-    cardWindow.setFullScreen(shouldBeFullscreen);
+    if (shouldBeFullscreen) {
+      applyCardPseudoFullscreen(cardWindow);
+    } else if (typeof cardWindow.setFullScreen === 'function') {
+      cardWindow.setFullScreen(false);
+    }
     return { success: true };
   } catch (error) {
     console.error('Error toggling fullscreen:', error);
@@ -3095,8 +3574,11 @@ ipcMain.handle('minimize-card', async (event, cardId, pageUrl = '', pageTitle = 
       return { success: false, error: 'Card window not found' };
     }
 
+    hideVisualizerWidget(cardId);
+    await new Promise((resolve) => setTimeout(resolve, VISUALIZER_WIDGET_MINIMIZE_LEAD_MS));
     createCardBubble(cardId, cardWindow, { pageUrl, pageTitle, themeKey });
     cardWindow.hide();
+    syncVisualizerWidget(cardId);
     return { success: true };
   } catch (error) {
     console.error('Error minimizing card:', error);
@@ -3119,6 +3601,8 @@ ipcMain.handle('close-bubble-and-card', async (event, cardId) => {
     const cardWindow = cardWindows.get(cardId);
     if (cardWindow && !cardWindow.isDestroyed()) {
       try {
+        closeVisualizerWidget(cardId);
+        await new Promise((resolve) => setTimeout(resolve, VISUALIZER_WIDGET_CLOSE_LEAD_MS));
         cardWindow.close();
       } catch (e) { }
     }
@@ -3141,7 +3625,11 @@ ipcMain.handle('show-bubble-context-menu', async (event, cardId) => {
       // Close both card and bubble
       const cardWindow = cardWindows.get(cardId);
       if (cardWindow && !cardWindow.isDestroyed()) {
-        try { cardWindow.close(); } catch (e) { }
+        try {
+          closeVisualizerWidget(cardId);
+          await new Promise((resolve) => setTimeout(resolve, VISUALIZER_WIDGET_CLOSE_LEAD_MS));
+          cardWindow.close();
+        } catch (e) { }
       }
       closeCardBubble(cardId);
     }
@@ -3182,20 +3670,38 @@ ipcMain.handle('cycle-windows', async (event, currentCardId) => {
   if (currentIndex === -1) currentIndex = 0;
 
   const nextIndex = (currentIndex + 1) % cards.length;
-  const target    = cards[nextIndex].window;
+  const target = cards[nextIndex].window;
+  const targetCardId = cards[nextIndex].cardId;
 
   try {
-    if (target.isMinimized()) target.restore();
-    target.show();
-    target.focus();
-    bringBubbleWindowsToFront();
-    setTimeout(() => bringBubbleWindowsToFront(), 80);
-    setTimeout(() => bringBubbleWindowsToFront(), 180);
+    // If the target card is hidden (bubble mode), restore it properly
+    // by closing its bubble and showing the card window
+    if (!target.isVisible()) {
+      const result = restoreCardFromBubble(targetCardId);
+      if (!result || !result.success) {
+        // Fallback: force show even if bubble restore failed
+        closeCardBubble(targetCardId);
+        if (target.isMinimized()) target.restore();
+        target.show();
+        target.focus();
+      }
+    } else {
+      if (target.isMinimized()) target.restore();
+      target.show();
+      target.focus();
+    }
+
     setTimeout(() => {
       try {
         if (!target.isDestroyed()) target.webContents.send('card-cycle-arriving');
       } catch (e) { }
     }, 40);
+
+    // Only bring remaining bubbles to front after a short delay
+    // so the restored card has time to appear first
+    setTimeout(() => bringBubbleWindowsToFront(), 150);
+    setTimeout(() => bringBubbleWindowsToFront(), 300);
+
     return { success: true };
   } catch (e) {
     console.error('cycle-windows error:', e);
@@ -3223,10 +3729,13 @@ const READMODE_HEIGHT = 580;
 const readmodeWindows = new Map(); // readmodeId -> BrowserWindow
 let readmodeIdCounter = 0;
 
-async function openReadmodeWindow(url, title, theme = 'primary', viewMode = 'article') {
+async function openReadmodeWindow(url, title, theme = 'primary', viewMode = 'article', articleId = null) {
   try {
+    // articleId is passed to readmode.html for offline payload loading
+    // The actual offline content is loaded via IPC in readmode.html using get-article-payload
+
     const readmodeId = ++readmodeIdCounter;
-    
+
     // Calculate centered position
     let finalX = 200;
     let finalY = 100;
@@ -3293,18 +3802,19 @@ async function openReadmodeWindow(url, title, theme = 'primary', viewMode = 'art
     readmodeWindow.on('leave-full-screen', sendReadmodeFullscreenState);
     readmodeWindow.on('show', sendReadmodeFullscreenState);
 
-    // Load the readmode HTML
+    // Load the readmode HTML - URL is passed for display, actual content loaded in readmode.html
     const encodedUrl = Buffer.from(url).toString('base64');
     const encodedTitle = Buffer.from(title || 'Read Mode').toString('base64');
     const readmodeHtmlPath = path.join(__dirname, 'src', 'readmode.html');
-    
+
     await readmodeWindow.loadFile(readmodeHtmlPath, {
       query: {
         readmodeId: String(readmodeId),
         url: encodedUrl,
         title: encodedTitle,
         theme: theme,
-        viewMode: viewMode
+        viewMode: viewMode,
+        articleId: articleId ? String(articleId) : ''
       }
     });
 
@@ -3318,8 +3828,8 @@ async function openReadmodeWindow(url, title, theme = 'primary', viewMode = 'art
 }
 
 // Open readmode card - creates a phone-sized reading window
-ipcMain.handle('open-readmode-card', async (event, url, title, theme = 'primary') => {
-  return openReadmodeWindow(url, title, theme, 'article');
+ipcMain.handle('open-readmode-card', async (event, url, title, theme = 'primary', articleId = null) => {
+  return openReadmodeWindow(url, title, theme, 'article', articleId);
 });
 
 ipcMain.handle('pick-readmode-file', async (event) => {
@@ -3503,6 +4013,87 @@ ipcMain.handle('set-saved-articles-for-recap', async (event, articles) => {
   }
 });
 
+// ========================
+// Offline Article Storage
+// ========================
+
+const OFFLINE_ARTICLES_DIR = 'offline-articles';
+
+function getOfflineArticlePath(articleId) {
+  try {
+    return path.join(app.getPath('userData'), OFFLINE_ARTICLES_DIR, `article-${articleId}.html`);
+  } catch (e) {
+    return '';
+  }
+}
+
+// Save article HTML content to disk for offline access
+ipcMain.handle('save-offline-article', async (event, articleId, url) => {
+  // Legacy stub — payload is now saved directly from readmode via save-article-payload
+  return { success: true, skipped: true };
+});
+
+// Save extracted article payload (JSON) for offline reading
+ipcMain.handle('save-article-payload', async (event, articleId, payloadJson) => {
+  try {
+    const articlePath = getOfflineArticlePath(articleId);
+    if (!articlePath) return { success: false, error: 'Invalid article path' };
+    fs.mkdirSync(path.dirname(articlePath), { recursive: true });
+    // Store as JSON, not raw HTML
+    const safePayload = typeof payloadJson === 'string' ? payloadJson : JSON.stringify(payloadJson);
+    fs.writeFileSync(articlePath.replace('.html', '.json'), safePayload, 'utf8');
+    console.log('[Offline] Saved article payload', articleId);
+    return { success: true };
+  } catch (e) {
+    console.error('[Offline] Failed to save article payload:', e.message);
+    return { success: false, error: e.message };
+  }
+});
+
+// Get saved article payload (JSON) for offline reading
+ipcMain.handle('get-article-payload', async (event, articleId) => {
+  try {
+    const articlePath = getOfflineArticlePath(articleId);
+    if (!articlePath) return { success: false, error: 'Invalid article path' };
+    const jsonPath = articlePath.replace('.html', '.json');
+    if (!fs.existsSync(jsonPath)) {
+      return { success: false, exists: false };
+    }
+    const raw = fs.readFileSync(jsonPath, 'utf8');
+    return { success: true, exists: true, payload: JSON.parse(raw) };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+// Get article HTML from disk (returns null if not stored)
+ipcMain.handle('get-offline-article', async (event, articleId) => {
+  try {
+    const articlePath = getOfflineArticlePath(articleId);
+    if (!articlePath || !fs.existsSync(articlePath)) {
+      return { success: false, exists: false };
+    }
+
+    const html = fs.readFileSync(articlePath, 'utf8');
+    return { success: true, exists: true, html };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+// Delete offline article content
+ipcMain.handle('delete-offline-article', async (event, articleId) => {
+  try {
+    const articlePath = getOfflineArticlePath(articleId);
+    if (articlePath && fs.existsSync(articlePath)) {
+      fs.unlinkSync(articlePath);
+    }
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
 ipcMain.handle('get-user-agent', async () => {
   return CHROME_LIKE_UA;
 });
@@ -3660,18 +4251,50 @@ ipcMain.on('web-notification', (event, payload) => {
   }
 });
 
-ipcMain.on('card-media-state', (event, payload) => {
+ ipcMain.on('card-media-state', (event, payload) => {
+   try {
+     const normalized = payload && typeof payload === 'object' ? payload : {};
+     const cardId = Number(normalized.cardId);
+     if (!Number.isFinite(cardId)) return;
+     updateBubbleMediaState(cardId, {
+       isPlaying: !!normalized.isPlaying,
+       hasMedia: !!normalized.hasMedia,
+       isVideo: !!normalized.isVideo,
+       isLive: !!normalized.isLive,
+       hasDuration: !!normalized.hasDuration,
+       remainingSeconds: normalized.remainingSeconds,
+       muted: typeof normalized.muted === 'boolean' ? !!normalized.muted : undefined,
+       volume: normalized.volume,
+       visualizerStyle: normalized.visualizerStyle,
+       themeKey: normalized.themeKey,
+     });
+   } catch (e) {
+     console.error('Error handling card media state:', e);
+   }
+ });
+
+ipcMain.handle('visualizer-widget-action', async (event, cardId, action, value = null) => {
   try {
-    const normalized = payload && typeof payload === 'object' ? payload : {};
-    const cardId = Number(normalized.cardId);
-    if (!Number.isFinite(cardId)) return;
-    updateBubbleMediaState(cardId, {
-      isPlaying: !!normalized.isPlaying,
-      isVideo: !!normalized.isVideo,
-      isLive: !!normalized.isLive,
+    const numericCardId = Number(cardId);
+    if (!Number.isFinite(numericCardId)) {
+      return { success: false, error: 'Invalid card id' };
+    }
+    const cardWindow = cardWindows.get(numericCardId);
+    if (!cardWindow || cardWindow.isDestroyed() || !cardWindow.webContents || cardWindow.webContents.isDestroyed()) {
+      return { success: false, error: 'Card window unavailable' };
+    }
+    const normalizedAction = String(action || '').toLowerCase();
+    if (normalizedAction === 'visual-lock' || normalizedAction === 'visual-unlock') {
+      visualizerWidgetLockStates.set(numericCardId, normalizedAction === 'visual-lock');
+      syncVisualizerWidget(numericCardId);
+    }
+    cardWindow.webContents.send('visualizer-widget-command', {
+      action: String(action || ''),
+      value,
     });
+    return { success: true };
   } catch (e) {
-    console.error('Error handling card media state:', e);
+    return { success: false, error: e.message };
   }
 });
 
@@ -3775,6 +4398,81 @@ ipcMain.handle('save-bookmark-to-folder', async (event, bookmarkData, folderId) 
   } catch (error) {
     console.error('Error saving bookmark to folder:', error);
     return { success: false, error: error.message };
+  }
+});
+
+// ========================
+// Favorites Persistence
+// ========================
+
+const FAVORITES_FILENAME = 'favorites.json';
+let favoritesCache = [];
+let favoritesPersistTimer = null;
+let favoritesLoaded = false;
+
+function getFavoritesFilePath() {
+  try {
+    return path.join(app.getPath('userData'), FAVORITES_FILENAME);
+  } catch (e) {
+    return '';
+  }
+}
+
+function loadFavoritesFromDisk() {
+  if (favoritesLoaded) return;
+  favoritesLoaded = true;
+  const filePath = getFavoritesFilePath();
+  if (!filePath || !fs.existsSync(filePath)) return;
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    favoritesCache = Array.isArray(parsed && parsed.favorites) ? parsed.favorites : [];
+  } catch (e) {
+    console.warn('Failed to load favorites:', e.message || e);
+  }
+}
+
+function saveFavoritesToDisk() {
+  const filePath = getFavoritesFilePath();
+  if (!filePath) return;
+  try {
+    const payload = {
+      version: 1,
+      updatedAt: Date.now(),
+      favorites: favoritesCache,
+    };
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('Failed to save favorites:', e.message || e);
+  }
+}
+
+function scheduleFavoritesPersist() {
+  if (favoritesPersistTimer) clearTimeout(favoritesPersistTimer);
+  favoritesPersistTimer = setTimeout(() => {
+    favoritesPersistTimer = null;
+    saveFavoritesToDisk();
+  }, 50);
+}
+
+ipcMain.handle('get-favorites', async () => {
+  try {
+    loadFavoritesFromDisk();
+    return { success: true, favorites: favoritesCache };
+  } catch (e) {
+    return { success: false, favorites: [] };
+  }
+});
+
+ipcMain.handle('save-favorites', async (event, favorites) => {
+  try {
+    favoritesCache = Array.isArray(favorites) ? favorites : [];
+    // Save immediately to disk
+    saveFavoritesToDisk();
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
   }
 });
 

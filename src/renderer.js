@@ -395,6 +395,45 @@ class DiscoveryBrowser {
       this.settingsBtn.addEventListener('click', () => this.toggleSettings());
     }
 
+    this.supportBtn = document.getElementById('support-btn');
+    this.supportPanel = document.getElementById('support-panel');
+    this.closeSupportBtn = document.getElementById('close-support-btn');
+    this.supportCopyToast = document.getElementById('support-copy-toast');
+
+    if (this.supportBtn) {
+      this.supportBtn.addEventListener('click', () => this.toggleSupport());
+    }
+
+    if (this.closeSupportBtn) {
+      this.closeSupportBtn.addEventListener('click', () => this.toggleSupport());
+    }
+
+    // Copy buttons for support panel
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const textToCopy = e.target.getAttribute('data-copy');
+        if (window.electronAPI && window.electronAPI.copyToClipboard) {
+          window.electronAPI.copyToClipboard(textToCopy).then(() => {
+            if (this.supportCopyToast) {
+              this.supportCopyToast.style.display = 'block';
+              setTimeout(() => {
+                this.supportCopyToast.style.display = 'none';
+              }, 2000);
+            }
+          });
+        } else if (navigator.clipboard) {
+          navigator.clipboard.writeText(textToCopy).then(() => {
+            if (this.supportCopyToast) {
+              this.supportCopyToast.style.display = 'block';
+              setTimeout(() => {
+                this.supportCopyToast.style.display = 'none';
+              }, 2000);
+            }
+          });
+        }
+      });
+    });
+
     if (this.notificationsBtn) {
       this.notificationsBtn.addEventListener('click', () => this.toggleNotifications());
     }
@@ -596,7 +635,7 @@ class DiscoveryBrowser {
     this.nextFolderId = 1;
     this.loadBookmarks();
     this.loadBookmarkFolders();
-    this.loadFavoriteBookmarks();
+    await this.loadFavoriteBookmarks(); // Load AFTER folders so sync has data
     this.renderFavoritesTray();
 
     // Article management
@@ -1500,6 +1539,18 @@ class DiscoveryBrowser {
       this.settingsPanel.style.display = 'none';
     }
 
+    // Close notifications if open
+    if (this.notificationPanel) {
+      this.notificationPanel.setAttribute('aria-hidden', 'true');
+      this.notificationPanel.style.display = 'none';
+    }
+
+    // Close support if open
+    if (this.supportPanel) {
+      this.supportPanel.setAttribute('aria-hidden', 'true');
+      this.supportPanel.style.display = 'none';
+    }
+
     // Toggle extensions
     this.extensionsPanel.setAttribute('aria-hidden', String(!isHidden));
     this.extensionsPanel.style.display = isHidden ? 'block' : 'none';
@@ -1520,6 +1571,12 @@ class DiscoveryBrowser {
     if (this.notificationPanel) {
       this.notificationPanel.setAttribute('aria-hidden', 'true');
       this.notificationPanel.style.display = 'none';
+    }
+
+    // Close support if open
+    if (this.supportPanel) {
+      this.supportPanel.setAttribute('aria-hidden', 'true');
+      this.supportPanel.style.display = 'none';
     }
 
     // Toggle settings
@@ -1553,10 +1610,40 @@ class DiscoveryBrowser {
       this.extensionsPanel.setAttribute('aria-hidden', 'true');
       this.extensionsPanel.style.display = 'none';
     }
+    // Close support if open
+    if (this.supportPanel) {
+      this.supportPanel.setAttribute('aria-hidden', 'true');
+      this.supportPanel.style.display = 'none';
+    }
 
     this.notificationPanel.setAttribute('aria-hidden', String(!isHidden));
     this.notificationPanel.style.display = isHidden ? 'block' : 'none';
     if (isHidden) this.renderNotifications();
+  }
+
+  toggleSupport() {
+    if (!this.supportPanel) return;
+
+    const isHidden = this.supportPanel.getAttribute('aria-hidden') === 'true';
+
+    // Close settings if open
+    if (this.settingsPanel) {
+      this.settingsPanel.setAttribute('aria-hidden', 'true');
+      this.settingsPanel.style.display = 'none';
+    }
+    // Close extensions if open
+    if (this.extensionsPanel) {
+      this.extensionsPanel.setAttribute('aria-hidden', 'true');
+      this.extensionsPanel.style.display = 'none';
+    }
+    // Close notifications if open
+    if (this.notificationPanel) {
+      this.notificationPanel.setAttribute('aria-hidden', 'true');
+      this.notificationPanel.style.display = 'none';
+    }
+
+    this.supportPanel.setAttribute('aria-hidden', String(!isHidden));
+    this.supportPanel.style.display = isHidden ? 'block' : 'none';
   }
 
   // ------------------------
@@ -2122,7 +2209,7 @@ class DiscoveryBrowser {
           if (this.currentSettingsTab === 'articles') {
             this.renderArticles();
           }
-          return;
+          return { ...existing };
         }
       }
     }
@@ -2140,11 +2227,21 @@ class DiscoveryBrowser {
     this.articles.set(article.id, article);
     this.currentArticlePage = 1;
     this.saveArticles();
-    
+
+    // Save article HTML for offline access (background, don't wait)
+    const articleUrl = articleData.url;
+    if (articleUrl && window.electronAPI && window.electronAPI.saveOfflineArticle) {
+      window.electronAPI.saveOfflineArticle(article.id, articleUrl).catch((e) => {
+        console.warn('Failed to save offline article:', e);
+      });
+    }
+
     // If the articles tab is currently active, re-render it
     if (this.currentSettingsTab === 'articles') {
       this.renderArticles();
     }
+
+    return { ...article };
   }
 
   escapeHtml(value) {
@@ -2250,8 +2347,11 @@ class DiscoveryBrowser {
   }
 
   openArticleInReadmode(article) {
-    // Create a card window with the article URL
-    if (article.url) {
+    // Open in readmode with offline article ID for offline content support
+    if (article.url && window.electronAPI && window.electronAPI.openReadmodeCard) {
+      window.electronAPI.openReadmodeCard(article.url, article.title, 'primary', article.id);
+    } else if (article.url) {
+      // Fallback
       this.createCard(article.url, 'readmode');
     }
   }
@@ -2264,8 +2364,18 @@ class DiscoveryBrowser {
     // Legacy support - folders are saved instead
   }
 
-  loadFavoriteBookmarks() {
+  async loadFavoriteBookmarks() {
     try {
+      // Try IPC first (persistent disk storage via main process)
+      if (window.electronAPI && window.electronAPI.getFavorites) {
+        const result = await window.electronAPI.getFavorites();
+        if (result && result.success && Array.isArray(result.favorites)) {
+          this.favoriteBookmarks = result.favorites.slice(0, this.maxFavoriteBookmarks);
+          this.syncFavoriteBookmarksWithFolders();
+          return;
+        }
+      }
+      // Fallback to localStorage
       const saved = localStorage.getItem('favoriteBookmarks');
       const parsed = saved ? JSON.parse(saved) : [];
       this.favoriteBookmarks = Array.isArray(parsed) ? parsed.slice(0, this.maxFavoriteBookmarks) : [];
@@ -2279,6 +2389,13 @@ class DiscoveryBrowser {
   saveFavoriteBookmarks() {
     try {
       this.favoriteBookmarks = this.favoriteBookmarks.slice(0, this.maxFavoriteBookmarks);
+      // Save to disk via main process (survives app restarts)
+      if (window.electronAPI && window.electronAPI.saveFavorites) {
+        window.electronAPI.saveFavorites(this.favoriteBookmarks).catch((e) => {
+          console.warn('Failed to persist favorites to disk:', e);
+        });
+      }
+      // Also keep localStorage as a fallback
       localStorage.setItem('favoriteBookmarks', JSON.stringify(this.favoriteBookmarks));
     } catch (e) {
       console.warn('Failed to save favorite bookmarks:', e);
@@ -2312,10 +2429,13 @@ class DiscoveryBrowser {
   }
 
   syncFavoriteBookmarksWithFolders() {
-    const syncedFavorites = this.favoriteBookmarks
-      .map((favorite) => this.getBookmarkByUrl(favorite.url))
-      .filter(Boolean)
-      .slice(0, this.maxFavoriteBookmarks);
+    // Enrich favorites with updated title/data from folders if available,
+    // but never delete a favorite just because it isn't in a folder.
+    const syncedFavorites = this.favoriteBookmarks.map((favorite) => {
+      const fromFolder = this.getBookmarkByUrl(favorite.url);
+      return fromFolder ? { ...favorite, title: fromFolder.title || favorite.title } : favorite;
+    }).slice(0, this.maxFavoriteBookmarks);
+
     const changed = JSON.stringify(syncedFavorites) !== JSON.stringify(this.favoriteBookmarks);
     this.favoriteBookmarks = syncedFavorites;
     if (changed) {
@@ -2581,12 +2701,12 @@ class DiscoveryBrowser {
 
   addToFavorites(bookmarkData) {
     const url = bookmarkData.url;
-    
+
     if (this.favoriteBookmarks.some(b => b.url === url)) {
       alert('This site is already in your favorites!');
       return false;
     }
-    
+
     if (this.favoriteBookmarks.length >= this.maxFavoriteBookmarks) {
       alert(`You can only keep ${this.maxFavoriteBookmarks} favorite sites.`);
       return false;
@@ -2882,6 +3002,9 @@ class DiscoveryBrowser {
     this.installedAddons = new Map();
     this.bookmarkFolders = new Map();
     this.favoriteBookmarks = [];
+    if (window.electronAPI && window.electronAPI.saveFavorites) {
+      window.electronAPI.saveFavorites([]).catch(() => { });
+    }
     this.searchEngineKey = 'google';
     this.cardThemeKey = 'primary';
     this.siteLayoutOverrides = {};
@@ -3454,11 +3577,11 @@ class DiscoveryBrowser {
     try {
       // In Electron, we can fetch RSS XML directly — no proxy or third-party API needed
       const rssFeeds = [
-        { url: 'https://feeds.bbci.co.uk/news/rss.xml',          source: 'BBC News' },
+        { url: 'https://feeds.bbci.co.uk/news/rss.xml', source: 'BBC News' },
         { url: 'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml', source: 'NY Times' },
-        { url: 'https://feeds.skynews.com/feeds/rss/home.xml',   source: 'Sky News' },
-        { url: 'https://www.theguardian.com/world/rss',          source: 'The Guardian' },
-        { url: 'https://feeds.reuters.com/reuters/topNews',      source: 'Reuters' },
+        { url: 'https://feeds.skynews.com/feeds/rss/home.xml', source: 'Sky News' },
+        { url: 'https://www.theguardian.com/world/rss', source: 'The Guardian' },
+        { url: 'https://feeds.reuters.com/reuters/topNews', source: 'Reuters' },
       ];
 
       for (const feed of rssFeeds) {
@@ -3523,7 +3646,7 @@ class DiscoveryBrowser {
               title: item.querySelector('title')?.textContent?.trim() || '',
               description: description || 'Click to read more...',
               url: item.querySelector('link')?.textContent?.trim() ||
-                   item.querySelector('guid')?.textContent?.trim() || '',
+                item.querySelector('guid')?.textContent?.trim() || '',
               publishedAt: item.querySelector('pubDate')?.textContent || null,
               source: { name: feed.source },
               imageUrl: imageUrl,

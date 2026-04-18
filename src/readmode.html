@@ -1148,22 +1148,72 @@
       position: fixed;
       bottom: 26px; left: 50%;
       transform: translateX(-50%);
-      padding: 7px 16px;
-      border-radius: 20px;
+      padding: 12px 14px;
+      border-radius: 18px;
       background: rgba(18,26,40,0.84);
       color: rgba(255,255,255,0.92);
       font: 600 11px/1.4 "Segoe UI", sans-serif;
       letter-spacing: 0.02em;
-      pointer-events: none;
+      pointer-events: auto;
       z-index: 8000;
-      display: flex; align-items: center; gap: 10px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.3);
       opacity: 0;
-      transition: opacity 0.3s ease;
-      white-space: nowrap;
+      transform: translateX(-50%) translateY(8px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      max-width: min(420px, calc(100vw - 28px));
     }
 
-    .magic-hint.visible { opacity: 1; }
+    .magic-hint.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .magic-hint-content {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .magic-hint-title {
+      font-weight: 700;
+      color: #fff8cf;
+      margin-right: 2px;
+    }
+
+    .magic-hint-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+
+    .magic-hint-btn {
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.92);
+      border-radius: 999px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font: 600 11px/1 "Segoe UI", sans-serif;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    }
+
+    .magic-hint-btn:hover {
+      background: rgba(255,255,255,0.16);
+      border-color: rgba(255,255,255,0.28);
+      transform: translateY(-1px);
+    }
+
+    .magic-hint-btn.secondary {
+      background: transparent;
+      color: rgba(255,255,255,0.74);
+    }
 
     .magic-hint kbd {
       display: inline-flex; align-items: center; justify-content: center;
@@ -1172,6 +1222,25 @@
       background: rgba(255,255,255,0.14);
       border: 1px solid rgba(255,255,255,0.24);
       font: 700 10px/1.5 "Segoe UI", sans-serif;
+    }
+
+    @media (max-width: 600px) {
+      .magic-hint {
+        width: calc(100vw - 24px);
+        left: 12px;
+        right: 12px;
+        bottom: 18px;
+        transform: translateY(8px);
+      }
+
+      .magic-hint.visible {
+        transform: translateY(0);
+      }
+
+      .magic-hint-actions {
+        width: 100%;
+        justify-content: flex-end;
+      }
     }
 
     @keyframes arrowPop {
@@ -1686,10 +1755,17 @@
     </svg>
   </div>
 
-  <div class="magic-hint" id="magic-hint" aria-live="polite">
-    <span>Magic Cursor</span>
-    <kbd>↓</kbd><kbd>↑</kbd><span>navigate paragraphs</span>
-    <kbd>Esc</kbd><span>exit</span>
+  <div class="magic-hint" id="magic-hint" aria-live="polite" hidden>
+    <div class="magic-hint-content">
+      <span class="magic-hint-title">Magic Cursor</span>
+      <span>Use the mouse wheel or</span>
+      <kbd>↓</kbd><kbd>↑</kbd><span>to move between highlighted paragraphs.</span>
+      <kbd>Esc</kbd><span>exit</span>
+    </div>
+    <div class="magic-hint-actions">
+      <button type="button" class="magic-hint-btn secondary" id="magic-hint-close-btn">Close</button>
+      <button type="button" class="magic-hint-btn" id="magic-hint-dismiss-btn">Don't show again</button>
+    </div>
   </div>
 
   <!-- ══════════════════════════════════════════
@@ -1891,6 +1967,8 @@
     const readmodeTitlebar = document.querySelector('.readmode-titlebar');
     const magicCursorEl  = document.getElementById('magic-cursor-el');
     const magicHint      = document.getElementById('magic-hint');
+    const magicHintCloseBtn = document.getElementById('magic-hint-close-btn');
+    const magicHintDismissBtn = document.getElementById('magic-hint-dismiss-btn');
     const phoneFrame     = document.getElementById('phone-frame');
 
     /* ─── Extraction state ─── */
@@ -1901,6 +1979,7 @@
     let extractionInProgress = false;
     let articleRendered      = false;
     let userNavigating       = false;
+    let lastExtractedPayload = null;
 
     pageTitleEl.textContent    = initialTitle || 'Read Mode';
     pageSubtitleEl.textContent = isLocalFileUrl(initialUrl) ? getReadableFileLabel(initialUrl) : (initialUrl || 'Loading source');
@@ -3268,6 +3347,8 @@
         stopProgressTick();
         setProgress(80, 'Rendering article...');
         renderArticle(payload || {});
+        // Store payload for offline saving
+        lastExtractedPayload = payload;
         extractedUrl        = pageUrl;
         articleRendered     = true;
         userNavigating      = false;
@@ -3375,11 +3456,30 @@
       savingArticle = true;
       saveArticleBtn.disabled = true;
       try {
-        const url = (() => { try { return sourceWebview.getURL() || ''; } catch(e) { return ''; } })();
+        const url = (() => {
+          try { return sourceWebview.getURL() || currentUrl || initialUrl || ''; } catch(e) { return currentUrl || initialUrl || ''; }
+        })();
         const title = pageTitleEl.textContent || 'Untitled Article';
         const content = readerArticle.innerText || '';
         const excerpt = content.substring(0, 200) + '...';
-        await window.readmodeAPI.saveArticle({ url, title, content, excerpt });
+        const saveResult = await window.readmodeAPI.saveArticle({ url, title, content, excerpt });
+        if (!saveResult || saveResult.success !== true) {
+          throw new Error(saveResult && saveResult.error ? saveResult.error : 'Failed to save article');
+        }
+
+        const articleIdFromSave = saveResult && saveResult.article && Number.isFinite(Number(saveResult.article.id))
+          ? Number(saveResult.article.id)
+          : NaN;
+        const articleIdParam = params.get('articleId');
+        const articleId = Number.isFinite(articleIdFromSave)
+          ? articleIdFromSave
+          : parseInt(articleIdParam, 10);
+
+        // Save the extracted payload for offline reading using the actual saved article id.
+        if (Number.isFinite(articleId) && lastExtractedPayload) {
+          await window.readmodeAPI.saveArticlePayload(articleId, JSON.stringify(lastExtractedPayload));
+        }
+
         saveArticleBtn.classList.add('active');
         saveArticleBtn.textContent = '✓';
         saveArticleBtn.title = 'Article saved!';
@@ -3393,7 +3493,6 @@
       } catch (e) {
         console.error('Failed to save article:', e);
         saveArticleBtn.textContent = '✕';
-        saveArticleBtn.title = 'Failed to save';
         setTimeout(() => {
           saveArticleBtn.textContent = '💾';
           saveArticleBtn.title = 'Save Article';
@@ -3801,6 +3900,7 @@ function isNetworkFailure(code, desc) {
        MAGIC CURSOR ENGINE
     ═══════════════════════════════════════════════════════════════ */
     const magicCursorBtn = document.getElementById('magic-cursor-btn');
+    const MAGIC_HINT_DISMISSED_STORAGE_KEY = 'readmode_magic_cursor_tip_dismissed';
     const MAGIC_EFFECTS_STORAGE_KEY = 'readmode_magic_effect_style';
     const MAGIC_EFFECTS = [
       { key: 'none',      label: 'None',      description: 'Use the default Magic Cursor highlight only.',       swatch: 'linear-gradient(135deg, rgba(255,255,255,0.85), rgba(226,232,240,0.92))' },
@@ -3834,10 +3934,12 @@ function isNetworkFailure(code, desc) {
     let magicActiveIdx    = -1;
     let totalWordCount    = 0;
     let magicParaWordCounts = [];
-    let magicHintTimer    = null;
+    let magicHintDismissed = localStorage.getItem(MAGIC_HINT_DISMISSED_STORAGE_KEY) === 'true';
+    let lastMagicWheelAt = 0;
 
     const MAGIC_SCROLL_EDGE = 90;
     const MAGIC_SCROLL_STEP = 200;
+    const MAGIC_WHEEL_COOLDOWN_MS = 160;
 
     function isValidMagicEffect(key) { return MAGIC_EFFECTS.some(e => e.key === key); }
     if (!isValidMagicEffect(activeMagicEffectKey)) activeMagicEffectKey = 'none';
@@ -3986,14 +4088,54 @@ function isNetworkFailure(code, desc) {
     function onMagicMouseEnter(e) { magicCursorEl.style.left = e.clientX + 'px'; magicCursorEl.style.top = e.clientY + 'px'; magicCursorEl.classList.add('visible'); }
 
     function showMagicHint() {
-      if (magicHintTimer) clearTimeout(magicHintTimer);
+      if (magicHintDismissed) return;
+      magicHint.hidden = false;
       magicHint.classList.add('visible');
-      magicHintTimer = setTimeout(() => { magicHint.classList.remove('visible'); magicHintTimer = null; }, 3500);
     }
 
     function hideMagicHint() {
-      if (magicHintTimer) { clearTimeout(magicHintTimer); magicHintTimer = null; }
       magicHint.classList.remove('visible');
+      setTimeout(() => {
+        if (!magicHint.classList.contains('visible')) magicHint.hidden = true;
+      }, 250);
+    }
+
+    function dismissMagicHintForever() {
+      magicHintDismissed = true;
+      localStorage.setItem(MAGIC_HINT_DISMISSED_STORAGE_KEY, 'true');
+      hideMagicHint();
+    }
+
+    function moveMagicSelection(direction) {
+      if (!magicCursorActive || !magicParaNodes.length) return false;
+      if (magicActiveIdx < 0) {
+        setMagicActive(0, true);
+        return true;
+      }
+
+      const nextIdx = direction > 0
+        ? Math.min(magicParaNodes.length - 1, magicActiveIdx + 1)
+        : Math.max(0, magicActiveIdx - 1);
+
+      if (nextIdx === magicActiveIdx) return false;
+      setMagicActive(nextIdx, true);
+      return true;
+    }
+
+    function handleMagicWheel(ev) {
+      if (!magicCursorActive) return;
+      const delta = Math.abs(ev.deltaY) >= Math.abs(ev.deltaX) ? ev.deltaY : ev.deltaX;
+      if (Math.abs(delta) < 6) return;
+      ev.preventDefault();
+
+      const now = Date.now();
+      if (now - lastMagicWheelAt < MAGIC_WHEEL_COOLDOWN_MS) return;
+      lastMagicWheelAt = now;
+
+      const moved = moveMagicSelection(delta > 0 ? 1 : -1);
+      if (!moved) {
+        readerStage.scrollBy({ top: delta > 0 ? MAGIC_SCROLL_STEP : -MAGIC_SCROLL_STEP, behavior: 'smooth' });
+      }
     }
 
     function enableMagicCursor() {
@@ -4014,6 +4156,7 @@ function isNetworkFailure(code, desc) {
       readerStage.addEventListener('mousemove',  onMagicMouseMove);
       readerStage.addEventListener('mouseleave', onMagicMouseLeave);
       readerStage.addEventListener('mouseenter', onMagicMouseEnter);
+      readerStage.addEventListener('wheel', handleMagicWheel, { passive: false });
       showMagicHint();
     }
 
@@ -4031,7 +4174,11 @@ function isNetworkFailure(code, desc) {
       readerStage.removeEventListener('mousemove',  onMagicMouseMove);
       readerStage.removeEventListener('mouseleave', onMagicMouseLeave);
       readerStage.removeEventListener('mouseenter', onMagicMouseEnter);
+      readerStage.removeEventListener('wheel', handleMagicWheel);
     }
+
+    if (magicHintCloseBtn) magicHintCloseBtn.addEventListener('click', hideMagicHint);
+    if (magicHintDismissBtn) magicHintDismissBtn.addEventListener('click', dismissMagicHintForever);
 
     magicEffectsBtn.addEventListener('click', (e) => { e.stopPropagation(); magicEffectsMenuOpen ? closeMagicEffectsMenu() : openMagicEffectsMenu(); });
     document.addEventListener('click', (e) => { if (magicEffectsMenuOpen && !magicEffectsPicker.contains(e.target)) closeMagicEffectsMenu(); });
@@ -4050,14 +4197,14 @@ function isNetworkFailure(code, desc) {
       if (!magicCursorActive) return false;
       if (ev.key === 'ArrowDown') {
         ev.preventDefault();
-        if (magicActiveIdx < magicParaNodes.length - 1) { setMagicActive(magicActiveIdx + 1, true); }
-        else { readerStage.scrollBy({ top: MAGIC_SCROLL_STEP, behavior: 'smooth' }); }
+        if (moveMagicSelection(1)) return true;
+        readerStage.scrollBy({ top: MAGIC_SCROLL_STEP, behavior: 'smooth' });
         return true;
       }
       if (ev.key === 'ArrowUp') {
         ev.preventDefault();
-        if (magicActiveIdx > 0) { setMagicActive(magicActiveIdx - 1, true); }
-        else { readerStage.scrollBy({ top: -MAGIC_SCROLL_STEP, behavior: 'smooth' }); }
+        if (moveMagicSelection(-1)) return true;
+        readerStage.scrollBy({ top: -MAGIC_SCROLL_STEP, behavior: 'smooth' });
         return true;
       }
       if (ev.key === 'Escape') { disableMagicCursor(); return true; }
@@ -4088,25 +4235,78 @@ function isNetworkFailure(code, desc) {
     setInterval(updateTime, 1000);
     updateNavButtons();
 
-    if (initialUrl) {
-      userNavigating = true;
-      function attachWebviewSrc() {
-        try {
-          if (typeof sourceWebview.loadURL === 'function') { sourceWebview.loadURL(initialUrl); }
-          else { sourceWebview.src = initialUrl; }
-        } catch (e) {
-          setTimeout(() => { sourceWebview.src = initialUrl; }, 100);
-        }
+    async function tryLoadOfflinePayload() {
+      const articleIdParam = params.get('articleId');
+      if (!articleIdParam || !window.readmodeAPI.getArticlePayload) return false;
+      const articleId = parseInt(articleIdParam, 10);
+      if (!Number.isFinite(articleId)) return false;
+      
+      try {
+        const result = await window.readmodeAPI.getArticlePayload(articleId);
+        if (!result || !result.exists || !result.payload) return false;
+        
+        const payload = typeof result.payload === 'string' 
+          ? JSON.parse(result.payload) 
+          : result.payload;
+        
+        if (!Array.isArray(payload.blocks) || payload.blocks.length === 0) return false;
+        
+        // Render from stored payload — no network needed
+        renderArticle(payload);
+        lastExtractedPayload = payload;
+        extractedUrl = initialUrl;
+        articleRendered = true;
+        userNavigating = false;
+        currentUrl = initialUrl;
+        loadHighlights(initialUrl);
+        setProgress(100, 'Loaded offline');
+        setTimeout(() => setLoadingState(false), 120);
+        
+        // Still load the webview in background for nav (silently)
+        pageSubtitleEl.textContent = '(offline) ' + (isLocalFileUrl(initialUrl) ? getReadableFileLabel(initialUrl) : initialUrl);
+        return true;
+      } catch (e) {
+        return false;
       }
-      if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        requestAnimationFrame(() => setTimeout(attachWebviewSrc, 0));
-      } else {
-        document.addEventListener('DOMContentLoaded', () => { requestAnimationFrame(() => setTimeout(attachWebviewSrc, 0)); });
-      }
-    } else {
-      loadingOverlay.classList.add('hidden');
-      wordCountLabel.textContent = 'No page';
     }
+
+    async function initReadmode() {
+      if (!initialUrl) {
+        loadingOverlay.classList.add('hidden');
+        wordCountLabel.textContent = 'No page';
+        return;
+      }
+
+      userNavigating = true;
+      const loadedOffline = await tryLoadOfflinePayload();
+      
+      if (!loadedOffline) {
+        // Normal online load
+        function attachWebviewSrc() {
+          try {
+            if (typeof sourceWebview.loadURL === 'function') { sourceWebview.loadURL(initialUrl); }
+            else { sourceWebview.src = initialUrl; }
+          } catch (e) {
+            setTimeout(() => { sourceWebview.src = initialUrl; }, 100);
+          }
+        }
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+          requestAnimationFrame(() => setTimeout(attachWebviewSrc, 0));
+        } else {
+          document.addEventListener('DOMContentLoaded', () => { requestAnimationFrame(() => setTimeout(attachWebviewSrc, 0)); });
+        }
+      } else {
+        // Offline: still attach webview quietly for nav buttons, but don't block on it
+        setTimeout(() => {
+          try {
+            if (typeof sourceWebview.loadURL === 'function') sourceWebview.loadURL(initialUrl);
+            else sourceWebview.src = initialUrl;
+          } catch (e) {}
+        }, 800);
+      }
+    }
+
+    initReadmode();
   </script>
 </body>
 </html>

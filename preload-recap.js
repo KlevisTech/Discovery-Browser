@@ -4,7 +4,7 @@ contextBridge.exposeInMainWorld('recapAPI', {
   closeWindow: () => ipcRenderer.invoke('close-recap-window'),
   minimizeWindow: () => ipcRenderer.invoke('minimize-recap-window'),
   toggleFullscreen: (shouldBeFullscreen) => ipcRenderer.invoke('toggle-recap-fullscreen', shouldBeFullscreen),
-  openReadmodeCard: (url, title) => ipcRenderer.invoke('open-readmode-card', url, title || 'Read Mode'),
+  openReadmodeCard: (url, title, theme, articleId) => ipcRenderer.invoke('open-readmode-card', url, title || 'Read Mode', theme, articleId),
   getSavedArticles: () => ipcRenderer.invoke('get-saved-articles-for-recap'),
   setSavedArticles: (articles) => ipcRenderer.invoke('set-saved-articles-for-recap', articles),
   googleSearch: (query) => ipcRenderer.invoke('google-search', query),

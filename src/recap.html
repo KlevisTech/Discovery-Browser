@@ -629,7 +629,7 @@
       const article = savedArticlesCache.find((item) => item.id === articleId);
       if (!article || !article.url) return;
       try {
-        await window.recapAPI.openReadmodeCard(article.url, article.title || 'Read Mode');
+        await window.recapAPI.openReadmodeCard(article.url, article.title || 'Read Mode', 'primary', article.id);
       } catch (e) {
         console.error('Failed to open article', e);
       }

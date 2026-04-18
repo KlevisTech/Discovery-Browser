@@ -45,6 +45,14 @@ contextBridge.exposeInMainWorld('readmodeAPI', {
   saveArticle: (articleData) =>
     ipcRenderer.invoke('save-article', articleData),
 
+  // Save article payload for offline reading
+  saveArticlePayload: (articleId, payload) =>
+    ipcRenderer.invoke('save-article-payload', articleId, payload),
+
+  // Get saved article payload for offline reading
+  getArticlePayload: (articleId) =>
+    ipcRenderer.invoke('get-article-payload', articleId),
+
   // Create a Google search card
   googleSearch: (query) =>
     ipcRenderer.invoke('google-search', query),

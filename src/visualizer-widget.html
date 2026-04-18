@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visualizer Widget</title>
+  <style>
+    :root {
+      --widget-bg: linear-gradient(180deg, rgba(15, 29, 61, 0.9), rgba(7, 14, 31, 0.86));
+      --widget-border: rgba(112, 172, 255, 0.26);
+      --widget-shadow: rgba(0, 0, 0, 0.2);
+      --widget-glow: rgba(94, 165, 255, 0.26);
+      --bar-blue: #68b8ff;
+      --bar-yellow: #ffd65c;
+      --control-fg: rgba(220, 236, 255, 0.9);
+      --control-bg: rgba(255, 255, 255, 0.08);
+      --control-bg-hover: rgba(255, 255, 255, 0.16);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      font-family: "Segoe UI", sans-serif;
+    }
+
+    html::-webkit-scrollbar,
+    body::-webkit-scrollbar {
+      width: 0;
+      height: 0;
+      display: none;
+    }
+
+    body {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 0 4px 18px;
+    }
+
+    body.lock-mode {
+      align-items: stretch;
+      justify-content: stretch;
+      padding: 0;
+    }
+
+    .widget-shell {
+      width: 82px;
+      height: 26px;
+      border-radius: 999px;
+      background: var(--widget-bg);
+      border: 1px solid var(--widget-border);
+      box-shadow:
+        0 10px 24px var(--widget-shadow),
+        0 0 0 1px rgba(255,255,255,0.05) inset,
+        0 0 18px var(--widget-glow);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      opacity: 0.98;
+      padding: 0 10px;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    body.lock-mode .widget-shell {
+      display: none;
+    }
+
+    .widget-shell.theme-sunset {
+      --widget-bg: linear-gradient(180deg, rgba(18, 33, 66, 0.9), rgba(8, 15, 31, 0.86));
+    }
+
+    .widget-shell.theme-ocean {
+      --widget-bg: linear-gradient(180deg, rgba(14, 33, 67, 0.9), rgba(7, 16, 34, 0.86));
+    }
+
+    .widget-shell.theme-emerald {
+      --widget-bg: linear-gradient(180deg, rgba(16, 32, 61, 0.9), rgba(8, 15, 30, 0.86));
+    }
+
+    .widget-shell.theme-amber {
+      --widget-bg: linear-gradient(180deg, rgba(16, 32, 61, 0.9), rgba(8, 15, 30, 0.86));
+    }
+
+    .widget-shell.theme-midnight {
+      --widget-bg: linear-gradient(180deg, rgba(14, 24, 49, 0.92), rgba(7, 11, 24, 0.88));
+    }
+
+    .widget-shell.theme-cocoa {
+      --widget-bg: linear-gradient(180deg, rgba(18, 31, 59, 0.9), rgba(8, 14, 27, 0.86));
+    }
+
+    .widget-shell.theme-frost {
+      --widget-bg: linear-gradient(180deg, rgba(18, 34, 66, 0.88), rgba(10, 20, 40, 0.84));
+    }
+
+    .visualizer {
+      width: 30px;
+      height: 18px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 4px;
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .visualizer span {
+      width: 4px;
+      min-height: 8px;
+      border-radius: 999px;
+      background: var(--bar-blue);
+      box-shadow: 0 0 10px color-mix(in srgb, var(--bar-blue) 42%, transparent);
+      animation: vizBars 1.1s ease-in-out infinite;
+      transform-origin: 50% 100%;
+    }
+
+    .visualizer span:nth-child(2) {
+      background: var(--bar-yellow);
+      box-shadow: 0 0 10px color-mix(in srgb, var(--bar-yellow) 42%, transparent);
+    }
+
+    .visualizer span:nth-child(2) { animation-delay: 0.16s; }
+    .visualizer span:nth-child(3) { animation-delay: 0.32s; }
+
+    .visualizer.style-pulse span {
+      width: 6px;
+      min-height: 6px;
+      animation-name: vizPulse;
+    }
+
+    .visualizer.style-ladder span:nth-child(1) { animation-duration: 0.95s; }
+    .visualizer.style-ladder span:nth-child(2) { animation-duration: 1.25s; }
+    .visualizer.style-ladder span:nth-child(3) { animation-duration: 1.05s; }
+
+    .visualizer.style-orbit {
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+    }
+
+    .visualizer.style-orbit span {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      min-height: 6px;
+      animation-name: vizOrbit;
+    }
+
+    .visualizer.style-orbit span:nth-child(2) { animation-delay: 0.24s; }
+    .visualizer.style-orbit span:nth-child(3) { animation-delay: 0.48s; }
+
+    .visualizer:not(.playing) span {
+      animation-play-state: paused;
+    }
+
+    .status-pill {
+      display: none;
+    }
+
+    .control-panel {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: 336px;
+      padding: 12px;
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(13, 23, 48, 0.96), rgba(8, 13, 28, 0.94));
+      border: 1px solid rgba(112, 172, 255, 0.18);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+      display: none;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      z-index: 10;
+      overflow: hidden;
+    }
+
+    .widget-shell.panel-open .control-panel {
+      display: grid;
+    }
+
+    .control-btn,
+    .volume-slider {
+      -webkit-app-region: no-drag;
+    }
+
+    .control-btn {
+      border: 0;
+      border-radius: 10px;
+      min-height: 36px;
+      background: var(--control-bg);
+      color: var(--control-fg);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.16s ease, transform 0.16s ease;
+      padding: 0 10px;
+    }
+
+    .control-btn:hover {
+      background: var(--control-bg-hover);
+      transform: translateY(-1px);
+    }
+
+    .control-btn.wide {
+      grid-column: span 1;
+    }
+
+    .control-btn.lock {
+      grid-column: span 2;
+      background: linear-gradient(135deg, rgba(104, 184, 255, 0.22), rgba(255, 214, 92, 0.18));
+      box-shadow: 0 8px 18px rgba(7, 14, 31, 0.2);
+    }
+
+    .volume-slider {
+      grid-column: span 4;
+      width: 100%;
+      accent-color: var(--bar-yellow);
+      cursor: pointer;
+      min-height: 36px;
+    }
+
+    .remaining-display {
+      grid-column: span 2;
+      min-height: 36px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--control-fg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      user-select: none;
+    }
+
+    .lock-scene {
+      display: none;
+      position: relative;
+      width: 100%;
+      height: 100%;
+      border-radius: 24px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255,255,255,0.14), transparent 24%),
+        linear-gradient(180deg, rgba(8, 12, 28, 0.985) 0%, rgba(5, 8, 20, 0.99) 100%);
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow:
+        0 30px 60px rgba(0,0,0,0.34),
+        inset 0 1px 0 rgba(255,255,255,0.12);
+      align-items: center;
+      justify-content: center;
+    }
+
+    body.lock-mode .lock-scene {
+      display: flex;
+      animation: lockSceneEnter 220ms cubic-bezier(0.2, 0.84, 0.24, 1);
+    }
+
+    .lock-scene.theme-sunset {
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255, 178, 216, 0.16), transparent 24%),
+        linear-gradient(180deg, rgba(30, 5, 18, 0.988) 0%, rgba(18, 4, 11, 0.992) 100%);
+    }
+
+    .lock-scene.theme-ocean {
+      background:
+        radial-gradient(circle at 50% 18%, rgba(130, 228, 255, 0.16), transparent 24%),
+        linear-gradient(180deg, rgba(4, 20, 38, 0.988) 0%, rgba(3, 10, 24, 0.992) 100%);
+    }
+
+    .lock-scene.theme-emerald {
+      background:
+        radial-gradient(circle at 50% 18%, rgba(140, 255, 214, 0.16), transparent 24%),
+        linear-gradient(180deg, rgba(5, 25, 18, 0.988) 0%, rgba(3, 14, 10, 0.992) 100%);
+    }
+
+    .lock-scene.theme-amber {
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255, 216, 160, 0.18), transparent 24%),
+        linear-gradient(180deg, rgba(40, 16, 4, 0.988) 0%, rgba(24, 10, 4, 0.992) 100%);
+    }
+
+    .lock-scene.theme-midnight {
+      background:
+        radial-gradient(circle at 50% 18%, rgba(170, 178, 206, 0.14), transparent 24%),
+        linear-gradient(180deg, rgba(5, 7, 15, 0.992) 0%, rgba(3, 4, 10, 0.995) 100%);
+    }
+
+    .lock-scene.theme-cocoa {
+      background:
+        radial-gradient(circle at 50% 18%, rgba(238, 194, 160, 0.14), transparent 24%),
+        linear-gradient(180deg, rgba(30, 16, 9, 0.99) 0%, rgba(20, 10, 5, 0.994) 100%);
+    }
+
+    .lock-scene.theme-frost {
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255,255,255,0.2), transparent 24%),
+        linear-gradient(180deg, rgba(218, 228, 238, 0.985) 0%, rgba(194, 205, 217, 0.99) 100%);
+    }
+
+    .lock-rings {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .lock-rings span {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid rgba(124, 247, 255, 0.18);
+      box-shadow: 0 0 30px rgba(124, 247, 255, 0.08);
+      animation: lockBreath 4.8s ease-in-out infinite;
+    }
+
+    .lock-rings span:nth-child(1) { width: min(34vw, 240px); height: min(34vw, 240px); }
+    .lock-rings span:nth-child(2) { width: min(52vw, 380px); height: min(52vw, 380px); animation-delay: -1.2s; }
+    .lock-rings span:nth-child(3) { width: min(70vw, 520px); height: min(70vw, 520px); animation-delay: -2.4s; }
+
+    .lock-stage {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      width: min(100%, 560px);
+      padding: 36px 28px;
+      text-align: center;
+    }
+
+    .lock-kicker {
+      font-size: 11px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: rgba(225, 241, 255, 0.72);
+    }
+
+    .lock-scene.theme-frost .lock-kicker,
+    .lock-scene.theme-frost .lock-copy {
+      color: rgba(30, 41, 59, 0.8);
+    }
+
+    .lock-copy {
+      font-size: 14px;
+      line-height: 1.6;
+      color: rgba(232, 242, 255, 0.82);
+      max-width: 380px;
+    }
+
+    .lock-visualizer {
+      width: 240px;
+      height: 140px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 10px;
+      filter: drop-shadow(0 0 18px rgba(124, 247, 255, 0.2));
+    }
+
+    .lock-visualizer span {
+      width: 18px;
+      min-height: 24px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #7cf7ff 0%, #68b8ff 35%, #ff6ff0 100%);
+      animation: lockBars 1.1s ease-in-out infinite;
+      transform-origin: bottom;
+    }
+
+    .lock-visualizer span:nth-child(2) { animation-delay: -0.14s; }
+    .lock-visualizer span:nth-child(3) { animation-delay: -0.28s; }
+    .lock-visualizer span:nth-child(4) { animation-delay: -0.42s; }
+    .lock-visualizer span:nth-child(5) { animation-delay: -0.56s; }
+
+    .lock-visualizer.style-pulse span {
+      width: 22px;
+      min-height: 22px;
+      border-radius: 50%;
+      animation-name: lockPulseDots;
+    }
+
+    .lock-visualizer.style-ladder span {
+      animation-name: lockTallBars;
+    }
+
+    .lock-visualizer.style-orbit {
+      position: relative;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+    }
+
+    .lock-visualizer.style-orbit span {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      min-height: 20px;
+      animation-name: lockOrbit;
+    }
+
+    .unlock-btn {
+      width: 108px;
+      height: 108px;
+      border: 0;
+      border-radius: 50%;
+      cursor: pointer;
+      background:
+        radial-gradient(circle at 32% 28%, rgba(255,255,255,0.28), transparent 32%),
+        linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.05));
+      color: rgba(245, 252, 255, 0.96);
+      box-shadow:
+        0 14px 34px rgba(0,0,0,0.3),
+        inset 0 1px 0 rgba(255,255,255,0.18),
+        0 0 0 1px rgba(255,255,255,0.12);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 4px;
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .unlock-btn:hover {
+      transform: translateY(-2px) scale(1.03);
+      box-shadow:
+        0 18px 38px rgba(0,0,0,0.34),
+        inset 0 1px 0 rgba(255,255,255,0.2),
+        0 0 0 1px rgba(255,255,255,0.14);
+    }
+
+    .unlock-btn .icon {
+      font-size: 30px;
+      line-height: 1;
+    }
+
+    .unlock-btn .label {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    @keyframes vizBars {
+      0%, 100% { transform: scaleY(0.45); opacity: 0.76; }
+      50% { transform: scaleY(1); opacity: 1; }
+    }
+
+    @keyframes vizPulse {
+      0%, 100% { transform: scale(0.72); opacity: 0.68; }
+      50% { transform: scale(1.18); opacity: 1; }
+    }
+
+    @keyframes vizOrbit {
+      0% { transform: rotate(0deg) translateY(-9px) scale(0.66); opacity: 0.62; }
+      50% { transform: rotate(180deg) translateY(-9px) scale(1.08); opacity: 1; }
+      100% { transform: rotate(360deg) translateY(-9px) scale(0.66); opacity: 0.62; }
+    }
+
+    @keyframes lockBreath {
+      0%, 100% { transform: scale(0.92); opacity: 0.38; }
+      50% { transform: scale(1.04); opacity: 0.88; }
+    }
+
+    @keyframes lockSceneEnter {
+      0% {
+        opacity: 0;
+        transform: scale(0.985);
+        filter: saturate(0.88);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1);
+        filter: saturate(1);
+      }
+    }
+
+    @keyframes lockBars {
+      0%, 100% { transform: scaleY(0.42); opacity: 0.72; }
+      50% { transform: scaleY(1.08); opacity: 1; }
+    }
+
+    @keyframes lockTallBars {
+      0%, 100% { transform: scaleY(0.34); opacity: 0.68; }
+      50% { transform: scaleY(1.32); opacity: 1; }
+    }
+
+    @keyframes lockPulseDots {
+      0%, 100% { transform: scale(0.68); opacity: 0.64; }
+      50% { transform: scale(1.18); opacity: 1; }
+    }
+
+    @keyframes lockOrbit {
+      0% { transform: rotate(0deg) translateY(-56px) scale(0.7); opacity: 0.62; }
+      50% { transform: rotate(180deg) translateY(-56px) scale(1.08); opacity: 1; }
+      100% { transform: rotate(360deg) translateY(-56px) scale(0.7); opacity: 0.62; }
+    }
+  </style>
+</head>
+<body>
+  <div class="widget-shell" id="widget-shell">
+    <div class="visualizer" id="visualizer" aria-hidden="true">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+    <div class="control-panel" id="control-panel">
+      <button class="control-btn wide" id="play-toggle-btn" type="button">Pause</button>
+      <div class="remaining-display" id="remaining-display">--:--</div>
+      <button class="control-btn wide" id="mute-btn" type="button">Mute</button>
+      <button class="control-btn wide" id="seek-back-btn" type="button">Rewind 10s</button>
+      <button class="control-btn wide" id="seek-forward-btn" type="button">Forward 10s</button>
+      <button class="control-btn lock" id="visual-lock-btn" type="button">Visual Lock</button>
+      <input class="volume-slider" id="volume-slider" type="range" min="0" max="100" value="100" />
+    </div>
+  </div>
+  <div class="lock-scene theme-primary" id="lock-scene" aria-hidden="true">
+    <div class="lock-rings" aria-hidden="true">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+    <div class="lock-stage">
+      <div class="lock-kicker">Visual Lock</div>
+      <div class="lock-visualizer style-bars" id="lock-visualizer" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <button class="unlock-btn" id="unlock-btn" type="button" aria-label="Unlock visual lock">
+        <span class="icon">🔒</span>
+        <span class="label">Unlock</span>
+      </button>
+      <p class="lock-copy">The page is tucked away so the sound can take over. Press the lock to bring the site back.</p>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search || '');
+    const cardId = Number(params.get('cardId'));
+    const initialTheme = String(params.get('theme') || 'primary').toLowerCase();
+    const widgetShell = document.getElementById('widget-shell');
+    const visualizer = document.getElementById('visualizer');
+    const lockScene = document.getElementById('lock-scene');
+    const lockVisualizer = document.getElementById('lock-visualizer');
+    const unlockBtn = document.getElementById('unlock-btn');
+    const controlPanel = document.getElementById('control-panel');
+    const playToggleBtn = document.getElementById('play-toggle-btn');
+    const remainingDisplay = document.getElementById('remaining-display');
+    const muteBtn = document.getElementById('mute-btn');
+    const seekBackBtn = document.getElementById('seek-back-btn');
+    const seekForwardBtn = document.getElementById('seek-forward-btn');
+    const visualLockBtn = document.getElementById('visual-lock-btn');
+    const volumeSlider = document.getElementById('volume-slider');
+    const themeClasses = ['theme-primary', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-frost'];
+    const styleClasses = ['style-bars', 'style-pulse', 'style-ladder', 'style-orbit'];
+    let widgetState = {
+      isPlaying: false,
+      hasDuration: false,
+      remainingSeconds: null,
+      isLive: false,
+      muted: false,
+      volume: 1,
+      visualizerStyle: 'bars',
+      visualLock: false,
+    };
+    let remainingTickTimer = null;
+    function applyTheme(themeKey) {
+      const normalized = String(themeKey || 'primary').toLowerCase() === 'alt'
+        ? 'sunset'
+        : String(themeKey || 'primary').toLowerCase();
+      themeClasses.forEach((name) => widgetShell.classList.remove(name));
+      widgetShell.classList.add(`theme-${normalized}`);
+      if (lockScene) {
+        themeClasses.forEach((name) => lockScene.classList.remove(name));
+        lockScene.classList.add(`theme-${normalized}`);
+      }
+    }
+
+    function applyStyle(styleKey) {
+      const requested = String(styleKey || '').toLowerCase();
+      const normalized = requested === 'orbit'
+        ? 'bars'
+        : (['bars', 'pulse', 'ladder', 'orbit'].includes(requested) ? requested : 'bars');
+      styleClasses.forEach((name) => visualizer.classList.remove(name));
+      visualizer.classList.add(`style-${normalized}`);
+      if (lockVisualizer) {
+        styleClasses.forEach((name) => lockVisualizer.classList.remove(name));
+        lockVisualizer.classList.add(`style-${normalized}`);
+      }
+    }
+
+    function formatRemaining(totalSeconds) {
+      const safe = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+      const hours = Math.floor(safe / 3600);
+      const minutes = Math.floor((safe % 3600) / 60);
+      const seconds = safe % 60;
+      if (hours > 0) {
+        return `${String(hours)}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      }
+      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function stopRemainingTick() {
+      if (!remainingTickTimer) return;
+      clearInterval(remainingTickTimer);
+      remainingTickTimer = null;
+    }
+
+    function updateRemainingDisplay() {
+      if (!remainingDisplay) return;
+      if (widgetState.isLive) {
+        remainingDisplay.textContent = 'LIVE';
+        return;
+      }
+      if (widgetState.hasDuration && Number.isFinite(Number(widgetState.remainingSeconds))) {
+        remainingDisplay.textContent = `-${formatRemaining(widgetState.remainingSeconds)}`;
+        return;
+      }
+      remainingDisplay.textContent = '--:--';
+    }
+
+    function syncRemainingTick() {
+      stopRemainingTick();
+      if (!(widgetState.isPlaying && widgetState.hasDuration && Number.isFinite(Number(widgetState.remainingSeconds)))) {
+        updateRemainingDisplay();
+        return;
+      }
+      updateRemainingDisplay();
+      remainingTickTimer = setInterval(() => {
+        if (!(widgetState.isPlaying && widgetState.hasDuration && Number.isFinite(Number(widgetState.remainingSeconds)))) {
+          stopRemainingTick();
+          updateRemainingDisplay();
+          return;
+        }
+        widgetState.remainingSeconds = Math.max(0, Number(widgetState.remainingSeconds) - 1);
+        updateRemainingDisplay();
+      }, 1000);
+    }
+
+    function applyState(payload) {
+      const next = payload && typeof payload === 'object' ? payload : {};
+      widgetState = {
+        ...widgetState,
+        ...next,
+      };
+      applyTheme(next.themeKey || initialTheme);
+      applyStyle(widgetState.visualizerStyle || 'bars');
+      document.body.classList.toggle('lock-mode', !!widgetState.visualLock);
+      if (lockScene) lockScene.setAttribute('aria-hidden', widgetState.visualLock ? 'false' : 'true');
+      widgetShell.classList.toggle('video-mode', !!next.isVideo);
+      widgetShell.classList.toggle('live-mode', !!next.isLive);
+      visualizer.classList.toggle('playing', !!widgetState.isPlaying);
+      if (lockVisualizer) lockVisualizer.classList.toggle('playing', !!widgetState.isPlaying);
+      if (playToggleBtn) playToggleBtn.textContent = widgetState.isPlaying ? 'Pause' : 'Play';
+      if (muteBtn) muteBtn.textContent = widgetState.muted ? 'Unmute' : 'Mute';
+      if (volumeSlider && Number.isFinite(Number(widgetState.volume))) {
+        volumeSlider.value = String(Math.round(Math.max(0, Math.min(1, Number(widgetState.volume))) * 100));
+      }
+      syncRemainingTick();
+    }
+
+    async function sendAction(action, value) {
+      if (!window.visualizerWidgetAPI || !window.visualizerWidgetAPI.sendAction) return;
+      try {
+        await window.visualizerWidgetAPI.sendAction(cardId, action, value);
+      } catch (e) { }
+    }
+
+    applyTheme(initialTheme);
+    applyStyle('bars');
+
+    widgetShell.addEventListener('click', (event) => {
+      if (controlPanel && controlPanel.contains(event.target)) return;
+      widgetShell.classList.toggle('panel-open');
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!widgetShell.contains(event.target)) {
+        widgetShell.classList.remove('panel-open');
+      }
+    });
+
+    if (playToggleBtn) {
+      playToggleBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        sendAction('toggle');
+      });
+    }
+
+    if (muteBtn) {
+      muteBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        sendAction('mute');
+      });
+    }
+
+    if (seekBackBtn) {
+      seekBackBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        sendAction('seek', -10);
+      });
+    }
+
+    if (seekForwardBtn) {
+      seekForwardBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        sendAction('seek', 10);
+      });
+    }
+
+    if (visualLockBtn) {
+      visualLockBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        sendAction('visual-lock');
+      });
+    }
+
+    if (unlockBtn) {
+      unlockBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        sendAction('visual-unlock');
+      });
+    }
+
+    if (volumeSlider) {
+      volumeSlider.addEventListener('input', (event) => {
+        event.stopPropagation();
+        const nextValue = Number(volumeSlider.value);
+        if (!Number.isFinite(nextValue)) return;
+        sendAction('volume', Math.max(0, Math.min(1, nextValue / 100)));
+      });
+    }
+
+    if (window.visualizerWidgetAPI && window.visualizerWidgetAPI.onStateUpdate) {
+      window.visualizerWidgetAPI.onStateUpdate((payload) => {
+        applyState(payload);
+      });
+    }
+  </script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 // Simple IPC invoke wrapper that inline scripts can use
-window.ipcInvoke = function(channel, ...args) {
+window.ipcInvoke = function (channel, ...args) {
   return ipcRenderer.invoke(channel, ...args);
 };
 
@@ -11,35 +11,35 @@ const electronAPI = {
   // ========================
   // Card management
   // ========================
-  createCard: (cardId, url, position, themeKey, launchSizeMode) => ipcRenderer.invoke('create-card', cardId, url, position, themeKey, launchSizeMode),
+  createCard: (cardId, url, position, themeKey, launchSizeMode, isBubbleMode) => ipcRenderer.invoke('create-card', cardId, url, position, themeKey, launchSizeMode, isBubbleMode),
   closeCard: (cardId) => ipcRenderer.invoke('close-card', cardId),
-  
+
   // Card navigation
   cardGoBack: (cardId) => ipcRenderer.invoke('card-go-back', cardId),
   cardGoForward: (cardId) => ipcRenderer.invoke('card-go-forward', cardId),
   cardReload: (cardId) => ipcRenderer.invoke('card-reload', cardId),
-  
+
   // Card events from main process
   onCardClosed: (callback) => {
     ipcRenderer.on('card-closed', (event, cardId) => callback(cardId));
   },
-  
+
   onCardTitleUpdated: (callback) => {
     ipcRenderer.on('card-title-updated', (event, cardId, title) => callback(cardId, title));
   },
-  
+
   onCardUrlUpdated: (callback) => {
     ipcRenderer.on('card-url-updated', (event, cardId, url) => callback(cardId, url));
   },
-  
+
   onCardLoadingStart: (callback) => {
     ipcRenderer.on('card-loading-start', (event, cardId) => callback(cardId));
   },
-  
+
   onCardLoadingFinish: (callback) => {
     ipcRenderer.on('card-loading-finish', (event, cardId, title, url) => callback(cardId, title, url));
   },
-  
+
   // External URL handler - for when links are opened from outside the app
   onOpenUrl: (callback) => {
     ipcRenderer.on('open-external-url', (event, url) => {
@@ -63,16 +63,16 @@ const electronAPI = {
   cancelAuthOpenExternal: (requestId) => {
     return ipcRenderer.invoke('cancel-auth-open-external', requestId);
   },
-  
+
   // Bookmark management
   onToggleBookmark: (callback) => {
     ipcRenderer.on('toggle-bookmark', (event, bookmarkData) => callback(bookmarkData));
   },
-  
+
   onCheckBookmarkStatus: (callback) => {
     ipcRenderer.on('check-bookmark-status', (event, url) => callback(url));
   },
-  
+
   sendBookmarkStatus: (isBookmarked) => {
     ipcRenderer.send('bookmark-status-response', isBookmarked);
   },
@@ -99,12 +99,12 @@ const electronAPI = {
   },
 
   // Password manager is disabled until secure OS-backed storage is implemented.
-  onSavePassword: () => {},
+  onSavePassword: () => { },
   syncPasswords: async () => ({ success: false, disabled: true }),
-  
+
   // Addon management
   updateAddons: (addons) => ipcRenderer.invoke('update-addons', addons),
-  
+
   // Default browser setting
   setAsDefaultBrowser: () => ipcRenderer.invoke('set-as-default-browser-ui'),
   isDefaultBrowser: () => ipcRenderer.invoke('is-default-browser-ui'),
@@ -151,6 +151,10 @@ const electronAPI = {
   getCardLaunchSizeMode: () => ipcRenderer.invoke('get-card-launch-size-mode'),
   setSiteLayoutOverrides: (overrides) => ipcRenderer.invoke('set-site-layout-overrides', overrides),
 
+  // Favorites management
+  getFavorites: () => ipcRenderer.invoke('get-favorites'),
+  saveFavorites: (favorites) => ipcRenderer.invoke('save-favorites', favorites),
+
   // Clear all user data
   clearUserData: () => ipcRenderer.invoke('clear-user-data'),
 
@@ -162,9 +166,18 @@ const electronAPI = {
   // Articles recap window
   openArticlesRecap: () => ipcRenderer.invoke('open-articles-recap'),
 
+  // Offline article storage
+  saveOfflineArticle: (articleId, url) => ipcRenderer.invoke('save-offline-article', articleId, url),
+  getOfflineArticle: (articleId) => ipcRenderer.invoke('get-offline-article', articleId),
+  deleteOfflineArticle: (articleId) => ipcRenderer.invoke('delete-offline-article', articleId),
+
   // Uploaded document reading
   pickReadmodeFile: () => ipcRenderer.invoke('pick-readmode-file'),
   openReadmodeDocument: (fileUrl, title) => ipcRenderer.invoke('open-readmode-document', fileUrl, title),
+  openReadmodeCard: (url, title, theme, articleId) => ipcRenderer.invoke('open-readmode-card', url, title, theme, articleId),
+
+  // Clipboard
+  copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
 };
 // Expose to renderer process
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
