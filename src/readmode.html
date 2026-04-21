@@ -2135,12 +2135,14 @@
       return unique;
     }
 
-    function buildExtractionFailureMarkup(errorOrPayload, pageUrl) {
+function buildExtractionFailureMarkup(errorOrPayload, pageUrl) {
       const details = getExtractionFailureDetails(errorOrPayload, pageUrl);
       const intro = details.shift() || 'The page content could not be converted into reader mode.';
       const items = details.map((detail) => `<li>${escapeHtml(detail)}</li>`).join('');
       return `<strong>We could not build the reader view.</strong>
+        <p>Try reloading the page. If the issue persists, check your internet connection.</p>
         <p>${escapeHtml(intro)}</p>
+        <p>Try again once before assuming it is a network issue. Some pages need another extraction pass to finish cleanly.</p>
         ${items ? `<ul class="reader-empty-details">${items}</ul>` : ''}`;
     }
 
@@ -2489,7 +2491,11 @@
       lightboxImages = [];
 
       if (isOfflineExtractionPayload(payload)) {
-        showReaderFailureState('No internet connection', 'Check your network and try again.', 'No internet');
+        showReaderFailureState(
+          'Could not extract the page yet',
+          'Try again once first. If it still fails, then check your connection or reload the page.',
+          'Retry extraction'
+        );
         return;
       }
 
@@ -3450,7 +3456,7 @@
       });
     }
 
-    let savingArticle = false;
+let savingArticle = false;
     saveArticleBtn.addEventListener('click', async () => {
       if (savingArticle) return;
       savingArticle = true;

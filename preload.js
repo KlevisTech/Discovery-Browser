@@ -166,6 +166,9 @@ const electronAPI = {
   // Articles recap window
   openArticlesRecap: () => ipcRenderer.invoke('open-articles-recap'),
 
+  // Open updates/changelog window
+  openUpdates: () => ipcRenderer.invoke('open-updates-window'),
+
   // Offline article storage
   saveOfflineArticle: (articleId, url) => ipcRenderer.invoke('save-offline-article', articleId, url),
   getOfflineArticle: (articleId) => ipcRenderer.invoke('get-offline-article', articleId),

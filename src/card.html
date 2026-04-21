@@ -376,7 +376,7 @@ body {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 12px;
+      padding: 0 6px;
       cursor: default;
       user-select: none;
       -webkit-user-select: none;
@@ -461,19 +461,18 @@ body {
     }
 
     .card-button {
-      width: 32px;
-      height: 32px;
+      width: 26px;
+      height: 26px;
       border-radius: 6px;
       border: none;
       background: rgba(255, 100, 100, 0.7);
       color: white;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 12px;
       font-weight: bold;
       display: flex;
       align-items: center;
       justify-content: center;
-      /* Simplified transition for GPU */
       transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
       transform: translateZ(0);
       will-change: transform;
@@ -483,19 +482,52 @@ body {
       background: rgba(100, 200, 255, 0.7);
     }
 
+    .card-button.size-btn:hover {
+      background: rgba(120, 220, 255, 0.85);
+      box-shadow: 0 2px 8px rgba(100, 200, 255, 0.5);
+    }
+
     .card-button.minimize-btn {
       background: rgba(255, 200, 50, 0.7);
     }
 
-    /* Bookmark button - dark blue */
-    .card-button.bookmark-btn {
-      background: rgba(30, 90, 160, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-    }
+     .card-button.minimize-btn:hover {
+       background: rgba(255, 210, 70, 0.85);
+       box-shadow: 0 2px 8px rgba(255, 200, 50, 0.5);
+     }
+
+     /* Bookmark button - dark blue */
+     .card-button.bookmark-btn {
+       background: rgba(30, 90, 160, 0.8);
+       border: 1px solid rgba(255, 255, 255, 0.3);
+       display: flex;
+       align-items: center;
+       justify-content: center;
+       padding: 0;
+     }
+
+     .card-button.bookmark-btn img {
+       width: 14px;
+       height: 14px;
+       pointer-events: none;
+       object-fit: contain;
+     }
+
+     .card-button.bookmark-btn.bookmarked {
+       background: rgba(255, 215, 0, 0.8);
+       border-color: rgba(255, 215, 0, 0.9);
+     }
+
+     .card-button.bookmark-btn:hover {
+       background: rgba(50, 130, 200, 0.85);
+       transform: scale(1.12);
+       box-shadow: 0 2px 8px rgba(50, 130, 200, 0.5);
+     }
+
+     .card-button.bookmark-btn.bookmarked:hover {
+       background: rgba(255, 225, 0, 0.85);
+       box-shadow: 0 2px 8px rgba(255, 215, 0, 0.6);
+     }
 
     .card-button.bookmark-btn img {
       width: 14px;
@@ -504,65 +536,54 @@ body {
       object-fit: contain;
     }
 
-    .card-button.bookmark-btn.bookmarked {
-      background: rgba(255, 215, 0, 0.8);
-      border-color: rgba(255, 215, 0, 0.9);
-    }
+     .card-button.bookmark-btn.bookmarked {
+       background: rgba(255, 215, 0, 0.3);
+       border: none;
+     }
 
-    /* Readmode button - dark blue */
-    .card-button.readmode-btn {
-      background: rgba(30, 90, 160, 0.8);
-    }
+     /* Readmode button - dark blue */
+     .card-button.readmode-btn {
+       background: rgba(30, 90, 160, 0.8);
+     }
 
-    .card-button.readmode-btn:hover {
-      background: rgba(50, 130, 200, 0.95);
-      transform: scale(1.15);
-      box-shadow: 0 4px 12px rgba(50, 130, 200, 0.6);
-    }
-
-    /* Cycle button - dark blue (matching readmode) */
-    .card-button.cycle-btn {
-      background: rgba(30, 90, 160, 0.8);
-    }
-
-    .card-button.cycle-btn:hover {
-      background: rgba(50, 130, 200, 0.95);
-      transform: scale(1.15);
-      box-shadow: 0 4px 12px rgba(50, 130, 200, 0.6);
-    }
+     .card-button.readmode-btn:hover {
+       background: rgba(50, 130, 200, 0.85);
+       transform: scale(1.12);
+       box-shadow: 0 2px 8px rgba(50, 130, 200, 0.5);
+     }
 
     .card-button:hover {
-      background: rgba(255, 67, 67, 0.9);
-      transform: scale(1.15) rotate(5deg);
-      box-shadow: 0 4px 12px rgba(255, 67, 67, 0.4);
+      background: rgba(255, 67, 67, 0.7);
+      transform: scale(1.12);
+      box-shadow: 0 2px 8px rgba(255, 67, 67, 0.4);
     }
 
     .card-button.size-btn:hover {
-      background: rgba(67, 180, 255, 0.9);
-      box-shadow: 0 4px 12px rgba(67, 180, 255, 0.4);
+      background: rgba(67, 180, 255, 0.7);
+      box-shadow: 0 2px 8px rgba(67, 180, 255, 0.4);
     }
 
     .card-button.minimize-btn:hover {
-      background: rgba(255, 180, 30, 0.9);
-      transform: scale(1.15) rotate(5deg);
-      box-shadow: 0 4px 12px rgba(255, 180, 30, 0.4);
+      background: rgba(255, 180, 30, 0.7);
+      transform: scale(1.12);
+      box-shadow: 0 2px 8px rgba(255, 180, 30, 0.4);
     }
 
-    .card-button.bookmark-btn:hover {
-      background: rgba(50, 130, 200, 0.95);
-      transform: scale(1.15);
-      box-shadow: 0 4px 12px rgba(50, 130, 200, 0.6);
-    }
+     .card-button.bookmark-btn:hover {
+       background: rgba(50, 130, 200, 0.7);
+       transform: scale(1.12);
+       box-shadow: 0 2px 8px rgba(50, 130, 200, 0.4);
+     }
 
-    .card-button.bookmark-btn.bookmarked:hover {
-      background: rgba(255, 215, 0, 0.95);
-      box-shadow: 0 4px 12px rgba(255, 215, 0, 0.6);
-    }
+     .card-button.bookmark-btn.bookmarked:hover {
+       background: rgba(255, 215, 0, 0.7);
+       box-shadow: 0 2px 8px rgba(255, 215, 0, 0.5);
+     }
 
-    .card-button:active {
-      background: rgba(255, 50, 50, 1);
-      transform: scale(0.95);
-    }
+     .card-button:active {
+       background: rgba(255, 50, 50, 0.6);
+       transform: scale(0.95);
+     }
 
     /* Download ring styling inside card */
     .download-ring__bg {
@@ -1286,15 +1307,21 @@ body {
       gap: 0;
     }
 
-    .visual-lock-overlay[data-style="orbit"] .visual-lock-eq span {
-      position: absolute;
-      width: 20px;
-      height: 20px;
-      min-height: 20px;
-      animation-name: visualLockOrbit;
-    }
+     .visual-lock-overlay[data-style="orbit"] .visual-lock-eq span {
+       position: absolute;
+       width: 20px;
+       height: 20px;
+       min-height: 20px;
+       animation-name: visualLockOrbit;
+     }
 
-    .visual-lock-unlock {
+     /* Pause visual lock animations when media is not playing */
+     .visual-lock-overlay:not(.media-playing) .visual-lock-eq span,
+     .visual-lock-overlay:not(.media-playing) .visual-lock-rings span {
+       animation-play-state: paused;
+     }
+
+     .visual-lock-unlock {
       width: 108px;
       height: 108px;
       border: 0;
@@ -1421,23 +1448,30 @@ body {
 .media-hover-control {
         position: absolute;
         left: 50%;
-        top: 50%;
+        top: 24px;
         transform: translateX(-50%) translateY(-50%) translateZ(0);
         display: none;
         flex-direction: column;
         align-items: center;
         gap: 8px;
-        z-index: 20;
+        z-index: 100;
         -webkit-app-region: no-drag;
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.2s ease;
-      will-change: opacity;
+        will-change: opacity;
+        width: auto;
       }
 
     .media-hover-control.active {
       display: flex !important;
       opacity: 1;
+      pointer-events: none;
+    }
+
+    .media-hover-control.active .audio-visualizer,
+    .media-hover-control.active.panel-open .media-hover-panel,
+    .media-hover-control.active.panel-open .media-hover-panel * {
       pointer-events: auto;
     }
 
@@ -1841,13 +1875,13 @@ body {
     }
 
     .zoom-btn {
-      width: 22px;
-      height: 22px;
+      width: 18px;
+      height: 18px;
       border-radius: 6px;
       border: 1px solid rgba(255, 255, 255, 0.2);
       background: rgba(255, 255, 255, 0.08);
       color: white;
-      font-size: 14px;
+      font-size: 12px;
       line-height: 1;
       cursor: pointer;
       display: inline-flex;
@@ -1878,34 +1912,26 @@ body {
       z-index: 10;
     }
 
-    @keyframes cyclePopIn {
-      0%   { transform: scale(0.94) translateZ(0); opacity: 0.6; }
-      60%  { transform: scale(1.03) translateZ(0); opacity: 1; }
-      100% { transform: scale(1)    translateZ(0); opacity: 1; }
-    }
-
-    .card-window.cycle-arriving {
-      animation: cyclePopIn 280ms cubic-bezier(0.34, 1.45, 0.64, 1) forwards !important;
-      will-change: transform, opacity;
-    }
-  </style>
+    </style>
 </head>
 
 <body>
   <div class="card-window">
     <!-- Titlebar with navigation and close button -->
     <div class="card-titlebar">
-      <div style="display:flex; align-items:center; gap:8px; -webkit-app-region: no-drag;">
+      <div style="display:flex; align-items:center; gap:2px; -webkit-app-region: no-drag; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 4px 6px; backdrop-filter: blur(8px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 8px rgba(0,0,0,0.2);">
         <button class="card-button" id="back-btn" title="Back">←</button>
         <button class="card-button" id="forward-btn" title="Forward">→</button>
         <button class="card-button" id="reload-btn" title="Reload">↻</button>
+        <span style="width:1px; height:16px; background:rgba(255,255,255,0.2); margin:0 3px; border-radius:1px; flex-shrink:0;"></span>
         <!-- Wide view button tooltip reflects actual wide width -->
         <button class="card-button size-btn" id="wide-btn" title="Wide View (1000px)">⇔</button>
         <button class="card-button size-btn" id="fullscreen-btn" title="Toggle Fullscreen">⛶</button>
+        <span style="width:1px; height:16px; background:rgba(255,255,255,0.2); margin:0 3px; border-radius:1px; flex-shrink:0;"></span>
         <button class="card-button minimize-btn" id="minimize-btn" title="Minimize">−</button>
+        <span style="width:1px; height:16px; background:rgba(255,255,255,0.2); margin:0 3px; border-radius:1px; flex-shrink:0;"></span>
         <button class="card-button bookmark-btn" id="bookmark-btn" title="Bookmark"><img src="../assets/bookmark.png" alt="Bookmark" style="width:14px; height:14px; pointer-events:none;" draggable="false"></button>
         <button class="card-button readmode-btn" id="readmode-btn" title="Read Mode">📖</button>
-        <button class="card-button cycle-btn" id="cycle-btn" title="Cycle Windows"><img src="../assets/cycle.png" alt="Cycle" style="width:16px; height:16px; pointer-events:none;" draggable="false"></button>
         <button class="card-button" id="split-btn" title="Split Screen">
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
             <rect x="3" y="4" width="7" height="16" rx="1.5" ry="1.5" fill="none" stroke="currentColor"
@@ -1924,33 +1950,9 @@ body {
             <path class="download-ring__fg" d="M18 2.5 a 15.5 15.5 0 0 1 0 31 a 15.5 15.5 0 0 1 0 -31" />
           </svg>
           <span class="download-ring__icon" style="position:relative; z-index:1; font-size:13px;">⬇</span>
-        </button>
+</button>
       </div>
       <span class="title-text">New Tab</span>
-      <div class="media-hover-control" id="media-hover-control" aria-hidden="true">
-        <button class="audio-visualizer" id="audio-visualizer" type="button" aria-label="Media controls">
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
-        <div class="media-hover-panel" id="media-hover-panel" role="group" aria-label="Media controls">
-          <button class="media-control-btn" id="media-toggle-btn" type="button">Play</button>
-          <div class="media-seek-group">
-            <button class="media-control-btn media-seek-btn" id="media-seek-back-btn" type="button" title="Rewind 10s">⏪</button>
-            <button class="media-control-btn media-seek-btn" id="media-seek-forward-btn" type="button" title="Forward 10s">⏩</button>
-          </div>
-          <label class="media-volume-group" for="media-volume-slider">
-            <span class="media-volume-row">
-              <span>Vol</span>
-              <input class="media-volume-slider" id="media-volume-slider" type="range" min="0" max="100" value="100" />
-            </span>
-            <span class="media-remaining-time" id="media-remaining-time">--:--</span>
-          </label>
-          <button class="media-control-btn" id="media-visualizer-style-btn" type="button" title="Change visualizer style">Viz</button>
-          <button class="media-control-btn" id="media-visual-lock-btn" type="button" title="Enter visual lock">Lock</button>
-          <button class="media-control-btn" id="media-mute-btn" type="button">Mute</button>
-        </div>
-      </div>
       <div class="card-controls">
         <div class="zoom-control" id="zoom-control">
           <button class="zoom-btn" id="zoom-out-btn" title="Zoom Out">−</button>
@@ -1962,6 +1964,32 @@ body {
         <button class="card-button" id="close-btn" title="Close">✕</button>
       </div>
       <div class="loading-wave" id="loading-wave" aria-hidden="true"></div>
+    </div>
+
+    <!-- Media hover control - positioned absolutely over titlebar -->
+    <div class="media-hover-control" id="media-hover-control" aria-hidden="true" style="position:absolute; left:50%; top:24px; transform:translateX(-50%) translateY(-50%) translateZ(0); z-index:100;">
+      <button class="audio-visualizer" id="audio-visualizer" type="button" aria-label="Media controls">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="media-hover-panel" id="media-hover-panel" role="group" aria-label="Media controls">
+        <button class="media-control-btn" id="media-toggle-btn" type="button">Play</button>
+        <div class="media-seek-group">
+          <button class="media-control-btn media-seek-btn" id="media-seek-back-btn" type="button" title="Rewind 10s">⏪</button>
+          <button class="media-control-btn media-seek-btn" id="media-seek-forward-btn" type="button" title="Forward 10s">⏩</button>
+        </div>
+        <label class="media-volume-group" for="media-volume-slider">
+          <span class="media-volume-row">
+            <span>Vol</span>
+            <input class="media-volume-slider" id="media-volume-slider" type="range" min="0" max="100" value="100" />
+          </span>
+          <span class="media-remaining-time" id="media-remaining-time">--:--</span>
+        </label>
+        <button class="media-control-btn" id="media-visualizer-style-btn" type="button" title="Change visualizer style">Viz</button>
+        <button class="media-control-btn" id="media-visual-lock-btn" type="button" title="Enter visual lock">Lock</button>
+        <button class="media-control-btn" id="media-mute-btn" type="button">Mute</button>
+      </div>
     </div>
 
     <!-- Content area: use webview for full site navigation -->
@@ -2039,10 +2067,8 @@ body {
       if (normalizedTheme !== 'primary') {
         cardWindowEl.classList.add(`theme-${normalizedTheme}`);
       }
-      // Set opening animation based on mode
-      if (isBubbleMode) {
-        cardWindowEl.classList.add('is-opening-tv-bubble');
-      } else {
+      // Set opening animation based on mode (skip for bubble mode - show instantly)
+      if (!isBubbleMode) {
         cardWindowEl.classList.add('is-opening-tv');
       }
     }
@@ -2121,9 +2147,9 @@ body {
     let mediaRemainingIsLive = false;
     let mediaRemainingIsPlaying = false;
     let lastBubbleMediaSignature = '';
-    let mediaPanelOpen = false;
-    let visualLockActive = false;
-    const MEDIA_START_GRACE_MS = 3500;
+     let mediaPanelOpen = false;
+     let visualLockActive = false;
+     const MEDIA_START_GRACE_MS = 3500;
     const mediaPlayingState = new Map();
     const recentMediaStartAt = new WeakMap();
     const mediaScriptPending = new WeakMap();
@@ -2222,31 +2248,41 @@ body {
       visualLockOverlay.dataset.style = activeVisualizerStyleKey || 'bars';
     }
 
-    function setVisualLockActive(isActive) {
-      visualLockActive = !!isActive;
-      if (cardWindowEl) cardWindowEl.classList.toggle('visual-lock-shell', visualLockActive);
-      if (visualLockOverlay) visualLockOverlay.classList.remove('active');
-      if (!cardContent) return;
-      setMediaPanelOpen(false);
-      setLoadingWave(false);
-      setLaunchFillVisible(false);
-      cardContent.classList.remove('visual-lock-returning');
-      cardContent.classList.toggle('visual-lock-hidden', visualLockActive);
-    }
+     function setVisualLockActive(isActive) {
+       visualLockActive = !!isActive;
+       if (cardWindowEl) cardWindowEl.classList.toggle('visual-lock-shell', visualLockActive);
+       if (visualLockOverlay) visualLockOverlay.classList.toggle('active', visualLockActive);
+       if (!cardContent) return;
+       setMediaPanelOpen(false);
+       setLoadingWave(false);
+       setLaunchFillVisible(false);
+       cardContent.classList.remove('visual-lock-returning');
+        cardContent.classList.toggle('visual-lock-hidden', visualLockActive);
+        // Update visual lock animation state based on current media playback
+        updateVisualLockAnimationState();
+      }
 
-    function unlockVisualLock() {
-      if (!visualLockActive || !cardContent) return;
-      visualLockActive = false;
-      if (cardWindowEl) cardWindowEl.classList.remove('visual-lock-shell');
-      if (visualLockOverlay) visualLockOverlay.classList.remove('active');
-      cardContent.classList.remove('visual-lock-hidden');
-      cardContent.classList.remove('visual-lock-returning');
-      void cardContent.offsetWidth;
-      cardContent.classList.add('visual-lock-returning');
-      setTimeout(() => {
-        cardContent.classList.remove('visual-lock-returning');
-      }, 560);
-    }
+     function updateVisualLockAnimationState() {
+       if (!visualLockOverlay) return;
+       const isPlaying = Array.from(mediaPlayingState.values()).some((state) => state && state.isPlaying);
+       visualLockOverlay.classList.toggle('media-playing', visualLockActive && isPlaying);
+     }
+
+     function unlockVisualLock() {
+       if (!visualLockActive || !cardContent) return;
+       visualLockActive = false;
+       if (cardWindowEl) cardWindowEl.classList.remove('visual-lock-shell');
+       if (visualLockOverlay) visualLockOverlay.classList.remove('active');
+       cardContent.classList.remove('visual-lock-hidden');
+       cardContent.classList.remove('visual-lock-returning');
+       void cardContent.offsetWidth;
+       cardContent.classList.add('visual-lock-returning');
+       setTimeout(() => {
+         cardContent.classList.remove('visual-lock-returning');
+        }, 560);
+        // Update visual lock animation state after unlocking
+        updateVisualLockAnimationState();
+      }
 
     function clearMainFirstContentFallback() {
       if (!mainFirstContentFallbackTimer) return;
@@ -2601,9 +2637,10 @@ body {
       return targets;
     }
 
-    async function runMediaScript(targetWebview, script) {
+    async function runMediaScript(targetWebview, script, options = {}) {
       if (!targetWebview || typeof targetWebview.executeJavaScript !== 'function') return null;
-      if (mediaScriptPending.get(targetWebview)) return null;
+      const bypassPending = !!options.bypassPending;
+      if (!bypassPending && mediaScriptPending.get(targetWebview)) return null;
       mediaScriptPending.set(targetWebview, true);
       try {
         const timeoutMs = 1200;
@@ -2904,11 +2941,12 @@ body {
       startMediaSyncLoop();
     }
 
-    async function readMediaState(targetWebview) {
+    async function readMediaState(targetWebview, options = {}) {
+      const bypassPending = !!options.bypassPending;
       // Return cached state if still valid (reduces DOM queries during playback)
       const now = Date.now();
       const cached = mediaStateCache.get(targetWebview);
-      if (cached && (now - cached.timestamp) < MEDIA_STATE_CACHE_TTL) {
+      if (!bypassPending && cached && (now - cached.timestamp) < MEDIA_STATE_CACHE_TTL) {
         return cached.state;
       }
 
@@ -2948,6 +2986,30 @@ body {
             ? Math.max(0, duration - Math.max(0, currentTime))
             : null;
           const isLive = !hasDuration && (duration === Infinity || !Number.isFinite(duration));
+          const mediaSessionMetadata = (() => {
+            try {
+              return navigator.mediaSession && navigator.mediaSession.metadata
+                ? navigator.mediaSession.metadata
+                : null;
+            } catch (e) {
+              return null;
+            }
+          })();
+          const mediaTitle = String(
+            (mediaSessionMetadata && mediaSessionMetadata.title)
+            || active.getAttribute('title')
+            || document.title
+            || ''
+          ).trim();
+          const mediaArtist = String(
+            (mediaSessionMetadata && mediaSessionMetadata.artist)
+            || active.getAttribute('aria-label')
+            || ''
+          ).trim();
+          const mediaAlbum = String(
+            (mediaSessionMetadata && mediaSessionMetadata.album)
+            || ''
+          ).trim();
           return {
             hasMedia: true,
             isPlaying: !!(!active.paused && !active.ended),
@@ -2957,11 +3019,16 @@ body {
             muted: !!active.muted,
             hasDuration,
             remainingSeconds,
-            isLive
+            isLive,
+            currentTime: Number.isFinite(currentTime) ? Math.max(0, currentTime) : 0,
+            durationSeconds: hasDuration ? duration : null,
+            mediaTitle,
+            mediaArtist,
+            mediaAlbum
           };
         })();
       `;
-      const result = await runMediaScript(targetWebview, script);
+      const result = await runMediaScript(targetWebview, script, { bypassPending });
       if (result) {
         mediaStateCache.set(targetWebview, {
           state: result,
@@ -3015,6 +3082,11 @@ body {
            : null,
          muted: typeof payload?.muted === 'boolean' ? !!payload.muted : false,
          volume: Number.isFinite(Number(payload?.volume)) ? Math.max(0, Math.min(1, Number(payload.volume))) : 1,
+         currentTime: Number.isFinite(Number(payload?.currentTime)) ? Math.max(0, Number(payload.currentTime)) : 0,
+         durationSeconds: Number.isFinite(Number(payload?.durationSeconds)) ? Math.max(0, Number(payload.durationSeconds)) : null,
+         mediaTitle: payload?.mediaTitle ? String(payload.mediaTitle) : '',
+         mediaArtist: payload?.mediaArtist ? String(payload.mediaArtist) : '',
+         mediaAlbum: payload?.mediaAlbum ? String(payload.mediaAlbum) : '',
          visualizerStyle: activeVisualizerStyleKey,
          themeKey: normalizedTheme
        };
@@ -3093,17 +3165,20 @@ body {
         mediaVolumeSlider.disabled = !shouldShow;
       }
 
-      mediaRemainingHasDuration = shouldShow && hasDuration;
-      mediaRemainingIsLive = shouldShow && isLive;
-      mediaRemainingIsPlaying = shouldShow && isPlaying;
-      mediaRemainingSeconds = mediaRemainingHasDuration ? remainingSeconds : null;
-      updateMediaRemainingDisplay();
-      if (mediaRemainingHasDuration && mediaRemainingIsPlaying) {
-        startMediaRemainingTicker();
-      } else {
-        stopMediaRemainingTicker();
-      }
-    }
+       mediaRemainingHasDuration = shouldShow && hasDuration;
+       mediaRemainingIsLive = shouldShow && isLive;
+       mediaRemainingIsPlaying = shouldShow && isPlaying;
+       mediaRemainingSeconds = mediaRemainingHasDuration ? remainingSeconds : null;
+       updateMediaRemainingDisplay();
+       if (mediaRemainingHasDuration && mediaRemainingIsPlaying) {
+         startMediaRemainingTicker();
+       } else {
+         stopMediaRemainingTicker();
+       }
+
+       // Update visual lock animation based on media playing state
+       updateVisualLockAnimationState();
+     }
 
     function formatMediaRemaining(totalSeconds) {
       const safe = Math.max(0, Math.floor(Number(totalSeconds) || 0));
@@ -3172,9 +3247,10 @@ body {
 
     async function getBestMediaTarget(options = {}) {
       const playingOnly = !!options.playingOnly;
+      const bypassPending = !!options.bypassPending;
       const targets = getMediaTargets();
       if (lastActiveMediaWebview && targets.includes(lastActiveMediaWebview)) {
-        const state = await readMediaState(lastActiveMediaWebview);
+        const state = await readMediaState(lastActiveMediaWebview, { bypassPending });
         if (state && ((playingOnly && state.isPlaying) || (!playingOnly && state.hasMedia))) {
           return { target: lastActiveMediaWebview, state };
         }
@@ -3182,7 +3258,7 @@ body {
 
       let fallback = null;
       for (const target of targets) {
-        const state = await readMediaState(target);
+        const state = await readMediaState(target, { bypassPending });
         if (!state || !state.hasMedia) continue;
         if (state.isPlaying) {
           lastActiveMediaWebview = target;
@@ -3247,23 +3323,24 @@ body {
       stopMediaBufferingOptimization();
     }
 
-    function pauseMediaSyncForFailure() {
-      mediaPlayingState.set(webview, { isPlaying: false, mediaType: 'unknown' });
-      if (splitWebview) {
-        mediaPlayingState.set(splitWebview, { isPlaying: false, mediaType: 'unknown' });
-      }
-      clearMediaStateCache(webview);
-      if (splitWebview) {
-        clearMediaStateCache(splitWebview);
-      }
-      mediaSyncInFlight = false;
-      stopWidgetMediaStateSync();
-      setMediaPanelOpen(false);
-      stopMediaSyncLoop();
-      stopMediaRemainingTicker();
-      updateBubblePlaybackState();
-      updateVisualizerPlaybackState();
-    }
+     function pauseMediaSyncForFailure() {
+       mediaPlayingState.set(webview, { isPlaying: false, mediaType: 'unknown' });
+       if (splitWebview) {
+         mediaPlayingState.set(splitWebview, { isPlaying: false, mediaType: 'unknown' });
+       }
+       clearMediaStateCache(webview);
+       if (splitWebview) {
+         clearMediaStateCache(splitWebview);
+       }
+       mediaSyncInFlight = false;
+       stopWidgetMediaStateSync();
+       setMediaPanelOpen(false);
+       stopMediaSyncLoop();
+       stopMediaRemainingTicker();
+       updateBubblePlaybackState();
+       updateVisualizerPlaybackState();
+       updateVisualLockAnimationState(); // Pause visual lock if active
+     }
 
     function isAnyVideoPlaying() {
       for (const value of mediaPlayingState.values()) {
@@ -3292,7 +3369,7 @@ body {
           return String(active.tagName || '').toLowerCase() === 'video' ? 'video' : 'audio';
         })();
       `;
-      const result = await runMediaScript(targetWebview, script);
+      const result = await runMediaScript(targetWebview, script, { bypassPending });
       return result === 'video' ? 'video' : (result === 'audio' ? 'audio' : 'unknown');
     }
 
@@ -3345,7 +3422,7 @@ body {
           };
         })();
       `;
-      const result = await runMediaScript(targetWebview, script);
+      const result = await runMediaScript(targetWebview, script, { bypassPending });
       return result && typeof result === 'object'
         ? result
         : { hasVisibleSurface: false, surfaceType: 'none' };
@@ -3369,6 +3446,30 @@ body {
       }
 
       return null;
+    }
+
+    function getLastKnownMediaTarget() {
+      const targets = getMediaTargets();
+      if (lastActiveMediaWebview && targets.includes(lastActiveMediaWebview)) {
+        return lastActiveMediaWebview;
+      }
+      return targets[0] || null;
+    }
+
+    function getMediaCommandTargets() {
+      const ordered = [];
+      const seen = new Set();
+      const eventDriven = getEventDrivenPlayingTarget();
+      const pushTarget = (target) => {
+        if (!target || seen.has(target)) return;
+        seen.add(target);
+        ordered.push(target);
+      };
+
+      if (eventDriven && eventDriven.target) pushTarget(eventDriven.target);
+      pushTarget(lastActiveMediaWebview);
+      getMediaTargets().forEach(pushTarget);
+      return ordered;
     }
 
     async function refreshMediaPlayingType(targetWebview) {
@@ -3398,7 +3499,7 @@ body {
       const token = ++bubblePlaybackRefreshToken;
       const eventDriven = getEventDrivenPlayingTarget();
       if (eventDriven && eventDriven.target && isMediaTargetVisible(eventDriven.target)) {
-        const preciseState = await readMediaState(eventDriven.target);
+        const preciseState = await readMediaState(eventDriven.target, { bypassPending: true });
         if (token !== bubblePlaybackRefreshToken) return;
         if (preciseState && preciseState.hasMedia && preciseState.isPlaying) {
           startWidgetMediaStateSync();
@@ -3412,7 +3513,12 @@ body {
              hasDuration: !!preciseState.hasDuration,
              remainingSeconds: Number.isFinite(Number(preciseState.remainingSeconds)) ? Number(preciseState.remainingSeconds) : null,
              muted: !!preciseState.muted,
-             volume: Number.isFinite(Number(preciseState.volume)) ? Number(preciseState.volume) : 1
+             volume: Number.isFinite(Number(preciseState.volume)) ? Number(preciseState.volume) : 1,
+             currentTime: Number.isFinite(Number(preciseState.currentTime)) ? Number(preciseState.currentTime) : 0,
+             durationSeconds: Number.isFinite(Number(preciseState.durationSeconds)) ? Number(preciseState.durationSeconds) : null,
+             mediaTitle: preciseState.mediaTitle || '',
+             mediaArtist: preciseState.mediaArtist || '',
+             mediaAlbum: preciseState.mediaAlbum || ''
            });
           return;
         }
@@ -3430,11 +3536,15 @@ body {
         return;
       }
 
-      const result = await getBestMediaTarget();
+      const result = await getBestMediaTarget({ bypassPending: true });
       if (token !== bubblePlaybackRefreshToken) return;
       const state = result?.state;
       if (state && state.hasMedia) {
-        startWidgetMediaStateSync();
+        if (state.isPlaying) {
+          startWidgetMediaStateSync();
+        } else {
+          stopWidgetMediaStateSync();
+        }
         publishBubbleMediaState({
           isPlaying: !!state.isPlaying,
           hasMedia: true,
@@ -3443,7 +3553,12 @@ body {
           hasDuration: !!state.hasDuration,
           remainingSeconds: Number.isFinite(Number(state.remainingSeconds)) ? Math.max(0, state.remainingSeconds) : null,
           muted: !!state.muted,
-          volume: Number.isFinite(Number(state.volume)) ? Math.max(0, Math.min(1, state.volume)) : 1
+          volume: Number.isFinite(Number(state.volume)) ? Math.max(0, Math.min(1, state.volume)) : 1,
+          currentTime: Number.isFinite(Number(state.currentTime)) ? Math.max(0, Number(state.currentTime)) : 0,
+          durationSeconds: Number.isFinite(Number(state.durationSeconds)) ? Math.max(0, Number(state.durationSeconds)) : null,
+          mediaTitle: state.mediaTitle || '',
+          mediaArtist: state.mediaArtist || '',
+          mediaAlbum: state.mediaAlbum || ''
         });
         return;
       }
@@ -3456,13 +3571,11 @@ body {
       visualizerRefreshToken += 1;
       if (!visualizerEnabled) {
         publishBubbleMediaState({ isPlaying: false, isVideo: false, isLive: false });
+        return;
       }
     }
 
     async function controlMedia(action, value) {
-      const result = await getBestMediaTarget();
-      if (!result || !result.target) return;
-
       const safeVolume = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
       let script = '';
       if (action === 'toggle') {
@@ -3521,8 +3634,27 @@ body {
       }
 
       if (!script) return;
-      await runMediaScript(result.target, script);
+      const targets = getMediaCommandTargets();
+      let actedTarget = null;
+      for (const target of targets) {
+        const result = await runMediaScript(target, script, { bypassPending: true });
+        clearMediaStateCache(target);
+        if (result) {
+          actedTarget = target;
+          lastActiveMediaWebview = target;
+          break;
+        }
+      }
+      if (actedTarget) {
+        const targetState = await readMediaState(actedTarget, { bypassPending: true });
+        if (targetState && targetState.hasMedia) {
+          renderMediaControl(targetState);
+        }
+      }
       setTimeout(() => {
+        updateBubblePlaybackState();
+        updateVisualizerPlaybackState();
+        updateVisualLockAnimationState();
         if (mediaPanelOpen) {
           scheduleMediaPanelSyncStart();
         }
@@ -4146,44 +4278,58 @@ body {
     });
 
     // Media visualizer and hover controls for active media in either webview.
-    webview.addEventListener('media-started-playing', () => {
-      installMediaRecoveryHooks(webview);
-      lastActiveMediaWebview = webview;
-      clearMediaStateCache(webview);
-      markRecentMediaStart(webview);
-      mediaPlayingState.set(webview, { isPlaying: true, mediaType: 'unknown' });
-      updateBubblePlaybackState();
-      updateVisualizerPlaybackState();
-      refreshMediaPlayingType(webview);
-      // Optimize buffering when both videos are playing
-      optimizeSplitScreenVideoBuffering();
-      if (mediaPanelOpen) {
-        scheduleMediaPanelSyncStart();
-      }
-    });
+     webview.addEventListener('media-started-playing', () => {
+       installMediaRecoveryHooks(webview);
+       lastActiveMediaWebview = webview;
+       clearMediaStateCache(webview);
+       markRecentMediaStart(webview);
+       mediaPlayingState.set(webview, { isPlaying: true, mediaType: 'unknown' });
+       startWidgetMediaStateSync();
+       publishBubbleMediaState({
+         isPlaying: true,
+         hasMedia: true,
+         isVideo: false,
+         isLive: false,
+         hasDuration: false,
+         remainingSeconds: null,
+         muted: false,
+         volume: 1
+       });
+       updateVisualizerPlaybackState();
+       updateVisualLockAnimationState(); // Ensure visual lock reflects playing state
+       refreshMediaPlayingType(webview);
+       setTimeout(() => updateBubblePlaybackState(), 160);
+       // Optimize buffering when both videos are playing
+       optimizeSplitScreenVideoBuffering();
+       if (mediaPanelOpen) {
+         scheduleMediaPanelSyncStart();
+       }
+     });
 
-    webview.addEventListener('media-paused', () => {
-      clearMediaStateCache(webview);
-      clearRecentMediaStart(webview);
-      mediaPlayingState.set(webview, { isPlaying: false, mediaType: 'unknown' });
-      updateBubblePlaybackState();
-      updateVisualizerPlaybackState();
-      if (mediaPanelOpen) {
-        scheduleMediaPanelSyncStart();
-      }
-    });
+     webview.addEventListener('media-paused', () => {
+       clearMediaStateCache(webview);
+       clearRecentMediaStart(webview);
+       mediaPlayingState.set(webview, { isPlaying: false, mediaType: 'unknown' });
+       updateBubblePlaybackState();
+       updateVisualizerPlaybackState();
+       updateVisualLockAnimationState(); // Ensure visual lock pauses
+       if (mediaPanelOpen) {
+         scheduleMediaPanelSyncStart();
+       }
+     });
 
     if (splitWebview) {
-      splitWebview.addEventListener('did-start-navigation', (e) => {
-        if (e && e.isMainFrame) {
-          isSplitNavigationLoading = true;
-          hideSecurityNoticeWhenAppropriate();
-          startSplitLoadGuard();
-          clearMediaStateCache(splitWebview);
-          mediaPlayingState.set(splitWebview, { isPlaying: false, mediaType: 'unknown' });
-          updateVisualizerPlaybackState();
-        }
-      });
+       splitWebview.addEventListener('did-start-navigation', (e) => {
+         if (e && e.isMainFrame) {
+           isSplitNavigationLoading = true;
+           hideSecurityNoticeWhenAppropriate();
+           startSplitLoadGuard();
+           clearMediaStateCache(splitWebview);
+           mediaPlayingState.set(splitWebview, { isPlaying: false, mediaType: 'unknown' });
+           updateVisualizerPlaybackState();
+           updateVisualLockAnimationState(); // Media stopped due to navigation
+         }
+       });
 
       // Fallback handler for when did-start-navigation doesn't fire
       splitWebview.addEventListener('did-start-loading', () => {
@@ -4251,26 +4397,39 @@ body {
         clearMediaStateCache(splitWebview);
         markRecentMediaStart(splitWebview);
         mediaPlayingState.set(splitWebview, { isPlaying: true, mediaType: 'unknown' });
-        updateBubblePlaybackState();
-        updateVisualizerPlaybackState();
-        refreshMediaPlayingType(splitWebview);
-        // Optimize buffering when both videos are playing
-        optimizeSplitScreenVideoBuffering();
-        if (mediaPanelOpen) {
-          scheduleMediaPanelSyncStart();
-        }
-      });
+         startWidgetMediaStateSync();
+         publishBubbleMediaState({
+           isPlaying: true,
+           hasMedia: true,
+           isVideo: false,
+           isLive: false,
+           hasDuration: false,
+           remainingSeconds: null,
+           muted: false,
+           volume: 1
+         });
+         updateVisualizerPlaybackState();
+         updateVisualLockAnimationState(); // Ensure visual lock reflects playing state
+         refreshMediaPlayingType(splitWebview);
+         setTimeout(() => updateBubblePlaybackState(), 160);
+         // Optimize buffering when both videos are playing
+         optimizeSplitScreenVideoBuffering();
+         if (mediaPanelOpen) {
+           scheduleMediaPanelSyncStart();
+         }
+       });
 
-      splitWebview.addEventListener('media-paused', () => {
-        clearMediaStateCache(splitWebview);
-        clearRecentMediaStart(splitWebview);
-        mediaPlayingState.set(splitWebview, { isPlaying: false, mediaType: 'unknown' });
-        updateBubblePlaybackState();
-        updateVisualizerPlaybackState();
-        if (mediaPanelOpen) {
-          scheduleMediaPanelSyncStart();
-        }
-      });
+       splitWebview.addEventListener('media-paused', () => {
+         clearMediaStateCache(splitWebview);
+         clearRecentMediaStart(splitWebview);
+         mediaPlayingState.set(splitWebview, { isPlaying: false, mediaType: 'unknown' });
+         updateBubblePlaybackState();
+         updateVisualizerPlaybackState();
+         updateVisualLockAnimationState(); // Ensure visual lock pauses
+         if (mediaPanelOpen) {
+           scheduleMediaPanelSyncStart();
+         }
+       });
     }
 
     if (window.cardAPI && window.cardAPI.onVisualizerSetting) {
@@ -4676,18 +4835,6 @@ if (isClosingCard || isMinimizingCard) return;
       });
     }
 
-    // Cycle button - cycle through open card windows, ending at main app
-    const cycleBtn = document.getElementById('cycle-btn');
-    if (cycleBtn) {
-      cycleBtn.addEventListener('click', async () => {
-        try {
-          await window.cardAPI.cycleWindows(cardId);
-        } catch (err) {
-          console.error('Error cycling windows:', err);
-        }
-      });
-    }
-
     // Keyboard shortcut: Ctrl+Shift+S toggles split screen (works in all screen sizes now)
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.shiftKey && (e.key === 'S' || e.key === 's')) {
@@ -4817,7 +4964,7 @@ window.addEventListener('card-restore-animate', (event) => {
         cardWindowEl.classList.remove('is-minimizing');
         cardWindowEl.classList.remove('is-restoring');
         void cardWindowEl.offsetWidth;
-        // Bubble restores should always replay the TV opening animation,
+// Bubble restores should always replay the TV opening animation,
         // even when the card was originally launched as a normal card.
         if (useBubbleRestoreAnimation) {
           cardWindowEl.classList.add('is-opening-tv-bubble');
@@ -4827,20 +4974,7 @@ window.addEventListener('card-restore-animate', (event) => {
       } catch (e) { }
     });
 
-    window.addEventListener('card-cycle-arriving', () => {
-      try {
-        if (!cardWindowEl) return;
-        cardWindowEl.classList.remove('cycle-arriving');
-        void cardWindowEl.offsetWidth;
-        cardWindowEl.classList.add('cycle-arriving');
-        cardWindowEl.addEventListener('animationend', function onEnd(evt) {
-          if (evt.animationName === 'cyclePopIn') {
-            cardWindowEl.removeEventListener('animationend', onEnd);
-            cardWindowEl.classList.remove('cycle-arriving');
-          }
-        });
-      } catch (e) { }
-    });
+
 
 if (cardWindowEl) {
       cardWindowEl.addEventListener('animationend', (evt) => {

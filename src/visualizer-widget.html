@@ -348,15 +348,58 @@
     }
 
     .lock-scene.theme-frost .lock-kicker,
-    .lock-scene.theme-frost .lock-copy {
+    .lock-scene.theme-frost .lock-meta-title,
+    .lock-scene.theme-frost .lock-meta-subtitle {
       color: rgba(30, 41, 59, 0.8);
     }
 
-    .lock-copy {
-      font-size: 14px;
-      line-height: 1.6;
-      color: rgba(232, 242, 255, 0.82);
-      max-width: 380px;
+    .lock-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: min(72vw, 420px);
+      min-height: 50px;
+      text-align: center;
+    }
+
+    .lock-meta-title {
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.3;
+      color: rgba(241, 248, 255, 0.96);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .lock-meta-subtitle {
+      font-size: 13px;
+      line-height: 1.5;
+      color: rgba(214, 228, 244, 0.74);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .lock-progress {
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      bottom: 14px;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+
+    .lock-progress-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #7cf7ff 0%, #68b8ff 45%, #ff6ff0 100%);
+      box-shadow: 0 0 18px rgba(124, 247, 255, 0.25);
+      transition: width 0.2s linear;
     }
 
     .lock-visualizer {
@@ -407,6 +450,11 @@
       height: 20px;
       min-height: 20px;
       animation-name: lockOrbit;
+    }
+
+    .lock-scene:not(.playing) .lock-rings span,
+    .lock-visualizer:not(.playing) span {
+      animation-play-state: paused;
     }
 
     .unlock-btn {
@@ -542,7 +590,13 @@
         <span class="icon">🔒</span>
         <span class="label">Unlock</span>
       </button>
-      <p class="lock-copy">The page is tucked away so the sound can take over. Press the lock to bring the site back.</p>
+      <div class="lock-meta" aria-live="polite">
+        <div class="lock-meta-title" id="lock-meta-title">No media playing</div>
+        <div class="lock-meta-subtitle" id="lock-meta-subtitle">Press play to bring the visualizer to life.</div>
+      </div>
+    </div>
+    <div class="lock-progress" aria-hidden="true">
+      <div class="lock-progress-fill" id="lock-progress-fill"></div>
     </div>
   </div>
 
@@ -555,6 +609,9 @@
     const lockScene = document.getElementById('lock-scene');
     const lockVisualizer = document.getElementById('lock-visualizer');
     const unlockBtn = document.getElementById('unlock-btn');
+    const lockMetaTitle = document.getElementById('lock-meta-title');
+    const lockMetaSubtitle = document.getElementById('lock-meta-subtitle');
+    const lockProgressFill = document.getElementById('lock-progress-fill');
     const controlPanel = document.getElementById('control-panel');
     const playToggleBtn = document.getElementById('play-toggle-btn');
     const remainingDisplay = document.getElementById('remaining-display');
@@ -572,6 +629,11 @@
       isLive: false,
       muted: false,
       volume: 1,
+      currentTime: 0,
+      durationSeconds: null,
+      mediaTitle: '',
+      mediaArtist: '',
+      mediaAlbum: '',
       visualizerStyle: 'bars',
       visualLock: false,
     };
@@ -631,21 +693,53 @@
       remainingDisplay.textContent = '--:--';
     }
 
+    function updateLockMetadata() {
+      if (lockMetaTitle) {
+        lockMetaTitle.textContent = widgetState.mediaTitle || (widgetState.isPlaying ? 'Now Playing' : 'No media playing');
+      }
+      if (lockMetaSubtitle) {
+        const subtitle = widgetState.mediaArtist || widgetState.mediaAlbum
+          || (widgetState.isLive ? 'Live stream' : (widgetState.hasDuration ? `Remaining ${formatRemaining(widgetState.remainingSeconds)}` : (widgetState.isPlaying ? 'Playing' : 'Playback paused')));
+        lockMetaSubtitle.textContent = subtitle;
+      }
+    }
+
+    function updateLockProgress() {
+      if (!lockProgressFill) return;
+      const duration = Number(widgetState.durationSeconds);
+      const currentTime = Number(widgetState.currentTime);
+      const percent = Number.isFinite(duration) && duration > 0 && Number.isFinite(currentTime)
+        ? Math.max(0, Math.min(100, (currentTime / duration) * 100))
+        : 0;
+      lockProgressFill.style.width = `${percent}%`;
+    }
+
     function syncRemainingTick() {
       stopRemainingTick();
       if (!(widgetState.isPlaying && widgetState.hasDuration && Number.isFinite(Number(widgetState.remainingSeconds)))) {
         updateRemainingDisplay();
+        updateLockMetadata();
+        updateLockProgress();
         return;
       }
       updateRemainingDisplay();
+      updateLockMetadata();
+      updateLockProgress();
       remainingTickTimer = setInterval(() => {
         if (!(widgetState.isPlaying && widgetState.hasDuration && Number.isFinite(Number(widgetState.remainingSeconds)))) {
           stopRemainingTick();
           updateRemainingDisplay();
+          updateLockMetadata();
+          updateLockProgress();
           return;
         }
         widgetState.remainingSeconds = Math.max(0, Number(widgetState.remainingSeconds) - 1);
+        if (Number.isFinite(Number(widgetState.currentTime))) {
+          widgetState.currentTime = Math.max(0, Number(widgetState.currentTime) + 1);
+        }
         updateRemainingDisplay();
+        updateLockMetadata();
+        updateLockProgress();
       }, 1000);
     }
 
@@ -659,6 +753,7 @@
       applyStyle(widgetState.visualizerStyle || 'bars');
       document.body.classList.toggle('lock-mode', !!widgetState.visualLock);
       if (lockScene) lockScene.setAttribute('aria-hidden', widgetState.visualLock ? 'false' : 'true');
+      if (lockScene) lockScene.classList.toggle('playing', !!widgetState.isPlaying);
       widgetShell.classList.toggle('video-mode', !!next.isVideo);
       widgetShell.classList.toggle('live-mode', !!next.isLive);
       visualizer.classList.toggle('playing', !!widgetState.isPlaying);
@@ -668,6 +763,8 @@
       if (volumeSlider && Number.isFinite(Number(widgetState.volume))) {
         volumeSlider.value = String(Math.round(Math.max(0, Math.min(1, Number(widgetState.volume))) * 100));
       }
+      updateLockMetadata();
+      updateLockProgress();
       syncRemainingTick();
     }
 

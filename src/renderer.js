@@ -944,10 +944,22 @@ class DiscoveryBrowser {
         host = authUrl ? new URL(authUrl).hostname : '';
       } catch (e) { }
 
-      const sameTarget = !!(authUrl && launchUrl && authUrl === launchUrl);
-      const message = sameTarget
-        ? `Discovery Browser cannot complete secure sign-in for ${host || 'this site'} inside the app. Continue in Chrome/Edge?`
-        : `Discovery Browser cannot complete secure sign-in inside the app. Continue in Chrome/Edge?`;
+       const sameTarget = !!(authUrl && launchUrl && authUrl === launchUrl);
+       let message = sameTarget
+         ? `Discovery Browser cannot complete secure sign-in for ${host || 'this site'} inside the app. Continue in Chrome/Edge?`
+         : `Discovery Browser cannot complete secure sign-in inside the app. Continue in Chrome/Edge?`;
+       
+       // Add helpful tip for Google authentication by integrating into the first statement
+       try {
+         const authHost = authUrl ? new URL(authUrl).hostname : '';
+         if (authHost && (authHost === 'accounts.google.com' || authHost.endsWith('.google.com') || authHost.includes('google'))) {
+           if (sameTarget) {
+             message = `Discovery Browser cannot complete secure Google sign-in for ${host || 'this site'} inside the app. If you have a Google password saved for this site, you can use it to sign in directly. Continue in Chrome/Edge?`;
+           } else {
+             message = `Discovery Browser cannot complete secure Google sign-in inside the app. If you have a Google password saved for this site, you can use it to sign in directly. Continue in Chrome/Edge?`;
+           }
+         }
+       } catch (e) { /* ignore */ }
 
       const targetUrl = launchUrl || authUrl || this.getSearchEngineHomeUrl();
       this.addNotification(`External Sign-In Required: ${message}`, targetUrl);
@@ -1768,6 +1780,20 @@ class DiscoveryBrowser {
       this.renderNotifications();
     });
     actions.appendChild(checkBtn);
+
+    // View All Updates button
+    const viewUpdatesBtn = document.createElement('button');
+    viewUpdatesBtn.type = 'button';
+    viewUpdatesBtn.className = 'btn';
+    viewUpdatesBtn.textContent = 'View All';
+    viewUpdatesBtn.style.padding = '4px 10px';
+    viewUpdatesBtn.style.fontSize = '10px';
+    viewUpdatesBtn.addEventListener('click', async () => {
+      if (window.electronAPI && window.electronAPI.openUpdates) {
+        await window.electronAPI.openUpdates();
+      }
+    });
+    actions.appendChild(viewUpdatesBtn);
 
     if (isUpdateAvailable) {
       const downloadBtn = document.createElement('button');

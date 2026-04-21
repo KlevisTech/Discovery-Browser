@@ -782,7 +782,7 @@ function getLaunchWindowSizeByMode(mode) {
   if (normalized === CARD_LAUNCH_MODE_WIDE) {
     return { width: 1100, height: 600 };
   }
-  return { width: 840, height: 500 };
+  return { width: 850, height: 500 };
 }
 
 function getCardPseudoFullscreenBounds(cardWindow) {
@@ -897,30 +897,39 @@ function clearBubbleNotifications(cardId) {
   updateBubbleNotification(cardId, 0);
 }
 
- function updateBubbleMediaState(cardId, mediaState = {}) {
-   const cardWindow = cardWindows.get(cardId);
-   const existingWidgetState = visualizerWidgetStates.get(cardId) || {};
-   const nextState = {
-     isPlaying: !!mediaState.isPlaying,
-     hasMedia: !!mediaState.hasMedia,
-     isVideo: !!mediaState.isVideo,
-     isLive: !!mediaState.isLive,
-     hasDuration: !!mediaState.hasDuration,
-     remainingSeconds: Number.isFinite(Number(mediaState.remainingSeconds))
-       ? Math.max(0, Number(mediaState.remainingSeconds))
-       : null,
-     muted: typeof mediaState.muted === 'boolean' ? !!mediaState.muted : !!existingWidgetState.muted,
-     volume: Number.isFinite(Number(mediaState.volume))
-       ? Math.max(0, Math.min(1, Number(mediaState.volume)))
-       : (Number.isFinite(Number(existingWidgetState.volume)) ? Math.max(0, Math.min(1, Number(existingWidgetState.volume))) : 1),
-     visualizerStyle: normalizeVisualizerStyleKey(mediaState.visualizerStyle || existingWidgetState.visualizerStyle),
-     themeKey: normalizeCardThemeKey(
-       mediaState.themeKey
-       || existingWidgetState.themeKey
-       || (cardWindow && cardWindow.__cardTheme)
-       || currentCardTheme
-     ),
-   };
+function updateBubbleMediaState(cardId, mediaState = {}) {
+    const cardWindow = cardWindows.get(cardId);
+    const existingWidgetState = visualizerWidgetStates.get(cardId) || {};
+    const nextState = {
+      isPlaying: !!mediaState.isPlaying,
+      hasMedia: !!mediaState.hasMedia,
+      isVideo: !!mediaState.isVideo,
+      isLive: !!mediaState.isLive,
+      hasDuration: !!mediaState.hasDuration,
+      remainingSeconds: Number.isFinite(Number(mediaState.remainingSeconds))
+        ? Math.max(0, Number(mediaState.remainingSeconds))
+        : null,
+      currentTime: Number.isFinite(Number(mediaState.currentTime))
+        ? Math.max(0, Number(mediaState.currentTime))
+        : (Number.isFinite(Number(existingWidgetState.currentTime)) ? Math.max(0, Number(existingWidgetState.currentTime)) : 0),
+      durationSeconds: Number.isFinite(Number(mediaState.durationSeconds))
+        ? Math.max(0, Number(mediaState.durationSeconds))
+        : (Number.isFinite(Number(existingWidgetState.durationSeconds)) ? Math.max(0, Number(existingWidgetState.durationSeconds)) : null),
+      mediaTitle: mediaState.mediaTitle ? String(mediaState.mediaTitle) : String(existingWidgetState.mediaTitle || ''),
+      mediaArtist: mediaState.mediaArtist ? String(mediaState.mediaArtist) : String(existingWidgetState.mediaArtist || ''),
+      mediaAlbum: mediaState.mediaAlbum ? String(mediaState.mediaAlbum) : String(existingWidgetState.mediaAlbum || ''),
+      muted: typeof mediaState.muted === 'boolean' ? !!mediaState.muted : !!existingWidgetState.muted,
+      volume: Number.isFinite(Number(mediaState.volume))
+        ? Math.max(0, Math.min(1, Number(mediaState.volume)))
+        : (Number.isFinite(Number(existingWidgetState.volume)) ? Math.max(0, Math.min(1, Number(existingWidgetState.volume))) : 1),
+      visualizerStyle: normalizeVisualizerStyleKey(mediaState.visualizerStyle || existingWidgetState.visualizerStyle),
+      themeKey: normalizeCardThemeKey(
+        mediaState.themeKey
+        || existingWidgetState.themeKey
+        || (cardWindow && cardWindow.__cardTheme)
+        || currentCardTheme
+      ),
+    };
    bubbleMediaStates.set(cardId, nextState);
    visualizerWidgetStates.set(cardId, nextState);
    const bubble = cardBubbles.get(cardId);
@@ -1080,15 +1089,15 @@ function shouldShowVisualizerWidget(cardId, cardWindow) {
     if (state.isPlaying === false && !restoreBoostActive && !isPausedVisualizerForeground(cardId, cardWindow)) {
       return false;
     }
-     if (!restoreBoostActive && activeVisualizerCardId !== Number(cardId)) return false;
-     if (!restoreBoostActive && mainWindow && !mainWindow.isDestroyed() && typeof mainWindow.isFocused === 'function' && mainWindow.isFocused()) {
-       return false;
-     }
-   } catch (e) {
-     return false;
-   }
-   return true;
- }
+    if (!restoreBoostActive && activeVisualizerCardId !== Number(cardId)) return false;
+    if (!restoreBoostActive && mainWindow && !mainWindow.isDestroyed() && typeof mainWindow.isFocused === 'function' && mainWindow.isFocused()) {
+      return false;
+    }
+  } catch (e) {
+    return false;
+  }
+  return true;
+}
 
 function ensureVisualizerWidget(cardId, cardWindow) {
   const existing = visualizerWidgets.get(cardId);
@@ -1124,10 +1133,8 @@ function ensureVisualizerWidget(cardId, cardWindow) {
   });
 
   try {
-    widget.setAlwaysOnTop(true, 'floating');
-  } catch (e) {
-    widget.setAlwaysOnTop(true);
-  }
+    widget.setAlwaysOnTop(false);
+  } catch (e) { }
 
   const widgetState = visualizerWidgetStates.get(cardId) || {};
   const widgetPath = path.join(__dirname, 'src', 'visualizer-widget.html');
@@ -1186,15 +1193,7 @@ function syncVisualizerWidget(cardId) {
   try {
     if (shouldShow) {
       if (!widget.isVisible()) widget.show();
-      if (state.isPlaying === false && !isLocked) {
-        widget.setAlwaysOnTop(false);
-      } else {
-        try {
-          widget.setAlwaysOnTop(true, 'floating');
-        } catch (e) {
-          widget.setAlwaysOnTop(true);
-        }
-      }
+      widget.setAlwaysOnTop(false);
     } else if (widget.isVisible()) {
       widget.hide();
     }
@@ -2730,8 +2729,8 @@ function createMainWindow() {
 
   let windowX = 100;
   let windowY = 60;
-  const CARD_WIDTH = 1000;
-  const CARD_HEIGHT = 600;
+  const CARD_WIDTH = 1050;
+  const CARD_HEIGHT = 603;
 
   try {
     const { screen } = require('electron');
@@ -3986,6 +3985,66 @@ ipcMain.handle('toggle-recap-fullscreen', async (event, shouldBeFullscreen) => {
   }
 });
 
+// Updates/What's New window
+let updatesWindow = null;
+
+ipcMain.handle('open-updates-window', async () => {
+  try {
+    if (updatesWindow && !updatesWindow.isDestroyed()) {
+      updatesWindow.show();
+      updatesWindow.focus();
+      return { success: true };
+    }
+
+    let finalX = 300;
+    let finalY = 100;
+    try {
+      const { screen } = require('electron');
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+      const { x: workX, y: workY } = primaryDisplay.workArea;
+      const updatesWidth = 520;
+      const updatesHeight = 680;
+      finalX = workX + Math.floor((screenWidth - updatesWidth) / 2);
+      finalY = workY + Math.max(16, Math.floor((screenHeight - updatesHeight) / 2));
+    } catch (e) { }
+
+    updatesWindow = new BrowserWindow({
+      width: 520,
+      height: 680,
+      minWidth: 450,
+      minHeight: 500,
+      x: finalX,
+      y: finalY,
+      icon: APP_ICON_PATH,
+      frame: true,
+      transparent: false,
+      resizable: true,
+      skipTaskbar: false,
+      show: true,
+      backgroundColor: '#1a1a2e',
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        preload: path.join(__dirname, 'preload.js'),
+      },
+    });
+
+    updatesWindow.on('closed', () => {
+      updatesWindow = null;
+    });
+
+    const updatesHtmlPath = path.join(__dirname, 'src', 'updates.html');
+    await updatesWindow.loadFile(updatesHtmlPath);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening updates window:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('get-saved-articles-for-recap', async () => {
   try {
     if (!mainWindow || mainWindow.isDestroyed()) return [];
@@ -4261,10 +4320,15 @@ ipcMain.on('web-notification', (event, payload) => {
        hasMedia: !!normalized.hasMedia,
        isVideo: !!normalized.isVideo,
        isLive: !!normalized.isLive,
-       hasDuration: !!normalized.hasDuration,
-       remainingSeconds: normalized.remainingSeconds,
-       muted: typeof normalized.muted === 'boolean' ? !!normalized.muted : undefined,
-       volume: normalized.volume,
+      hasDuration: !!normalized.hasDuration,
+      remainingSeconds: normalized.remainingSeconds,
+      currentTime: normalized.currentTime,
+      durationSeconds: normalized.durationSeconds,
+      mediaTitle: normalized.mediaTitle,
+      mediaArtist: normalized.mediaArtist,
+      mediaAlbum: normalized.mediaAlbum,
+      muted: typeof normalized.muted === 'boolean' ? !!normalized.muted : undefined,
+      volume: normalized.volume,
        visualizerStyle: normalized.visualizerStyle,
        themeKey: normalized.themeKey,
      });

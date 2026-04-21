@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discovery Browser - What's New</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --shell-bg: linear-gradient(180deg, #1a1a2e 0%, #16213e 42%, #0f0f23 100%);
+      --chrome-bg: rgba(30, 30, 60, 0.95);
+      --text-main: #e2e8f0;
+      --text-muted: #94a3b8;
+      --accent: #60a5fa;
+      --accent-soft: rgba(96, 165, 250, 0.15);
+      --card-bg: rgba(40, 40, 80, 0.6);
+      --border: rgba(96, 165, 250, 0.25);
+    }
+    
+    html, body {
+      width: 100%; height: 100%;
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--shell-bg);
+      color: var(--text-main);
+      overflow-y: auto;
+    }
+    
+    body {
+      -webkit-app-region: drag;
+      padding: 20px;
+    }
+    
+    .titlebar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+      -webkit-app-region: no-drag;
+    }
+    
+    .app-info {
+      display: flex; align-items: center; gap: 14px;
+    }
+    
+    .app-logo {
+      width: 42px; height: 42px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      font-weight: bold;
+    }
+    
+    .app-name {
+      font-size: 18px; font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    
+    .version {
+      font-size: 11px; color: var(--text-muted);
+      background: var(--accent-soft);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    
+    .section-title {
+      font-size: 13px; font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin: 24px 0 12px;
+    }
+    
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .feature-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+    
+    .feature-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 8px;
+    }
+    
+    .feature-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: var(--accent-soft);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    
+    .feature-name {
+      font-size: 14px; font-weight: 600;
+    }
+    
+    .feature-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    
+    .badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .badge-new {
+      background: rgba(74, 222, 128, 0.2);
+      color: #4ade80;
+    }
+    
+    .badge-improved {
+      background: rgba(96, 165, 250, 0.2);
+      color: #60a5fa;
+    }
+    
+    .badge-feature {
+      background: rgba(168, 85, 247, 0.2);
+      color: #a78bfa;
+    }
+    
+    .close-info {
+      text-align: center;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="titlebar">
+    <div class="app-info">
+      <div class="app-logo">D</div>
+      <div>
+        <div class="app-name">Discovery Browser</div>
+        <span class="version">Version 2.0.0</span>
+      </div>
+    </div>
+  </div>
+  
+  <div class="section-title">New Features</div>
+  
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">📖</div>
+      <div class="feature-name">Read Mode <span class="badge badge-new">New</span></div>
+    </div>
+    <div class="feature-desc">
+      A beautiful reader view that converts any web article into a clean, distraction-free reading experience. Supports custom fonts, dark mode, magic cursor for highlighting paragraphs, and saves articles for offline reading.
+    </div>
+  </div>
+  
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">📝</div>
+      <div class="feature-name">Article Recap <span class="badge badge-new">New</span></div>
+    </div>
+    <div class="feature-desc">
+      View all your saved articles and highlights in one dedicated window. Perfect for reviewing what you've read and revisiting important passages.
+    </div>
+  </div>
+  
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">📄</div>
+      <div class="feature-name">Document Upload <span class="badge badge-new">New</span></div>
+    </div>
+    <div class="feature-desc">
+      Upload and read documents (TXT, HTML, MD) in readmode style. Convert your local files into clean, readable articles.
+    </div>
+  </div>
+  
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">📰</div>
+      <div class="feature-name">News Feed <span class="badge badge-new">New</span></div>
+    </div>
+    <div class="feature-desc">
+      Stay informed with integrated news feeds. Click the news icon to browse and add cards for your favorite news sources.
+    </div>
+  </div>
+  
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">⭐</div>
+      <div class="feature-name">Favorite Bookmarks <span class="badge badge-new">New</span></div>
+    </div>
+    <div class="feature-desc">
+      Save your favorite sites for quick access. Right-click cards or use the star icon to mark favorites.
+    </div>
+  </div>
+  
+  <div class="section-title">Customization</div>
+  
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">⚙️</div>
+      <div class="feature-name">Custom Site Layout <span class="badge badge-feature">Feature</span></div>
+    </div>
+    <div class="feature-desc">
+      In Settings, configure custom window layouts for specific websites. Set default size, position, and appearance for sites you visit often. Perfect for keeping your news or dashboard sites always visible the way you want.
+    </div>
+  </div>
+  
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">🎨</div>
+      <div class="feature-name">Window Themes <span class="badge badge-feature">Feature</span></div>
+    </div>
+    <div class="feature-desc">
+      New theme options for your card windows. Choose from various color schemes to personalize your browsing experience.
+    </div>
+  </div>
+  
+  <div class="section-title">Visualizer Improvements</div>
+  
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">🎵</div>
+      <div class="feature-name">Reactive Bubble <span class="badge badge-improved">Improved</span></div>
+    </div>
+    <div class="feature-desc">
+      The visualizer bubble now reacts when media is playing. Watch the colors dance and pulse in sync with your audio for an immersive experience.
+    </div>
+  </div>
+  
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">🔒</div>
+      <div class="feature-name">Visual Lock <span class="badge badge-improved">Improved</span></div>
+    </div>
+    <div class="feature-desc">
+      Display the visualizer on your lock screen with beautiful animations. Keep the music visualization running even when your display sleeps.
+    </div>
+  </div>
+  
+  <div class="close-info">
+    Thank you for using Discovery Browser!<br>
+    Made with ❤️ by Modern Tech
+  </div>
+</body>
+</html>
