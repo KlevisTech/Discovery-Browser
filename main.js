@@ -1,4 +1,4 @@
-﻿// main.js
+// main.js
 const electron = require('electron');
 const app = electron.app;
 const BrowserWindow = electron.BrowserWindow;
@@ -332,8 +332,9 @@ app.commandLine.appendSwitch('disable-quic');
 app.commandLine.appendSwitch('disable-http3');
 // Reduce automation fingerprints that can break bot challenges.
 app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
-// Avoid Private Access Token challenges that Electron can't complete.
-app.commandLine.appendSwitch('disable-features', 'PrivateStateTokens,PrivacyPass');
+// Enable Private Access Token challenges (Private State Tokens) for Cloudflare Turnstile compatibility
+// These are now supported in recent Electron versions
+app.commandLine.appendSwitch('enable-features', 'PrivateStateTokens');
 
 // Network/DNS stability flags - help with slow DNS servers
 // Use system DNS resolver with extended timeout for slow DNS servers
@@ -363,6 +364,40 @@ if (process.platform === 'win32') {
 
 // Increase max listeners to prevent memory leak warnings
 require('events').EventEmitter.defaultMaxListeners = 50;
+
+// Safe IPC send wrapper - prevents crashes from disposed webContents
+function safeIpcSend(webContents, channel, ...args) {
+  try {
+    if (!webContents || webContents.isDestroyed()) {
+      return false;
+    }
+    webContents.send(channel, ...args);
+    return true;
+  } catch (e) {
+    // Silently ignore send errors - window/frame may be disposed
+    if (e && e.message && !e.message.includes('Render frame was disposed')) {
+      console.debug('IPC send error:', e.message);
+    }
+    return false;
+  }
+}
+
+// Safe executeJavaScript wrapper - prevents crashes from disposed webContents
+async function safeExecuteJavaScript(webContents, script, userGesture = false) {
+  try {
+    if (!webContents || webContents.isDestroyed()) {
+      return null;
+    }
+    return await webContents.executeJavaScript(script, userGesture);
+  } catch (e) {
+    const errorMsg = e && e.message ? String(e.message) : String(e);
+    // Log non-trivial errors but silently ignore frame disposal errors
+    if (!errorMsg.includes('Render frame was disposed') && !errorMsg.includes('destroyed')) {
+      console.debug('ExecuteJavaScript error:', errorMsg);
+    }
+    return null;
+  }
+}
 
 // Track which webContents have been initialized to prevent duplicate listeners
 const initializedWebContents = new WeakSet();
@@ -1820,7 +1855,9 @@ function openAuthInExternalBrowser(url, context = {}) {
 
 function notifyExternalAuthRedirect(authUrl, launchUrl, requestId) {
   try {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) {
+      return;
+    }
     mainWindow.webContents.send('auth-opened-externally', { authUrl, launchUrl, requestId });
   } catch (e) {
     // ignore
@@ -2037,9 +2074,14 @@ function createCardDirectly(url, options = {}) {
     cardWindow.webContents.on('did-navigate', (event, navUrl) => {
       if (navUrl === lastReportedUrl) return;
       lastReportedUrl = navUrl;
-      if (mainWindow && !mainWindow.isDestroyed() && cardWindow && !cardWindow.isDestroyed()) {
-        mainWindow.webContents.send('card-url-updated', cardId, navUrl);
-        mainWindow.webContents.send('card-title-updated', cardId, cardWindow.webContents.getTitle());
+      // Use safe wrapper to prevent crashes from disposed frames
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        safeIpcSend(mainWindow.webContents, 'card-url-updated', cardId, navUrl);
+        try {
+          if (cardWindow && !cardWindow.isDestroyed()) {
+            safeIpcSend(mainWindow.webContents, 'card-title-updated', cardId, cardWindow.webContents.getTitle());
+          }
+        } catch (e) { }
       }
     });
 
@@ -2047,9 +2089,11 @@ function createCardDirectly(url, options = {}) {
     cardWindow.webContents.on('page-title-updated', (event, title) => {
       clearTimeout(titleDebounceTimer);
       titleDebounceTimer = setTimeout(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('card-title-updated', cardId, title);
+        // Check window state before sending IPC using safe wrapper
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          return;
         }
+        safeIpcSend(mainWindow.webContents, 'card-title-updated', cardId, title);
         try {
           if (cardBubbles.has(cardId)) {
             const parsedCount = extractTitleNotificationCount(title);
@@ -2065,33 +2109,43 @@ function createCardDirectly(url, options = {}) {
 
     cardWindow.webContents.on('did-finish-load', () => {
       clearCardLoadTimeout(cardWindow);
+      // Check window states before sending IPC using safe wrapper
       if (mainWindow && !mainWindow.isDestroyed() && cardWindow && !cardWindow.isDestroyed()) {
-        const pageTitle = cardWindow.webContents.getTitle();
-        const currentUrl = cardWindow.webContents.getURL();
-        mainWindow.webContents.send('external-card-created', {
-          cardId,
-          url: currentUrl || targetUrl,
-          title: pageTitle || (() => { try { return new URL(targetUrl).hostname; } catch (e) { return 'Loading...'; } })()
-        });
-        mainWindow.webContents.send('card-loading-finish', cardId, pageTitle, currentUrl);
+        try {
+          const pageTitle = cardWindow.webContents.getTitle();
+          const currentUrl = cardWindow.webContents.getURL();
+          safeIpcSend(mainWindow.webContents, 'external-card-created', {
+            cardId,
+            url: currentUrl || targetUrl,
+            title: pageTitle || (() => { try { return new URL(targetUrl).hostname; } catch (e) { return 'Loading...'; } })()
+          });
+          safeIpcSend(mainWindow.webContents, 'card-loading-finish', cardId, pageTitle, currentUrl);
+        } catch (e) {
+          // Silently ignore errors
+        }
       }
       try {
         if (cardWindow && !cardWindow.isDestroyed() && cardWindow.webContents && !cardWindow.webContents.isDestroyed()) {
-          cardWindow.webContents.send('visualizer-setting', !!visualizerEnabled);
+          safeIpcSend(cardWindow.webContents, 'visualizer-setting', !!visualizerEnabled);
         }
       } catch (e) { }
     });
 
     cardWindow.webContents.on('did-navigate', (event, navUrl) => {
+      // Check both window states before sending IPC using safe wrapper
       if (mainWindow && !mainWindow.isDestroyed() && cardWindow && !cardWindow.isDestroyed()) {
-        mainWindow.webContents.send('card-url-updated', cardId, navUrl);
-        mainWindow.webContents.send('card-title-updated', cardId, cardWindow.webContents.getTitle());
+        safeIpcSend(mainWindow.webContents, 'card-url-updated', cardId, navUrl);
+        try {
+          if (cardWindow && !cardWindow.isDestroyed()) {
+            safeIpcSend(mainWindow.webContents, 'card-title-updated', cardId, cardWindow.webContents.getTitle());
+          }
+        } catch (e) { }
       }
     });
 
     cardWindow.webContents.on('page-title-updated', (event, title) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('card-title-updated', cardId, title);
+        safeIpcSend(mainWindow.webContents, 'card-title-updated', cardId, title);
       }
       try {
         if (cardBubbles.has(cardId)) {
@@ -2118,7 +2172,7 @@ function createCardDirectly(url, options = {}) {
       visualizerWidgetStates.delete(cardId);
       cardWindows.delete(cardId);
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('card-closed', cardId);
+        safeIpcSend(mainWindow.webContents, 'card-closed', cardId);
       }
     });
 
@@ -2393,9 +2447,13 @@ function sendDownloadEvent(channel, payload, originatingWebContents) {
         } catch (e) { }
       }
 
-      if (win && !win.isDestroyed()) {
-        win.webContents.send(channel, payload);
-        console.warn('[DownloadEvent] Sent to originating window');
+      if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+        try {
+          win.webContents.send(channel, payload);
+          console.warn('[DownloadEvent] Sent to originating window');
+        } catch (e) {
+          console.warn('[DownloadEvent] Error sending to originating window:', e.message);
+        }
       } else {
         console.warn('[DownloadEvent] Originating window not available');
       }
@@ -2601,40 +2659,55 @@ ipcMain.handle('set-site-layout-overrides', async (event, overrides) => {
 // Article saving handler - forward from readmode to main renderer
 ipcMain.handle('save-article', async (event, articleData) => {
   try {
+    // Double-check window state before and after execution to prevent race conditions
     if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) {
       return { success: false, error: 'Main window unavailable' };
     }
 
     const serializedArticleData = JSON.stringify(articleData || {});
-    const result = await mainWindow.webContents.executeJavaScript(
-      `(function() {
-        try {
-          const articleData = ${serializedArticleData};
-          if (window.discoveryBrowser && typeof window.discoveryBrowser.saveArticle === 'function') {
-            const saved = window.discoveryBrowser.saveArticle(articleData);
-            return { success: true, article: saved || null };
+    try {
+      // Use safe wrapper to handle frame disposal errors
+      const result = await safeExecuteJavaScript(
+        mainWindow.webContents,
+        `(function() {
+          try {
+            const articleData = ${serializedArticleData};
+            if (window.discoveryBrowser && typeof window.discoveryBrowser.saveArticle === 'function') {
+              const saved = window.discoveryBrowser.saveArticle(articleData);
+              return { success: true, article: saved || null };
+            }
+            return { success: false, error: 'Discovery browser unavailable' };
+          } catch (err) {
+            return { success: false, error: err && err.message ? err.message : String(err) };
           }
-          return { success: false, error: 'Discovery browser unavailable' };
-        } catch (err) {
-          return { success: false, error: err && err.message ? err.message : String(err) };
-        }
-      })()`,
-      true
-    );
+        })()`,
+        true
+      );
 
-    return result && typeof result === 'object' ? result : { success: false, error: 'Unexpected save result' };
+      return result && typeof result === 'object' ? result : { success: false, error: 'Unexpected save result' };
+    } catch (execError) {
+      // Handle any execution errors (though safeExecuteJavaScript should handle them)
+      const errorMsg = execError && execError.message ? String(execError.message) : String(execError);
+      console.error('Failed to execute script in main window:', errorMsg);
+      
+      return { success: false, error: errorMsg };
+    }
   } catch (e) {
     console.error('Failed to save article:', e);
-    return { success: false, error: e.message };
+    return { success: false, error: e && e.message ? e.message : 'Unknown error' };
   }
 });
 
 // Google search handler - create a new card with Google search
 ipcMain.handle('google-search', async (event, query) => {
   try {
-    if (mainWindow && mainWindow.webContents) {
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
       const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-      mainWindow.webContents.send('create-card-from-search', searchUrl);
+      try {
+        mainWindow.webContents.send('create-card-from-search', searchUrl);
+      } catch (e) {
+        console.error('Error sending search event:', e);
+      }
     }
     return { success: true };
   } catch (e) {
@@ -2646,8 +2719,12 @@ ipcMain.handle('google-search', async (event, query) => {
 // Open ChatGPT as a new card
 ipcMain.handle('open-chatgpt', async (event) => {
   try {
-    if (mainWindow && mainWindow.webContents) {
-      mainWindow.webContents.send('create-card-from-search', 'https://chat.openai.com');
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+      try {
+        mainWindow.webContents.send('create-card-from-search', 'https://chat.openai.com');
+      } catch (e) {
+        console.error('Error sending ChatGPT event:', e);
+      }
     }
     return { success: true };
   } catch (e) {
@@ -4047,8 +4124,10 @@ ipcMain.handle('open-updates-window', async () => {
 
 ipcMain.handle('get-saved-articles-for-recap', async () => {
   try {
-    if (!mainWindow || mainWindow.isDestroyed()) return [];
-    const raw = await mainWindow.webContents.executeJavaScript("localStorage.getItem('savedArticles')", true);
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) {
+      return [];
+    }
+    const raw = await safeExecuteJavaScript(mainWindow.webContents, "localStorage.getItem('savedArticles')", true);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
@@ -4059,16 +4138,19 @@ ipcMain.handle('get-saved-articles-for-recap', async () => {
 
 ipcMain.handle('set-saved-articles-for-recap', async (event, articles) => {
   try {
-    if (!mainWindow || mainWindow.isDestroyed()) return { success: false, error: 'Main window unavailable' };
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) {
+      return { success: false, error: 'Main window unavailable' };
+    }
     const serialized = JSON.stringify(Array.isArray(articles) ? articles : []);
-    await mainWindow.webContents.executeJavaScript(
+    const result = await safeExecuteJavaScript(
+      mainWindow.webContents,
       `localStorage.setItem('savedArticles', ${JSON.stringify(serialized)});`,
       true
     );
-    return { success: true };
+    return { success: result !== null, error: result === null ? 'Failed to save articles' : undefined };
   } catch (error) {
     console.error('Error setting saved articles for recap:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error && error.message ? error.message : 'Unknown error' };
   }
 });
 
@@ -4593,7 +4675,7 @@ function compareVersions(a, b) {
 }
 
 function getConfiguredUpdateUrl() {
-  const fallback = 'https://gitlab.com/moderntechgroup/discovery-web/-/releases';
+  const fallback = 'https://discovery-browser.onrender.com';
   const candidate = String(process.env.DISCOVERY_UPDATE_URL || fallback).trim();
   if (!isHttpUrl(candidate)) return fallback;
   return candidate;
@@ -4654,23 +4736,24 @@ async function fetchLatestVersionFromRemote() {
 
       const contentType = String(res.headers.get('content-type') || '').toLowerCase();
       let version = '';
+      let payload = {};
       if (contentType.includes('application/json')) {
-        const json = await res.json();
-        version = extractVersionFromAnyPayload(json);
+        payload = await res.json();
+        version = extractVersionFromAnyPayload(payload);
       } else {
         const text = await res.text();
         version = extractVersionFromAnyPayload(text);
       }
 
       if (version) {
-        return { latestVersion: version, source: endpoint };
+        return { latestVersion: version, source: endpoint, payload };
       }
     } catch (e) {
       // Try next endpoint.
     }
   }
 
-  return { latestVersion: '', source: sourceUrl };
+  return { latestVersion: '', source: sourceUrl, payload: {} };
 }
 
 ipcMain.handle('get-update-status', async () => {
@@ -4679,8 +4762,9 @@ ipcMain.handle('get-update-status', async () => {
     const remote = await fetchLatestVersionFromRemote();
     const envLatestVersion = String(process.env.DISCOVERY_LATEST_VERSION || '').trim();
     const latestVersion = String(remote.latestVersion || envLatestVersion || '').trim();
-    const updateUrl = getConfiguredUpdateUrl();
-    const updateMessage = String(process.env.DISCOVERY_UPDATE_MESSAGE || '').trim();
+    // Use updateUrl from remote response (e.g., sourceforge), fall back to configured URL
+    const updateUrl = (remote.payload && remote.payload.updateUrl) || getConfiguredUpdateUrl();
+    const updateMessage = String(process.env.DISCOVERY_UPDATE_MESSAGE || remote.payload?.message || '').trim();
     const hasLatest = latestVersion.length > 0;
     const isUpdateAvailable = hasLatest ? compareVersions(latestVersion, currentVersion) > 0 : false;
 
@@ -4710,11 +4794,51 @@ ipcMain.handle('get-update-status', async () => {
 
 ipcMain.handle('open-update-download', async () => {
   try {
-    const updateUrl = getConfiguredUpdateUrl();
+    // Fetch latest status to get the correct updateUrl from remote
+    const remote = await fetchLatestVersionFromRemote();
+    const updateUrl = (remote.payload && remote.payload.updateUrl) || getConfiguredUpdateUrl();
     if (!/^https:\/\//i.test(updateUrl)) {
       return { success: false, error: 'Update URL must use HTTPS' };
     }
-    await shell.openExternal(updateUrl);
+
+    // Try to launch update URL in an external browser (Chrome, Edge, Firefox)
+    // instead of using shell.openExternal, which might open in Discovery itself
+    if (process.platform === 'win32') {
+      const pf = process.env['ProgramFiles'] || 'C:\\Program Files';
+      const pfx86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+      const localAppData = process.env['LOCALAPPDATA'] || '';
+      const browserCandidates = [
+        path.join(pf, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        path.join(pfx86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        localAppData ? path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe') : '',
+        path.join(pfx86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+        path.join(pf, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+        path.join(pf, 'Mozilla Firefox', 'firefox.exe'),
+        path.join(pfx86, 'Mozilla Firefox', 'firefox.exe'),
+        localAppData ? path.join(localAppData, 'Mozilla Firefox', 'firefox.exe') : '',
+      ];
+      for (const candidate of browserCandidates) {
+        if (launchBrowserExecutable(candidate, updateUrl)) {
+          return { success: true };
+        }
+      }
+    }
+
+    // No supported browser found - prompt user to copy and open in another browser
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Download Update',
+      message: 'Please open this link in Chrome, Edge, or Firefox',
+      detail: `The update requires a full browser with cookies and extensions enabled.\n\nURL: ${updateUrl}\n\n(Copied to clipboard)`,
+      buttons: ['OK'],
+      defaultId: 0,
+      noLink: true,
+    }).then(() => {
+      try {
+        clipboard.writeText(updateUrl);
+      } catch (e) {}
+    }).catch(() => {});
+
     return { success: true };
   } catch (error) {
     return { success: false, error: error && error.message ? error.message : 'Failed to open update URL' };

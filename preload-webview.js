@@ -1,31 +1,40 @@
 // Preload script injected into webview to intercept link clicks
 // This prevents links from opening in new windows and allows them to load in the same webview
 
-// Prevent window.open calls
-const originalOpen = window.open;
-window.open = function(url, target, features) {
-  // Instead of opening a new window, navigate in the current webview
-  if (url) {
-    window.location.href = url;
-  }
-  return null;
-};
+// Get current URL to check if we're on a challenge page
+const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+const isChallengeUrl = /challenges\.cloudflare\.com|turnstile/i.test(currentUrl);
 
-// Intercept link clicks to prevent target="_blank"
-document.addEventListener('click', (e) => {
-  const link = e.target.closest('a');
-  if (link && link.href) {
-    const target = link.getAttribute('target');
-    // If the link has target="_blank" or target="_new", prevent it and navigate in current window
-    if (target === '_blank' || target === '_new') {
-      e.preventDefault();
-      e.stopPropagation();
-      window.location.href = link.href;
+// Only intercept window.open if NOT on a Cloudflare challenge page
+// (Turnstile needs window.open capabilities for its iframe)
+if (!isChallengeUrl) {
+  const originalOpen = window.open;
+  window.open = function(url, target, features) {
+    // Instead of opening a new window, navigate in the current webview
+    if (url) {
+      window.location.href = url;
     }
-  }
-}, true);
+    return null;
+  };
+}
 
-console.log('Webview preload script loaded - intercepting new window attempts');
+// Intercept link clicks to prevent target="_blank" EXCEPT for challenge pages
+if (!isChallengeUrl) {
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('a');
+    if (link && link.href) {
+      const target = link.getAttribute('target');
+      // If the link has target="_blank" or target="_new", prevent it and navigate in current window
+      if (target === '_blank' || target === '_new') {
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = link.href;
+      }
+    }
+  }, true);
+}
+
+console.log('Webview preload script loaded - intercepting new window attempts (except on challenge pages)');
 
 // Intercept Web Notification API and forward to the host
 let ipcRenderer = null;

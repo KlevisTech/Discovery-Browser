@@ -6,6 +6,7 @@
  */
 
 class DiscoveryBrowser {
+
   constructor() {
     this.cards = new Map(); // cardId -> cardData
     this.nextCardId = 1;
@@ -452,8 +453,13 @@ class DiscoveryBrowser {
 
     if (this.clearNotificationsBtn) {
       this.clearNotificationsBtn.textContent = 'Check now';
-      this.clearNotificationsBtn.addEventListener('click', () => {
-        this.refreshUpdateStatus().then(() => this.renderNotifications());
+      this.clearNotificationsBtn.addEventListener('click', async () => {
+        this.clearNotificationsBtn.disabled = true;
+        this.clearNotificationsBtn.textContent = 'Checking...';
+        await this.refreshUpdateStatus();
+        this.renderNotifications();
+        this.clearNotificationsBtn.disabled = false;
+        this.clearNotificationsBtn.textContent = 'Check now';
       });
     }
 
@@ -932,6 +938,93 @@ class DiscoveryBrowser {
         this.showAuthRedirectNotice(payload || {});
       });
     }
+
+    // Setup mouse scroll wheel support
+    this.setupScrollWheelListeners();
+  }
+
+  setupScrollWheelListeners() {
+    // Handle mouse scroll wheel events for main scrollable containers
+    const handleWheel = (event) => {
+      const target = event.target;
+      const scrollableTarget = this.findScrollableParent(target);
+
+      if (scrollableTarget) {
+        // Prevent default only if the element can scroll in that direction
+        const canScrollVertically = scrollableTarget.scrollHeight > scrollableTarget.clientHeight;
+        const canScrollHorizontally = scrollableTarget.scrollWidth > scrollableTarget.clientWidth;
+        const isVerticalScroll = Math.abs(event.deltaY) > Math.abs(event.deltaX);
+
+        if ((isVerticalScroll && canScrollVertically) || (!isVerticalScroll && canScrollHorizontally)) {
+          event.preventDefault();
+          
+          // Smooth scroll with acceleration
+          const scrollAmountY = event.deltaY * 0.5; // Reduce sensitivity
+          const scrollAmountX = event.deltaX * 0.5;
+          
+          scrollableTarget.scrollLeft += scrollAmountX;
+          scrollableTarget.scrollTop += scrollAmountY;
+        }
+      }
+    };
+
+    // Apply wheel listener to document
+    document.addEventListener('wheel', handleWheel, { passive: false });
+
+    // Also handle direct container scrolling
+    const containers = [
+      this.cardDock,
+      this.tabsContainer,
+      this.notificationList,
+      this.newsContainer,
+      document.getElementById('history-list'),
+      document.getElementById('settings-bookmarks-tab'),
+      document.getElementById('settings-articles-tab'),
+      document.getElementById('settings-downloads-tab'),
+      document.getElementById('installed-addons-grid'),
+      document.querySelector('.settings-content')
+    ];
+
+    containers.forEach(container => {
+      if (container) {
+        container.addEventListener('wheel', handleWheel, { passive: false });
+      }
+    });
+  }
+
+  findScrollableParent(element) {
+    let current = element;
+    while (current && current !== document.body) {
+      const style = window.getComputedStyle(current);
+      const overflow = style.overflow || '';
+      const overflowY = style.overflowY || '';
+      const overflowX = style.overflowX || '';
+      
+      // Check if element has scrollable content
+      const hasVerticalScroll = current.scrollHeight > current.clientHeight;
+      const hasHorizontalScroll = current.scrollWidth > current.clientWidth;
+      
+      // Check if overflow allows scrolling
+      const canScroll = 
+        (overflow === 'auto' || overflow === 'scroll' || 
+         overflowY === 'auto' || overflowY === 'scroll' ||
+         overflowX === 'auto' || overflowX === 'scroll') &&
+        (hasVerticalScroll || hasHorizontalScroll);
+      
+      if (canScroll) {
+        return current;
+      }
+      
+      current = current.parentElement;
+    }
+    
+    // Default to window/document for main page scroll
+    if (document.documentElement.scrollHeight > document.documentElement.clientHeight ||
+        document.documentElement.scrollWidth > document.documentElement.clientWidth) {
+      return document.documentElement;
+    }
+    
+    return null;
   }
 
   showAuthRedirectNotice(payload = {}) {
@@ -1681,7 +1774,7 @@ class DiscoveryBrowser {
         currentVersion: 'unknown',
         latestVersion: '',
         isUpdateAvailable: false,
-        updateUrl: 'https://gitlab.com/moderntechgroup/discovery-web/-/releases',
+        updateUrl: 'https://discovery-web.onrender.com',
         updateMessage: 'Update service is unavailable in this build.',
       };
       this.updateNotificationsBadge();
@@ -1697,7 +1790,7 @@ class DiscoveryBrowser {
         currentVersion: 'unknown',
         latestVersion: '',
         isUpdateAvailable: false,
-        updateUrl: 'https://gitlab.com/moderntechgroup/discovery-web/-/releases',
+        updateUrl: 'https://discovery-web.onrender.com',
         updateMessage: 'Unable to check updates right now.',
       };
       this.updateNotificationsBadge();

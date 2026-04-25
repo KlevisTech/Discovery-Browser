@@ -1997,9 +1997,9 @@ body {
       <div class="card-launch-fill active" id="card-launch-fill" aria-hidden="true"></div>
       <div class="split-container" id="split-container">
         <div class="split-pane split-pane-left">
-          <webview id="card-webview" style="width:100%; height:100%;" partition="persist:webview" allowpopups preload=""
+          <webview id="card-webview" style="width:100%; height:100%;" partition="persist:webview" allowpopups preload="../preload-webview.js"
             disablewebsecurity="false" enableremotemodule="false" enableblinkfeatures="LazyLoad,LazyImageLoading"
-            disableblinkfeatures="AutoplayIgnoresWebAudio"></webview>
+            disableblinkfeatures="AutoplayIgnoresWebAudio" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"></webview>
         </div>
         <div class="split-divider" id="split-divider"></div>
         <div class="split-pane split-pane-right" id="split-pane-right">
@@ -2009,8 +2009,8 @@ body {
             <button class="split-go-btn" id="split-go-btn">Go</button>
           </div>
           <webview id="split-webview" style="width:100%; flex:1 1 auto;" partition="persist:webview" allowpopups
-            preload="" disablewebsecurity="false" enableremotemodule="false"
-            enableblinkfeatures="LazyLoad,LazyImageLoading" disableblinkfeatures="AutoplayIgnoresWebAudio"></webview>
+            preload="../preload-webview.js" disablewebsecurity="false" enableremotemodule="false"
+            enableblinkfeatures="LazyLoad,LazyImageLoading" disableblinkfeatures="AutoplayIgnoresWebAudio" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"></webview>
         </div>
       </div>
     </div>

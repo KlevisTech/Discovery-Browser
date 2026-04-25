@@ -6,7 +6,7 @@ function buildPayload() {
   return {
     latestVersion: String(process.env.LATEST_VERSION || '1.0.0').trim(),
     updateUrl: String(
-      process.env.UPDATE_URL || 'https://gitlab.com/moderntechgroup/discovery-web/-/releases'
+      process.env.UPDATE_URL || 'https://discovery-web.onrender.com'
     ).trim(),
     message: String(process.env.UPDATE_MESSAGE || '').trim(),
     checkedAt: new Date().toISOString(),
