@@ -5,19 +5,6 @@
 const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
 const isChallengeUrl = /challenges\.cloudflare\.com|turnstile/i.test(currentUrl);
 
-// Only intercept window.open if NOT on a Cloudflare challenge page
-// (Turnstile needs window.open capabilities for its iframe)
-if (!isChallengeUrl) {
-  const originalOpen = window.open;
-  window.open = function(url, target, features) {
-    // Instead of opening a new window, navigate in the current webview
-    if (url) {
-      window.location.href = url;
-    }
-    return null;
-  };
-}
-
 // Intercept link clicks to prevent target="_blank" EXCEPT for challenge pages
 if (!isChallengeUrl) {
   document.addEventListener('click', (e) => {
@@ -34,7 +21,7 @@ if (!isChallengeUrl) {
   }, true);
 }
 
-console.log('Webview preload script loaded - intercepting new window attempts (except on challenge pages)');
+console.log('Webview preload script loaded - preserving browser popup behavior for challenge flows');
 
 // Intercept Web Notification API and forward to the host
 let ipcRenderer = null;
@@ -48,24 +35,6 @@ try {
     Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => undefined });
   } else if (typeof navigator !== 'undefined') {
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-  }
-} catch (e) {}
-
-// Additional lightweight fingerprint hardening for common bot checks.
-try {
-  if (typeof window !== 'undefined' && !window.chrome) {
-    window.chrome = { runtime: {} };
-  }
-} catch (e) {}
-
-try {
-  if (typeof navigator !== 'undefined') {
-    if (navigator.languages && navigator.languages.length === 0) {
-      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-    }
-    if (navigator.plugins && navigator.plugins.length === 0) {
-      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
-    }
   }
 } catch (e) {}
 

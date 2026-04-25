@@ -905,6 +905,135 @@ body {
       display: block;
     }
 
+    .security-load-notice.challenge-handoff {
+      top: 50%;
+      left: 50%;
+      right: auto;
+      width: min(420px, calc(100% - 40px));
+      transform: translate(-50%, -50%);
+      padding: 18px 20px;
+      border-radius: 18px;
+      border: 1px solid rgba(140, 226, 255, 0.34);
+      background:
+        radial-gradient(circle at top, rgba(124, 247, 255, 0.18), transparent 42%),
+        linear-gradient(145deg, rgba(9, 18, 36, 0.96), rgba(16, 26, 48, 0.95));
+      color: rgba(236, 246, 255, 0.98);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+      backdrop-filter: blur(12px);
+      text-align: center;
+      z-index: 80;
+      overflow: hidden;
+    }
+
+    .security-load-notice.challenge-handoff::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, transparent, rgba(124, 247, 255, 0.22), transparent);
+      transform: translateX(-100%);
+      animation: challengeNoticeSweep 1.15s ease-out forwards;
+      pointer-events: none;
+    }
+
+    .security-load-notice.challenge-handoff .notice-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(124, 247, 255, 0.1);
+      border: 1px solid rgba(124, 247, 255, 0.22);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .security-load-notice.challenge-handoff .notice-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      margin-bottom: 8px;
+    }
+
+    .security-load-notice.challenge-handoff .notice-body {
+      font-size: 12px;
+      line-height: 1.6;
+      color: rgba(214, 232, 248, 0.92);
+      margin-bottom: 14px;
+    }
+
+    .security-load-notice.challenge-handoff .notice-progress {
+      height: 4px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+
+    .security-load-notice.challenge-handoff .notice-progress > span {
+      display: block;
+      height: 100%;
+      width: 100%;
+      transform-origin: left center;
+      background: linear-gradient(90deg, rgba(124, 247, 255, 0.92), rgba(170, 130, 255, 0.88));
+      animation: challengeProgress 0.9s linear forwards;
+    }
+
+    .card-window.is-challenge-promoting {
+      animation: challengePromote 0.92s cubic-bezier(0.2, 0.72, 0.18, 1) forwards;
+      pointer-events: none;
+    }
+
+    .card-window.is-challenge-promoting .card-content {
+      filter: saturate(0.94) blur(0.6px);
+    }
+
+    .card-window.is-challenge-promoting .split-container,
+    .card-window.is-challenge-promoting .card-titlebar,
+    .card-window.is-challenge-promoting .media-hover-control {
+      transition: opacity 0.24s ease, transform 0.24s ease, filter 0.24s ease;
+    }
+
+    .card-window.is-challenge-promoting .split-container {
+      opacity: 0.2;
+      transform: scale(0.985);
+      filter: saturate(0.82);
+    }
+
+    .card-window.is-challenge-promoting .card-titlebar,
+    .card-window.is-challenge-promoting .media-hover-control {
+      opacity: 0.45;
+      transform: translateY(-2px);
+    }
+
+    @keyframes challengeNoticeSweep {
+      0% { transform: translateX(-100%); opacity: 0; }
+      20% { opacity: 1; }
+      100% { transform: translateX(100%); opacity: 0; }
+    }
+
+    @keyframes challengeProgress {
+      from { transform: scaleX(1); }
+      to { transform: scaleX(0); }
+    }
+
+    @keyframes challengePromote {
+      0% {
+        transform: scale(1) translateY(0) translateZ(0);
+        opacity: 1;
+      }
+      55% {
+        transform: scale(0.992) translateY(-4px) translateZ(0);
+        opacity: 0.94;
+      }
+      100% {
+        transform: scale(0.972) translateY(-14px) translateZ(0);
+        opacity: 0.1;
+      }
+    }
+
     @keyframes contentFadeIn {
       from {
         opacity: 0;
@@ -1999,7 +2128,7 @@ body {
         <div class="split-pane split-pane-left">
           <webview id="card-webview" style="width:100%; height:100%;" partition="persist:webview" allowpopups preload="../preload-webview.js"
             disablewebsecurity="false" enableremotemodule="false" enableblinkfeatures="LazyLoad,LazyImageLoading"
-            disableblinkfeatures="AutoplayIgnoresWebAudio" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"></webview>
+            disableblinkfeatures="AutoplayIgnoresWebAudio"></webview>
         </div>
         <div class="split-divider" id="split-divider"></div>
         <div class="split-pane split-pane-right" id="split-pane-right">
@@ -2010,7 +2139,7 @@ body {
           </div>
           <webview id="split-webview" style="width:100%; flex:1 1 auto;" partition="persist:webview" allowpopups
             preload="../preload-webview.js" disablewebsecurity="false" enableremotemodule="false"
-            enableblinkfeatures="LazyLoad,LazyImageLoading" disableblinkfeatures="AutoplayIgnoresWebAudio" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"></webview>
+            enableblinkfeatures="LazyLoad,LazyImageLoading" disableblinkfeatures="AutoplayIgnoresWebAudio"></webview>
         </div>
       </div>
     </div>
@@ -2159,6 +2288,7 @@ body {
     window._networkErrorActive = false;
     let isMinimizingCard = false;
     let isClosingCard = false;
+    let isChallengePromoting = false;
     function waitForCardAnimationEnd(el, expectedName, fallbackMs) {
       return new Promise((resolve) => {
         if (!el) {
@@ -2325,15 +2455,38 @@ body {
     }
 
     function showChallengeBanner(targetUrl) {
-      // Security challenge banner removed - let site load naturally
-      return;
+      const detail = arguments.length > 1 && arguments[1] ? arguments[1] : null;
+      const el = ensureSecurityLoadNotice();
+      if (!el) return;
+      isChallengePromoting = true;
+      hideSecurityNoticeWhenAppropriate(true);
+      el.classList.add('active', 'challenge-handoff');
+      const bodyText = detail && detail.message
+        ? String(detail.message)
+        : 'This site needs Full Browser Mode. Your site card experience may change while we move you into a more compatible window.';
+      el.innerHTML = `
+        <div class="notice-badge">Full Browser Mode</div>
+        <div class="notice-title">Switching for site compatibility</div>
+        <div class="notice-body">${bodyText}</div>
+        <div class="notice-progress" aria-hidden="true"><span></span></div>
+      `;
+      if (cardWindowEl) {
+        cardWindowEl.classList.remove('is-closing-tv', 'is-minimizing', 'is-restoring');
+        void cardWindowEl.offsetWidth;
+        cardWindowEl.classList.add('is-challenge-promoting');
+      }
+      setLoadingWave(false);
+      setLaunchFillVisible(false);
+      setCardContentVisible(true);
     }
 
     function hideSecurityLoadNotice() {
+      if (isChallengePromoting) return;
       const el = ensureSecurityLoadNotice();
       if (!el) return;
-      el.classList.remove('active');
+      el.classList.remove('challenge-handoff');
       el.textContent = '';
+      el.classList.remove('active');
       // Reset network error flag when manually hiding
       window._networkErrorActive = false;
       stopNetworkRecoveryWatcher();
@@ -4482,6 +4635,9 @@ body {
 
     // Intercept new-window events
     webview.addEventListener('new-window', (e) => {
+      if (isCloudflareChallengeUrl(e && e.url)) {
+        return;
+      }
       e.preventDefault();
       const url = e.url;
       if (url) {
@@ -4530,7 +4686,7 @@ body {
       window.addEventListener('cloudflare-challenge-banner', (ev) => {
         try {
           const detail = ev && ev.detail ? ev.detail : {};
-          showChallengeBanner(detail.url || '');
+          showChallengeBanner(detail.url || '', detail);
         } catch (e) { }
       });
     }

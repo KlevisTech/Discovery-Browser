@@ -30,6 +30,7 @@ class DiscoveryBrowser {
     this.notifications = [];
     this.maxNotifications = 20;
     this.updateStatus = null;
+    this.forceUpdateOverlay = null;
 
     // Search engine settings
     this.searchEngines = [
@@ -1774,15 +1775,19 @@ class DiscoveryBrowser {
         currentVersion: 'unknown',
         latestVersion: '',
         isUpdateAvailable: false,
+        isForcedUpdate: false,
+        updatePolicy: 'lenient',
         updateUrl: 'https://discovery-web.onrender.com',
         updateMessage: 'Update service is unavailable in this build.',
       };
+      this.applyForcedUpdateGate();
       this.updateNotificationsBadge();
       return;
     }
     try {
       const status = await window.electronAPI.getUpdateStatus();
       this.updateStatus = status || null;
+      this.applyForcedUpdateGate();
       this.updateNotificationsBadge();
     } catch (e) {
       this.updateStatus = {
@@ -1790,10 +1795,74 @@ class DiscoveryBrowser {
         currentVersion: 'unknown',
         latestVersion: '',
         isUpdateAvailable: false,
+        isForcedUpdate: false,
+        updatePolicy: 'lenient',
         updateUrl: 'https://discovery-web.onrender.com',
         updateMessage: 'Unable to check updates right now.',
       };
+      this.applyForcedUpdateGate();
       this.updateNotificationsBadge();
+    }
+  }
+
+  ensureForcedUpdateOverlay() {
+    if (this.forceUpdateOverlay) return this.forceUpdateOverlay;
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed; inset:0; z-index:99999; display:none; align-items:center; justify-content:center; padding:24px; background:radial-gradient(circle at top, rgba(96,165,250,0.18), transparent 32%), linear-gradient(180deg, rgba(10,16,28,0.96), rgba(8,10,18,0.98)); backdrop-filter:blur(12px);';
+    overlay.innerHTML = `
+      <div style="width:min(520px, 100%); border-radius:24px; padding:28px 26px; background:linear-gradient(160deg, rgba(18,28,48,0.96), rgba(10,16,30,0.98)); border:1px solid rgba(96,165,250,0.26); box-shadow:0 24px 80px rgba(0,0,0,0.42); color:white; text-align:left;">
+        <div style="display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:rgba(96,165,250,0.12); border:1px solid rgba(96,165,250,0.24); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(191,219,254,0.96);">Required Update</div>
+        <div style="margin-top:16px; font-size:28px; font-weight:700; line-height:1.15;">Discovery Browser needs an update before you continue.</div>
+        <div data-update-copy style="margin-top:12px; font-size:13px; line-height:1.7; color:rgba(226,232,240,0.84);">A newer version is required for this release.</div>
+        <div data-update-versions style="margin-top:14px; font-size:12px; color:rgba(148,163,184,0.96);"></div>
+        <div style="margin-top:20px; display:flex; gap:10px; flex-wrap:wrap;">
+          <button type="button" data-action="download" style="border:none; border-radius:14px; padding:11px 16px; font-size:13px; font-weight:600; cursor:pointer; color:#08111f; background:linear-gradient(135deg, #7dd3fc, #60a5fa);">Download Update</button>
+          <button type="button" data-action="check" style="border:1px solid rgba(255,255,255,0.14); border-radius:14px; padding:11px 16px; font-size:13px; font-weight:600; cursor:pointer; color:white; background:rgba(255,255,255,0.06);">Check Again</button>
+          <button type="button" data-action="view" style="border:1px solid rgba(255,255,255,0.14); border-radius:14px; padding:11px 16px; font-size:13px; font-weight:600; cursor:pointer; color:white; background:rgba(255,255,255,0.06);">View All Updates</button>
+        </div>
+      </div>
+    `;
+    const downloadBtn = overlay.querySelector('[data-action="download"]');
+    const checkBtn = overlay.querySelector('[data-action="check"]');
+    const viewBtn = overlay.querySelector('[data-action="view"]');
+    if (downloadBtn) {
+      downloadBtn.addEventListener('click', async () => {
+        if (window.electronAPI && window.electronAPI.openUpdateDownload) {
+          await window.electronAPI.openUpdateDownload();
+        }
+      });
+    }
+    if (checkBtn) {
+      checkBtn.addEventListener('click', async () => {
+        await this.refreshUpdateStatus();
+        this.renderNotifications();
+      });
+    }
+    if (viewBtn) {
+      viewBtn.addEventListener('click', async () => {
+        if (window.electronAPI && window.electronAPI.openUpdates) {
+          await window.electronAPI.openUpdates();
+        }
+      });
+    }
+    document.body.appendChild(overlay);
+    this.forceUpdateOverlay = overlay;
+    return overlay;
+  }
+
+  applyForcedUpdateGate() {
+    const overlay = this.ensureForcedUpdateOverlay();
+    const status = this.updateStatus || {};
+    const forced = !!status.isForcedUpdate;
+    overlay.style.display = forced ? 'flex' : 'none';
+    if (!forced) return;
+    const copy = overlay.querySelector('[data-update-copy]');
+    const versions = overlay.querySelector('[data-update-versions]');
+    if (copy) {
+      copy.textContent = status.updateMessage || 'A newer version is required for this release.';
+    }
+    if (versions) {
+      versions.textContent = `Current: ${status.currentVersion || 'unknown'} • Required: ${status.latestVersion || 'latest'}`;
     }
   }
 
@@ -1820,6 +1889,7 @@ class DiscoveryBrowser {
     this.notificationList.innerHTML = '';
     const status = this.updateStatus;
     const isUpdateAvailable = !!(status && status.isUpdateAvailable);
+    const isForcedUpdate = !!(status && status.isForcedUpdate);
     const currentVersion = status && status.currentVersion ? status.currentVersion : 'unknown';
     const latestVersion = status && status.latestVersion ? status.latestVersion : currentVersion;
     const updateMessage = status && status.updateMessage
@@ -1843,13 +1913,28 @@ class DiscoveryBrowser {
     headline.style.color = 'white';
     headline.style.fontSize = '12px';
     headline.style.fontWeight = '600';
-    headline.textContent = isUpdateAvailable ? 'Update Available' : 'Discovery is Up to Date';
+    headline.textContent = isUpdateAvailable
+      ? (isForcedUpdate ? 'Required Update' : 'Update Available')
+      : 'Discovery is Up to Date';
 
     const versions = document.createElement('div');
     versions.style.color = 'rgba(255,255,255,0.75)';
     versions.style.fontSize = '10px';
     versions.style.marginTop = '4px';
     versions.textContent = `Current: ${currentVersion} • Latest: ${latestVersion}`;
+
+    const policy = document.createElement('div');
+    policy.style.fontSize = '10px';
+    policy.style.marginTop = '6px';
+    policy.style.fontWeight = '700';
+    policy.style.letterSpacing = '0.04em';
+    policy.style.textTransform = 'uppercase';
+    policy.style.color = isUpdateAvailable
+      ? (isForcedUpdate ? '#fda4af' : '#93c5fd')
+      : 'rgba(255,255,255,0.56)';
+    policy.textContent = isUpdateAvailable
+      ? (isForcedUpdate ? 'Required before continuing' : 'Optional update')
+      : 'Latest version installed';
 
     const message = document.createElement('div');
     message.style.color = 'rgba(255,255,255,0.82)';
@@ -1905,6 +1990,7 @@ class DiscoveryBrowser {
 
     card.appendChild(headline);
     card.appendChild(versions);
+    card.appendChild(policy);
     card.appendChild(message);
     card.appendChild(actions);
     this.notificationList.appendChild(card);
@@ -3455,6 +3541,10 @@ class DiscoveryBrowser {
   }
 
   async createCard(url) {
+    if (this.updateStatus && this.updateStatus.isForcedUpdate) {
+      this.applyForcedUpdateGate();
+      return;
+    }
     if (!url) {
       url = this.getSearchEngineHomeUrl();
     }
@@ -3505,6 +3595,11 @@ class DiscoveryBrowser {
       if (!result || !result.success) {
         this.cards.delete(cardId);
         this.updateCardCount();
+        if (result && result.blockedByUpdate) {
+          await this.refreshUpdateStatus();
+          this.renderNotifications();
+          return;
+        }
         if (result && result.externalOpened) {
           return;
         }

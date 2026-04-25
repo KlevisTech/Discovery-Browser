@@ -417,6 +417,13 @@ app.on('web-contents-created', (event, contents) => {
   // Ensure all new windows/popups become card windows with the same layout
   try {
     contents.setWindowOpenHandler(({ url }) => {
+      let host = '';
+      try {
+        host = String(new URL(url).hostname || '').toLowerCase();
+      } catch (e) { }
+      if (isSecurityAllowlistedHost(host)) {
+        return { action: 'allow' };
+      }
       openUrlInCard(url);
       return { action: 'deny' };
     });
@@ -752,6 +759,7 @@ if (require('electron').app.isPackaged) {
 // Keep references to main window and all card windows
 let mainWindow;
 const cardWindows = new Map(); // cardId -> BrowserWindow
+const promotedChallengeWindows = new Map(); // normalizedUrl -> BrowserWindow
 const cardBubbles = new Map(); // cardId -> bubble BrowserWindow
 const visualizerWidgets = new Map(); // cardId -> visualizer BrowserWindow
 const bubbleNotifications = new Map(); // cardId -> notification count
@@ -1813,6 +1821,128 @@ function openExternalBrowserForChallenge(url) {
   return { opened: false, launchUrl };
 }
 
+function openChallengeInFullBrowserWindow(url, options = {}) {
+  if (!url) return { opened: false, window: null };
+  const targetUrl = String(url).trim();
+  if (!isHttpUrl(targetUrl)) return { opened: false, window: null };
+
+  const windowKeyPrefix = String(options && options.windowKeyPrefix || 'challenge-browser').trim() || 'challenge-browser';
+  const normalizedUrl = `${windowKeyPrefix}:${targetUrl.toLowerCase()}`;
+  const existing = promotedChallengeWindows.get(normalizedUrl);
+  if (existing && !existing.isDestroyed()) {
+    try {
+      if (existing.isMinimized()) existing.restore();
+      existing.show();
+      existing.focus();
+      existing.loadURL(targetUrl);
+    } catch (e) { }
+    return { opened: true, window: existing };
+  }
+
+  let windowX = 120;
+  let windowY = 70;
+  let windowWidth = 1280;
+  let windowHeight = 860;
+  try {
+    const { screen } = require('electron');
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const workArea = primaryDisplay && primaryDisplay.workAreaSize ? primaryDisplay.workAreaSize : { width: 1440, height: 900 };
+    windowWidth = Math.min(1400, Math.max(1100, Math.floor(workArea.width * 0.82)));
+    windowHeight = Math.min(980, Math.max(760, Math.floor(workArea.height * 0.86)));
+    windowX = Math.max(30, Math.floor((workArea.width - windowWidth) / 2));
+    windowY = Math.max(30, Math.floor((workArea.height - windowHeight) / 2));
+  } catch (e) { }
+
+  const fullBrowserWindow = new BrowserWindow({
+    width: windowWidth,
+    height: windowHeight,
+    x: windowX,
+    y: windowY,
+    minWidth: 980,
+    minHeight: 700,
+    icon: APP_ICON_PATH,
+    frame: true,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#ffffff',
+    title: String(options && options.windowTitle || 'Discovery Browser - Full Browser Mode'),
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      spellcheck: true,
+      backgroundThrottling: true,
+      partition: 'persist:webview',
+    },
+  });
+  attachWindowHangRecovery(fullBrowserWindow, `challenge-browser-${Date.now()}`);
+  try { fullBrowserWindow.webContents.setUserAgent(CHROME_LIKE_UA); } catch (e) { }
+
+  try {
+    fullBrowserWindow.webContents.setWindowOpenHandler(({ url: openUrl, referrer }) => {
+      if (!isHttpUrl(openUrl)) {
+        return { action: 'deny' };
+      }
+      try {
+        fullBrowserWindow.loadURL(openUrl);
+        return { action: 'deny' };
+      } catch (e) {
+        return { action: 'allow' };
+      }
+    });
+  } catch (e) { }
+
+  fullBrowserWindow.once('ready-to-show', () => {
+    try {
+      fullBrowserWindow.show();
+      fullBrowserWindow.focus();
+    } catch (e) { }
+  });
+
+  fullBrowserWindow.webContents.on('page-title-updated', (event, title) => {
+    try {
+      if (title && !fullBrowserWindow.isDestroyed()) {
+        fullBrowserWindow.setTitle(`${title} - Discovery Browser`);
+      }
+    } catch (e) { }
+  });
+
+  fullBrowserWindow.on('closed', () => {
+    const current = promotedChallengeWindows.get(normalizedUrl);
+    if (current === fullBrowserWindow) {
+      promotedChallengeWindows.delete(normalizedUrl);
+    }
+  });
+
+  promotedChallengeWindows.set(normalizedUrl, fullBrowserWindow);
+  fullBrowserWindow.loadURL(targetUrl).catch((err) => {
+    console.error('[Challenge Browser] Failed to load URL:', err);
+    const current = promotedChallengeWindows.get(normalizedUrl);
+    if (current === fullBrowserWindow) {
+      promotedChallengeWindows.delete(normalizedUrl);
+    }
+    try {
+      if (!fullBrowserWindow.isDestroyed()) {
+        fullBrowserWindow.close();
+      }
+    } catch (e) { }
+  });
+
+  const sourceCardId = Number(options && options.sourceCardId);
+  if (Number.isFinite(sourceCardId)) {
+    const sourceCard = cardWindows.get(sourceCardId);
+    if (sourceCard && !sourceCard.isDestroyed()) {
+      setTimeout(() => {
+        try {
+          if (!sourceCard.isDestroyed()) sourceCard.close();
+        } catch (e) { }
+      }, 250);
+    }
+  }
+
+  return { opened: true, window: fullBrowserWindow };
+}
+
 function openAuthInExternalBrowser(url, context = {}) {
   if (!url) return { opened: false, launchUrl: null };
   const launchUrl = pickExternalLaunchUrl(url, context);
@@ -1973,7 +2103,7 @@ function createCardDirectly(url, options = {}) {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        sandbox: true,
+        sandbox: false,
         webviewTag: true,
         preload: path.join(__dirname, 'preload-card.js'),
         enableWebSQL: false,
@@ -2056,6 +2186,13 @@ function createCardDirectly(url, options = {}) {
     // Force any window.open/target=_blank to open as a card window
     try {
       cardWindow.webContents.setWindowOpenHandler(({ url: openUrl, referrer }) => {
+        let host = '';
+        try {
+          host = String(new URL(openUrl).hostname || '').toLowerCase();
+        } catch (e) { }
+        if (isSecurityAllowlistedHost(host)) {
+          return { action: 'allow' };
+        }
         let sourceUrl = '';
         try {
           sourceUrl = cardWindow.webContents.getURL();
@@ -2185,6 +2322,7 @@ function createCardDirectly(url, options = {}) {
 
 function openUrlInCard(url, context = {}) {
   try {
+    if (updateEnforcementState.isForcedUpdate) return;
     if (!url) return;
     const targetUrl = String(url).trim();
     if (!isHttpUrl(targetUrl)) {
@@ -3214,30 +3352,10 @@ function setupAddonBlocking() {
   session.defaultSession.webRequest.onBeforeSendHeaders(headerHandler);
   session.defaultSession.webRequest.onBeforeRedirect(redirectHandler);
   // Challenge request logging removed (noise in production).
-  // Setup CSP override handler to allow external scripts like reCAPTCHA
+  // Keep security challenge pages as close to stock Chromium behavior as possible.
+  // Rewriting CSP on Cloudflare/Turnstile pages can cause the challenge to fail.
   const cspOverrideHandler = (details, callback) => {
     const responseHeaders = Object.assign({}, details.responseHeaders);
-    let host = '';
-    try {
-      host = details && details.url ? String(new URL(details.url).hostname || '').toLowerCase() : '';
-    } catch (e) { }
-    // Keep normal browser behavior for most sites; only relax CSP for
-    // known challenge/security hosts where external scripts are required.
-    if (!isSecurityAllowlistedHost(host)) {
-      callback({ responseHeaders });
-      return;
-    }
-    // Remove or relax CSP headers to allow external scripts
-    if (responseHeaders['Content-Security-Policy'] || responseHeaders['content-security-policy']) {
-      // Allow Google scripts and other common external resources
-      const csp = (responseHeaders['Content-Security-Policy'] || responseHeaders['content-security-policy'])[0];
-      const relaxedCsp = csp
-        .replace(/script-src\s+'none'/g, "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com")
-        .replace(/object-src\s+'none'/g, "object-src 'self' data:")
-        .replace(/frame-ancestors\s+'none'/g, "frame-ancestors *");
-      responseHeaders['Content-Security-Policy'] = [relaxedCsp];
-      responseHeaders['content-security-policy'] = [relaxedCsp];
-    }
     callback({ responseHeaders });
   };
 
@@ -3276,6 +3394,13 @@ function setupAddonBlocking() {
 // Enhanced create-card handler with beautiful animations
 ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'primary', launchSizeMode = null, isBubbleMode = null) => {
   try {
+    if (updateEnforcementState.isForcedUpdate) {
+      return {
+        success: false,
+        blockedByUpdate: true,
+        error: 'A required update must be installed before continuing.'
+      };
+    }
     const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'frost']);
     const normalizedTheme = allowedThemes.has(String(themeKey || '').toLowerCase())
       ? String(themeKey || '').toLowerCase()
@@ -3341,7 +3466,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        sandbox: true,
+        sandbox: false,
         webviewTag: true,
         preload: path.join(__dirname, 'preload-card.js'),
         // PERFORMANCE OPTIMIZATIONS:
@@ -3371,6 +3496,13 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
     // Force any window.open/target=_blank to open as a card window
     try {
       cardWindow.webContents.setWindowOpenHandler(({ url, referrer }) => {
+        let host = '';
+        try {
+          host = String(new URL(url).hostname || '').toLowerCase();
+        } catch (e) { }
+        if (isSecurityAllowlistedHost(host)) {
+          return { action: 'allow' };
+        }
         let sourceUrl = '';
         try {
           sourceUrl = cardWindow.webContents.getURL();
@@ -3485,6 +3617,9 @@ ipcMain.handle('update-card-position', async (event, cardId, x, y) => {
 // Navigate card to URL
 ipcMain.handle('navigate-card', async (event, cardId, url) => {
   try {
+    if (updateEnforcementState.isForcedUpdate) {
+      return { success: false, blockedByUpdate: true, error: 'A required update must be installed before continuing.' };
+    }
     const cardWindow = cardWindows.get(cardId);
     if (!cardWindow || cardWindow.isDestroyed()) {
       return { success: false, error: 'Card window not found' };
@@ -4358,7 +4493,26 @@ ipcMain.on('cloudflare-challenge', (event, payload) => {
     if (!targetUrl) return;
     const cardWindow = cardWindows.get(cardId);
     if (cardWindow && !cardWindow.isDestroyed()) {
-      cardWindow.webContents.send('cloudflare-challenge-banner', { url: targetUrl });
+      cardWindow.webContents.send('cloudflare-challenge-banner', {
+        url: targetUrl,
+        mode: 'full-browser-handoff',
+        message: 'This site needs Full Browser Mode. Your site card experience may change while we move you into a more compatible window.'
+      });
+      setTimeout(() => {
+        try {
+          const promoted = openChallengeInFullBrowserWindow(targetUrl, { sourceCardId: cardId });
+          if (!promoted || !promoted.opened) {
+            openExternalBrowserForChallenge(targetUrl);
+          }
+        } catch (e) {
+          openExternalBrowserForChallenge(targetUrl);
+        }
+      }, 900);
+      return;
+    }
+    const promoted = openChallengeInFullBrowserWindow(targetUrl, { sourceCardId: cardId });
+    if (!promoted || !promoted.opened) {
+      openExternalBrowserForChallenge(targetUrl);
     }
   } catch (e) { }
 });
@@ -4674,6 +4828,64 @@ function compareVersions(a, b) {
   return 0;
 }
 
+function parseBooleanLike(value) {
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'required' || normalized === 'forced';
+}
+
+function resolveRemoteUpdatePolicy(payload = {}) {
+  const remoteMode = String(
+    payload.updateMode
+    || payload.update_mode
+    || payload.releaseChannel
+    || payload.release_channel
+    || ''
+  ).trim().toLowerCase();
+  const forceUpdate = parseBooleanLike(
+    payload.forceUpdate
+    ?? payload.force_update
+    ?? payload.required
+    ?? payload.requiredUpdate
+    ?? payload.required_update
+  );
+  const policy = remoteMode === 'forced' || remoteMode === 'required'
+    ? 'forced'
+    : (forceUpdate ? 'forced' : 'lenient');
+  return {
+    updatePolicy: policy,
+    isForcedUpdate: policy === 'forced',
+  };
+}
+
+const updateEnforcementState = {
+  isForcedUpdate: false,
+  latestVersion: '',
+  updateUrl: '',
+  updateMessage: '',
+  checkedAt: 0,
+};
+
+function setUpdateEnforcementState(nextState = {}) {
+  updateEnforcementState.isForcedUpdate = !!nextState.isForcedUpdate;
+  updateEnforcementState.latestVersion = String(nextState.latestVersion || '').trim();
+  updateEnforcementState.updateUrl = String(nextState.updateUrl || '').trim();
+  updateEnforcementState.updateMessage = String(nextState.updateMessage || '').trim();
+  updateEnforcementState.checkedAt = Date.now();
+}
+
+function closeAllCardsForForcedUpdate() {
+  for (const [cardId, cardWindow] of cardWindows.entries()) {
+    try {
+      closeCardBubble(cardId);
+      closeVisualizerWidget(cardId);
+      if (cardWindow && !cardWindow.isDestroyed()) {
+        cardWindow.close();
+      }
+    } catch (e) { }
+  }
+}
+
 function getConfiguredUpdateUrl() {
   const fallback = 'https://discovery-browser.onrender.com';
   const candidate = String(process.env.DISCOVERY_UPDATE_URL || fallback).trim();
@@ -4713,15 +4925,16 @@ async function fetchLatestVersionFromRemote() {
   const sourceUrl = getConfiguredUpdateCheckUrl();
   const endpoints = [sourceUrl];
   if (sourceUrl.endsWith('/')) {
-    endpoints.push(`${sourceUrl}version.json`);
     endpoints.push(`${sourceUrl}update.json`);
+    endpoints.push(`${sourceUrl}version.json`);
     endpoints.push(`${sourceUrl}api/version`);
   } else {
-    endpoints.push(`${sourceUrl}/version.json`);
     endpoints.push(`${sourceUrl}/update.json`);
+    endpoints.push(`${sourceUrl}/version.json`);
     endpoints.push(`${sourceUrl}/api/version`);
   }
 
+  let bestMatch = null;
   for (const endpoint of endpoints) {
     try {
       const controller = new AbortController();
@@ -4746,13 +4959,30 @@ async function fetchLatestVersionFromRemote() {
       }
 
       if (version) {
-        return { latestVersion: version, source: endpoint, payload };
+        const candidate = { latestVersion: version, source: endpoint, payload };
+        const hasPolicy = !!(payload && (
+          payload.updateMode
+          || payload.update_mode
+          || payload.forceUpdate
+          || payload.force_update
+          || payload.required
+          || payload.requiredUpdate
+        ));
+        if (hasPolicy) {
+          return candidate;
+        }
+        if (!bestMatch) {
+          bestMatch = candidate;
+        }
       }
     } catch (e) {
       // Try next endpoint.
     }
   }
 
+  if (bestMatch) {
+    return bestMatch;
+  }
   return { latestVersion: '', source: sourceUrl, payload: {} };
 }
 
@@ -4760,19 +4990,31 @@ ipcMain.handle('get-update-status', async () => {
   try {
     const currentVersion = String(app.getVersion ? app.getVersion() : '0.0.0');
     const remote = await fetchLatestVersionFromRemote();
-    const envLatestVersion = String(process.env.DISCOVERY_LATEST_VERSION || '').trim();
-    const latestVersion = String(remote.latestVersion || envLatestVersion || '').trim();
+    const latestVersion = String(remote.latestVersion || '').trim();
     // Use updateUrl from remote response (e.g., sourceforge), fall back to configured URL
     const updateUrl = (remote.payload && remote.payload.updateUrl) || getConfiguredUpdateUrl();
-    const updateMessage = String(process.env.DISCOVERY_UPDATE_MESSAGE || remote.payload?.message || '').trim();
+    const updateMessage = String(remote.payload?.message || '').trim();
+    const policy = resolveRemoteUpdatePolicy(remote.payload || {});
     const hasLatest = latestVersion.length > 0;
     const isUpdateAvailable = hasLatest ? compareVersions(latestVersion, currentVersion) > 0 : false;
+    const isForcedUpdate = isUpdateAvailable && policy.isForcedUpdate;
+    setUpdateEnforcementState({
+      isForcedUpdate,
+      latestVersion: hasLatest ? latestVersion : currentVersion,
+      updateUrl,
+      updateMessage,
+    });
+    if (isForcedUpdate) {
+      closeAllCardsForForcedUpdate();
+    }
 
     return {
       success: true,
       currentVersion,
       latestVersion: hasLatest ? latestVersion : currentVersion,
       isUpdateAvailable,
+      isForcedUpdate,
+      updatePolicy: policy.updatePolicy,
       updateUrl,
       checkedFrom: remote.source || getConfiguredUpdateCheckUrl(),
       updateMessage: updateMessage || (isUpdateAvailable
@@ -4786,6 +5028,8 @@ ipcMain.handle('get-update-status', async () => {
       currentVersion: String(app.getVersion ? app.getVersion() : '0.0.0'),
       latestVersion: '',
       isUpdateAvailable: false,
+      isForcedUpdate: false,
+      updatePolicy: 'lenient',
       updateUrl: getConfiguredUpdateUrl(),
       updateMessage: 'Unable to check update status right now.'
     };
