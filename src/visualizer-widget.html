@@ -213,10 +213,17 @@
       grid-column: span 1;
     }
 
-    .control-btn.lock {
-      grid-column: span 2;
+    .control-btn.lock,
+    .control-btn.flames {
+      grid-column: span 1;
       background: linear-gradient(135deg, rgba(104, 184, 255, 0.22), rgba(255, 214, 92, 0.18));
       box-shadow: 0 8px 18px rgba(7, 14, 31, 0.2);
+    }
+
+    .control-btn.flames[disabled] {
+      opacity: 0.56;
+      cursor: default;
+      transform: none;
     }
 
     .volume-slider {
@@ -567,7 +574,8 @@
       <button class="control-btn wide" id="mute-btn" type="button">Mute</button>
       <button class="control-btn wide" id="seek-back-btn" type="button">Rewind 10s</button>
       <button class="control-btn wide" id="seek-forward-btn" type="button">Forward 10s</button>
-      <button class="control-btn lock" id="visual-lock-btn" type="button">Visual Lock</button>
+      <button class="control-btn lock" id="visual-lock-btn" type="button">Lock View</button>
+      <button class="control-btn flames" id="side-flames-btn" type="button">Flames Off</button>
       <input class="volume-slider" id="volume-slider" type="range" min="0" max="100" value="100" />
     </div>
   </div>
@@ -619,6 +627,7 @@
     const seekBackBtn = document.getElementById('seek-back-btn');
     const seekForwardBtn = document.getElementById('seek-forward-btn');
     const visualLockBtn = document.getElementById('visual-lock-btn');
+    const sideFlamesBtn = document.getElementById('side-flames-btn');
     const volumeSlider = document.getElementById('volume-slider');
     const themeClasses = ['theme-primary', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-frost'];
     const styleClasses = ['style-bars', 'style-pulse', 'style-ladder', 'style-orbit'];
@@ -760,6 +769,20 @@
       if (lockVisualizer) lockVisualizer.classList.toggle('playing', !!widgetState.isPlaying);
       if (playToggleBtn) playToggleBtn.textContent = widgetState.isPlaying ? 'Pause' : 'Play';
       if (muteBtn) muteBtn.textContent = widgetState.muted ? 'Unmute' : 'Mute';
+      if (visualLockBtn) {
+        visualLockBtn.textContent = widgetState.visualLock ? 'Lock On' : 'Lock View';
+      }
+      if (sideFlamesBtn) {
+        const flamesAvailable = String(widgetState.cardShape || 'default').toLowerCase() === 'wave';
+        const flamesEnabled = widgetState.sideFlamesEnabled === true;
+        sideFlamesBtn.disabled = !flamesAvailable;
+        sideFlamesBtn.textContent = flamesAvailable
+          ? (flamesEnabled ? 'Flames On' : 'Flames Off')
+          : 'Flames N/A';
+        sideFlamesBtn.title = flamesAvailable
+          ? 'Toggle side flames'
+          : 'Side flames are available on wave windows only';
+      }
       if (volumeSlider && Number.isFinite(Number(widgetState.volume))) {
         volumeSlider.value = String(Math.round(Math.max(0, Math.min(1, Number(widgetState.volume))) * 100));
       }
@@ -821,6 +844,14 @@
       visualLockBtn.addEventListener('click', (event) => {
         event.stopPropagation();
         sendAction('visual-lock');
+      });
+    }
+
+    if (sideFlamesBtn) {
+      sideFlamesBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (sideFlamesBtn.disabled) return;
+        sendAction('side-flames-toggle');
       });
     }
 

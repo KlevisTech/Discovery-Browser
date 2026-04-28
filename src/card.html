@@ -11,11 +11,15 @@
       try {
         const params = new URLSearchParams(window.location.search || '');
         const rawTheme = String(params.get('theme') || 'primary').toLowerCase();
+        const rawShape = String(params.get('shape') || 'default').toLowerCase();
         const normalizedTheme = rawTheme === 'alt' ? 'sunset' : rawTheme;
         const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'frost']);
+        const normalizedShape = rawShape === 'wave' ? 'wave' : 'default';
         const themeClass = allowedThemes.has(normalizedTheme) ? `theme-${normalizedTheme}` : 'theme-primary';
         document.documentElement.classList.add(themeClass);
         document.documentElement.setAttribute('data-card-theme', themeClass.replace('theme-', ''));
+        document.documentElement.classList.add(`card-shape-${normalizedShape}`);
+        document.documentElement.setAttribute('data-card-shape', normalizedShape);
       } catch (e) { }
     })();
   </script>
@@ -98,7 +102,7 @@ body {
       }
       100% {
         transform: scaleY(1) scaleX(1) translateZ(0);
-        clip-path: inset(0 0 0 0 round 24px);
+        clip-path: var(--card-final-clip);
         opacity: 1;
         filter: brightness(1);
       }
@@ -107,7 +111,7 @@ body {
     @keyframes tvCloseCollapse {
       0% {
         transform: scaleY(1) scaleX(1) translateZ(0);
-        clip-path: inset(0 0 0 0 round 24px);
+        clip-path: var(--card-final-clip);
         opacity: 1;
         filter: brightness(1);
       }
@@ -191,9 +195,11 @@ body {
       --launch-signal-core: rgba(255, 255, 255, 0.2);
       --launch-signal-glow: rgba(255, 255, 255, 0.12);
       --launch-signal-shadow: rgba(0, 0, 0, 0.18);
+      --card-final-clip: inset(0 0 0 0 round 24px);
       background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
       border: 6px solid rgba(255, 255, 255, 0.35);
       border-radius: 24px;
+      clip-path: var(--card-final-clip);
       box-shadow:
         0 25px 50px rgba(0, 0, 0, 0.3),
         0 0 0 1px rgba(255, 255, 255, 0.1) inset,
@@ -204,6 +210,16 @@ body {
       will-change: transform, opacity, clip-path, filter;
       transform: translateZ(0);
       backface-visibility: hidden;
+    }
+
+    .card-window.shape-wave {
+      --card-final-clip: url(#site-card-shape);
+      border: none;
+      border-radius: 0;
+    }
+
+    .card-window.shape-wave .card-titlebar {
+      padding: 0 2px;
     }
 
     /* Theme-specific card window backgrounds and borders */
@@ -270,6 +286,60 @@ body {
       --launch-signal-shadow: rgba(96, 112, 126, 0.16);
       background: linear-gradient(135deg, #c8d2dc 0%, #e6ebf0 55%, #d7e0e8 100%);
       border-color: rgba(240, 247, 255, 0.78);
+    }
+
+    .card-shape-outline {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 6;
+    }
+
+    .card-window:not(.shape-wave) .card-shape-outline {
+      display: none;
+    }
+
+    .card-shape-outline path {
+      fill: none;
+      stroke: rgba(255, 255, 255, 0.62);
+      stroke-width: 11;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+      filter:
+        drop-shadow(0 0 8px rgba(255, 255, 255, 0.22))
+        drop-shadow(0 0 18px rgba(255, 255, 255, 0.14));
+    }
+
+    .theme-sunset .card-shape-outline path,
+    .theme-alt .card-shape-outline path {
+      stroke: rgba(255, 225, 234, 0.72);
+    }
+
+    .theme-ocean .card-shape-outline path {
+      stroke: rgba(206, 241, 255, 0.72);
+    }
+
+    .theme-emerald .card-shape-outline path {
+      stroke: rgba(220, 255, 238, 0.7);
+    }
+
+    .theme-amber .card-shape-outline path {
+      stroke: rgba(255, 233, 198, 0.72);
+    }
+
+    .theme-midnight .card-shape-outline path {
+      stroke: rgba(186, 198, 232, 0.66);
+    }
+
+    .theme-cocoa .card-shape-outline path {
+      stroke: rgba(244, 223, 206, 0.68);
+    }
+
+    .theme-frost .card-shape-outline path {
+      stroke: rgba(255, 255, 255, 0.94);
     }
 
     /* Shimmer effect on card appearance */
@@ -711,8 +781,36 @@ body {
       animation: contentFadeIn 0.46s ease 0.14s backwards;
     }
 
+    .card-content::-webkit-scrollbar,
+    .card-content *::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+
+    .card-content::-webkit-scrollbar-track,
+    .card-content *::-webkit-scrollbar-track {
+      background: rgba(15, 20, 35, 0.18);
+      border-radius: 999px;
+    }
+
+    .card-content::-webkit-scrollbar-thumb,
+    .card-content *::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, rgba(111, 167, 255, 0.9), rgba(249, 122, 195, 0.9));
+      border-radius: 999px;
+      border: 2px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .card-content::-webkit-scrollbar-thumb:hover,
+    .card-content *::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, rgba(130, 184, 255, 0.98), rgba(255, 145, 209, 0.98));
+    }
+
     .card-content.is-awaiting-first-content {
       background: inherit;
+    }
+
+    .card-window.shape-wave .card-content {
+      background: transparent;
     }
 
     .card-launch-fill {
@@ -1901,9 +1999,15 @@ body {
       height: 100%;
       display: flex;
       position: relative;
+      box-sizing: border-box;
+      padding: 0;
       z-index: 1;
       opacity: 1;
       transition: opacity 180ms ease;
+    }
+
+    .card-window.shape-wave .split-container {
+      padding: 0 22px 14px 2px;
     }
 
     .split-pane {
@@ -1911,6 +2015,8 @@ body {
       min-width: 0;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
+      border-radius: 14px;
     }
 
     .split-pane-left {
@@ -1927,6 +2033,21 @@ body {
       flex: 1 1 auto;
       display: none;
       background: rgba(8, 12, 20, 0.85);
+    }
+
+    #card-webview,
+    #split-webview {
+      border-radius: 14px;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    .card-window.shape-wave #card-webview {
+      margin-right: 0;
+    }
+
+    .card-window.shape-wave .split-container.split-active #card-webview {
+      margin-right: 0;
     }
 
     .split-container.split-active .split-divider {
@@ -2045,7 +2166,17 @@ body {
 </head>
 
 <body>
-  <div class="card-window">
+  <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+    <defs>
+      <clipPath id="site-card-shape" clipPathUnits="objectBoundingBox">
+        <path d="M0.001,0.046 C0.001,0.016 0.012,0.004 0.036,0.004 L0.964,0.004 C0.988,0.004 0.999,0.016 0.999,0.046 L0.999,0.822 C0.999,0.912 0.958,0.966 0.916,0.966 C0.863,0.966 0.831,0.908 0.715,0.908 C0.625,0.908 0.568,0.955 0.5,0.955 C0.432,0.955 0.375,0.908 0.285,0.908 C0.169,0.908 0.137,0.966 0.084,0.966 C0.042,0.966 0.001,0.912 0.001,0.822 Z" />
+      </clipPath>
+    </defs>
+  </svg>
+  <div class="card-window shape-default">
+    <svg class="card-shape-outline" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      <path d="M1 46 C1 16 12 4 36 4 L964 4 C988 4 999 16 999 46 L999 822 C999 912 958 966 916 966 C863 966 831 908 715 908 C625 908 568 955 500 955 C432 955 375 908 285 908 C169 908 137 966 84 966 C42 966 1 912 1 822 Z" />
+    </svg>
     <!-- Titlebar with navigation and close button -->
     <div class="card-titlebar">
       <div style="display:flex; align-items:center; gap:2px; -webkit-app-region: no-drag; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 4px 6px; backdrop-filter: blur(8px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 8px rgba(0,0,0,0.2);">
@@ -2116,6 +2247,7 @@ body {
           <span class="media-remaining-time" id="media-remaining-time">--:--</span>
         </label>
         <button class="media-control-btn" id="media-visualizer-style-btn" type="button" title="Change visualizer style">Viz</button>
+        <button class="media-control-btn" id="media-side-flames-btn" type="button" title="Toggle side flames">Flames</button>
         <button class="media-control-btn" id="media-visual-lock-btn" type="button" title="Enter visual lock">Lock</button>
         <button class="media-control-btn" id="media-mute-btn" type="button">Mute</button>
       </div>
@@ -2177,6 +2309,8 @@ body {
     const encodedUrl = params.get('url');
     const theme = (params.get('theme') || 'primary').toLowerCase();
     const normalizedTheme = theme === 'alt' ? 'sunset' : theme;
+    const shape = (params.get('shape') || 'default').toLowerCase();
+    const normalizedShape = shape === 'wave' ? 'wave' : 'default';
 
     let initialUrl = null;
     if (encodedUrl) {
@@ -2193,9 +2327,11 @@ body {
     if (cardWindowEl) {
       const allThemeClasses = ['theme-alt', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-frost'];
       allThemeClasses.forEach((cls) => cardWindowEl.classList.remove(cls));
+      cardWindowEl.classList.remove('shape-default', 'shape-wave');
       if (normalizedTheme !== 'primary') {
         cardWindowEl.classList.add(`theme-${normalizedTheme}`);
       }
+      cardWindowEl.classList.add(`shape-${normalizedShape}`);
       // Set opening animation based on mode (skip for bubble mode - show instantly)
       if (!isBubbleMode) {
         cardWindowEl.classList.add('is-opening-tv');
@@ -2236,13 +2372,17 @@ body {
     const mediaToggleBtn = document.getElementById('media-toggle-btn');
     const mediaVolumeSlider = document.getElementById('media-volume-slider');
     const mediaVisualizerStyleBtn = document.getElementById('media-visualizer-style-btn');
+    const mediaSideFlamesBtn = document.getElementById('media-side-flames-btn');
     const mediaVisualLockBtn = document.getElementById('media-visual-lock-btn');
     const mediaMuteBtn = document.getElementById('media-mute-btn');
     const mediaRemainingTime = document.getElementById('media-remaining-time');
     const mediaSeekBackBtn = document.getElementById('media-seek-back-btn');
     const mediaSeekForwardBtn = document.getElementById('media-seek-forward-btn');
     let visualizerEnabled = true;
+    let sideFlamesEnabled = false;
     const VISUALIZER_STYLE_STORAGE_KEY = 'card_visualizer_style';
+    const SIDE_FLAMES_STORAGE_KEY = 'card_side_flames_enabled';
+    const MEDIA_VOLUME_STORAGE_KEY = 'card_media_volume';
     const VISUALIZER_STYLES = [
       { key: 'bars', label: 'Bars' },
       { key: 'pulse', label: 'Pulse' },
@@ -2250,6 +2390,17 @@ body {
       { key: 'orbit', label: 'Orbit' },
     ];
     let activeVisualizerStyleKey = localStorage.getItem(VISUALIZER_STYLE_STORAGE_KEY) || 'bars';
+    const savedSideFlamesPreference = localStorage.getItem(SIDE_FLAMES_STORAGE_KEY);
+    if (savedSideFlamesPreference === 'true' || savedSideFlamesPreference === 'false') {
+      sideFlamesEnabled = savedSideFlamesPreference === 'true';
+    }
+    const savedMediaVolumePreference = Number(localStorage.getItem(MEDIA_VOLUME_STORAGE_KEY));
+    let preferredMediaVolume = Number.isFinite(savedMediaVolumePreference)
+      ? Math.max(0, Math.min(1, savedMediaVolumePreference))
+      : 1;
+    if (mediaVolumeSlider) {
+      mediaVolumeSlider.value = String(Math.round(preferredMediaVolume * 100));
+    }
     let lastActiveMediaWebview = null;
     let mediaBufferingOptimizationTimer = null;
 
@@ -2331,6 +2482,48 @@ body {
     const ZOOM_MAX = 3.0;
     const ZOOM_STEP = 0.1;
     let zoomHideTimer = null;
+
+    function focusActiveBrowsingSurface(deferMs = 0) {
+      const activeSurface = (isSplitView && splitWebview) ? splitWebview : webview;
+      if (!activeSurface || typeof activeSurface.focus !== 'function') return;
+      const applyFocus = () => {
+        try {
+          activeSurface.focus();
+        } catch (e) { }
+      };
+      if (deferMs > 0) {
+        setTimeout(applyFocus, deferMs);
+      } else {
+        applyFocus();
+      }
+    }
+
+    function shouldPreserveShellFocus(target) {
+      if (!target || !target.closest) return false;
+      return !!target.closest(
+        '.card-titlebar, .card-button, .split-topbar, .split-url-input, .split-go-btn, .split-reload-btn, .media-hover-control, .security-load-notice, .zoom-controls'
+      );
+    }
+
+    function restoreBrowsingFocusFromShell(event) {
+      const target = event && event.target ? event.target : null;
+      if (shouldPreserveShellFocus(target)) return;
+      focusActiveBrowsingSurface(0);
+    }
+
+    if (cardContent) {
+      cardContent.addEventListener('pointerdown', restoreBrowsingFocusFromShell, true);
+    }
+    if (splitContainer) {
+      splitContainer.addEventListener('pointerdown', restoreBrowsingFocusFromShell, true);
+    }
+    if (webview) {
+      webview.addEventListener('mousedown', () => focusActiveBrowsingSurface(0), true);
+      webview.addEventListener('mouseenter', () => focusActiveBrowsingSurface(0));
+    }
+    if (splitWebview) {
+      splitWebview.addEventListener('mousedown', () => focusActiveBrowsingSurface(0), true);
+    }
 
     const isCloudflareChallengeUrl = (rawUrl) => {
       try {
@@ -3064,7 +3257,7 @@ body {
         isPlaying: true,
         isVideo: mediaType === 'video',
         isVisibleMedia: mediaType === 'video',
-        volume: 1,
+        volume: preferredMediaVolume,
         muted: false,
         hasDuration: false,
         remainingSeconds: null,
@@ -3127,9 +3320,9 @@ body {
             return items.find((m) => (m.currentSrc || m.src)) || items[0] || null;
           };
           const media = Array.from(document.querySelectorAll('video, audio'));
-          if (!media.length) return { hasMedia: false, isPlaying: false, isVideo: false, isVisibleMedia: false, volume: 1, muted: false, hasDuration: false, remainingSeconds: null, isLive: false };
+          if (!media.length) return { hasMedia: false, isPlaying: false, isVideo: false, isVisibleMedia: false, volume: ${preferredMediaVolume}, muted: false, hasDuration: false, remainingSeconds: null, isLive: false };
           const active = pickBestMedia(media);
-          if (!active) return { hasMedia: false, isPlaying: false, isVideo: false, isVisibleMedia: false, volume: 1, muted: false, hasDuration: false, remainingSeconds: null, isLive: false };
+          if (!active) return { hasMedia: false, isPlaying: false, isVideo: false, isVisibleMedia: false, volume: ${preferredMediaVolume}, muted: false, hasDuration: false, remainingSeconds: null, isLive: false };
           const rawVolume = Number(active.volume);
           const volume = Number.isFinite(rawVolume) ? Math.max(0, Math.min(1, rawVolume)) : 1;
           const duration = Number(active.duration);
@@ -3222,6 +3415,62 @@ body {
       applyVisualizerStyle(VISUALIZER_STYLES[nextIndex].key);
     }
 
+    function clampMediaVolume(value) {
+      return Number.isFinite(Number(value)) ? Math.max(0, Math.min(1, Number(value))) : 1;
+    }
+
+    function setPreferredMediaVolume(value, persist = true) {
+      preferredMediaVolume = clampMediaVolume(value);
+      if (persist) {
+        localStorage.setItem(MEDIA_VOLUME_STORAGE_KEY, String(preferredMediaVolume));
+      }
+      if (mediaVolumeSlider && !mediaHoverControl?.classList.contains('active')) {
+        mediaVolumeSlider.value = String(Math.round(preferredMediaVolume * 100));
+      }
+    }
+
+    async function applyPreferredVolumeToTarget(targetWebview) {
+      if (!targetWebview) return false;
+      const script = `
+        (() => {
+          const media = Array.from(document.querySelectorAll('video, audio'));
+          if (!media.length) return null;
+          let changed = false;
+          for (const entry of media) {
+            entry.volume = ${preferredMediaVolume};
+            if (entry.volume > 0 && entry.muted) entry.muted = false;
+            changed = true;
+          }
+          return changed;
+        })();
+      `;
+      try {
+        const result = await runMediaScript(targetWebview, script, { bypassPending: true });
+        if (result) {
+          clearMediaStateCache(targetWebview);
+          return true;
+        }
+      } catch (e) { }
+      return false;
+    }
+
+    function updateSideFlamesButton() {
+      if (!mediaSideFlamesBtn) return;
+      const flamesAvailable = normalizedShape === 'wave';
+      mediaSideFlamesBtn.textContent = flamesAvailable
+        ? (sideFlamesEnabled ? 'Flames On' : 'Flames Off')
+        : 'Flames N/A';
+      mediaSideFlamesBtn.title = flamesAvailable
+        ? 'Toggle side flames'
+        : 'Side flames are available on wave windows only';
+      mediaSideFlamesBtn.setAttribute(
+        'aria-label',
+        flamesAvailable
+          ? `Toggle side flames. Currently ${sideFlamesEnabled ? 'on' : 'off'}`
+          : 'Side flames are available on wave windows only'
+      );
+    }
+
      function publishBubbleMediaState(payload) {
        const bubblePayload = {
          cardId,
@@ -3264,7 +3513,7 @@ body {
          hasDuration: false,
          remainingSeconds: null,
          muted: false,
-         volume: 1
+         volume: preferredMediaVolume
        });
      }
 
@@ -3305,6 +3554,9 @@ body {
       if (mediaVisualLockBtn) {
         mediaVisualLockBtn.disabled = !shouldShow;
       }
+      if (mediaSideFlamesBtn) {
+        mediaSideFlamesBtn.disabled = !shouldShow || normalizedShape !== 'wave';
+      }
       if (mediaSeekBackBtn) {
         mediaSeekBackBtn.disabled = !shouldShow;
       }
@@ -3314,6 +3566,8 @@ body {
       if (mediaVolumeSlider) {
         if (hasVolume && sliderValue !== null) {
           mediaVolumeSlider.value = String(Math.max(0, Math.min(100, sliderValue)));
+        } else {
+          mediaVolumeSlider.value = String(Math.round(preferredMediaVolume * 100));
         }
         mediaVolumeSlider.disabled = !shouldShow;
       }
@@ -3423,7 +3677,7 @@ body {
         lastActiveMediaWebview = fallback.target;
         return fallback;
       }
-      return { target: null, state: { hasMedia: false, isPlaying: false, isVideo: false, volume: 1, muted: false } };
+      return { target: null, state: { hasMedia: false, isPlaying: false, isVideo: false, volume: preferredMediaVolume, muted: false } };
     }
 
     async function syncMediaControlState() {
@@ -3442,7 +3696,7 @@ body {
 
     function setAudioVisualizer(isActive) {
       if (!visualizerEnabled) {
-        renderMediaControl({ hasMedia: false, isPlaying: false, isVideo: false, volume: 1, muted: false });
+        renderMediaControl({ hasMedia: false, isPlaying: false, isVideo: false, volume: preferredMediaVolume, muted: false });
         stopMediaRemainingTicker();
         return;
       }
@@ -3452,7 +3706,7 @@ body {
           scheduleMediaPanelSyncStart();
         }
       } else {
-        renderMediaControl({ hasMedia: false, isPlaying: false, isVideo: false, volume: 1, muted: false });
+        renderMediaControl({ hasMedia: false, isPlaying: false, isVideo: false, volume: preferredMediaVolume, muted: false });
         stopMediaRemainingTicker();
       }
     }
@@ -3716,20 +3970,23 @@ body {
         return;
       }
       stopWidgetMediaStateSync();
-      publishBubbleMediaState({ isPlaying: false, hasMedia: false, isVideo: false, isLive: false, hasDuration: false, remainingSeconds: null, muted: false, volume: 1 });
+      publishBubbleMediaState({ isPlaying: false, hasMedia: false, isVideo: false, isLive: false, hasDuration: false, remainingSeconds: null, muted: false, volume: preferredMediaVolume });
     }
 
     let visualizerRefreshToken = 0;
     async function updateVisualizerPlaybackState() {
       visualizerRefreshToken += 1;
       if (!visualizerEnabled) {
-        publishBubbleMediaState({ isPlaying: false, isVideo: false, isLive: false });
+        publishBubbleMediaState({ isPlaying: false, isVideo: false, isLive: false, volume: preferredMediaVolume });
         return;
       }
     }
 
     async function controlMedia(action, value) {
       const safeVolume = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
+      if (action === 'volume') {
+        setPreferredMediaVolume(safeVolume);
+      }
       let script = '';
       if (action === 'toggle') {
         script = `
@@ -3840,6 +4097,31 @@ body {
       });
     }
 
+    updateSideFlamesButton();
+
+    if (mediaSideFlamesBtn) {
+      mediaSideFlamesBtn.addEventListener('click', async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (normalizedShape !== 'wave') return;
+        const nextEnabled = !sideFlamesEnabled;
+        sideFlamesEnabled = nextEnabled;
+        updateSideFlamesButton();
+        try {
+          if (window.cardAPI && typeof window.cardAPI.setSideFlamesEnabled === 'function') {
+            const result = await window.cardAPI.setSideFlamesEnabled(cardId, nextEnabled);
+            if (result && typeof result.enabled === 'boolean') {
+              sideFlamesEnabled = !!result.enabled;
+            }
+          }
+        } catch (e) {
+          sideFlamesEnabled = !nextEnabled;
+        }
+        localStorage.setItem(SIDE_FLAMES_STORAGE_KEY, String(sideFlamesEnabled));
+        updateSideFlamesButton();
+      });
+    }
+
     if (mediaVisualLockBtn) {
       mediaVisualLockBtn.addEventListener('click', (event) => {
         event.preventDefault();
@@ -3932,6 +4214,10 @@ body {
         cycleVisualizerStyle(1);
       } else if (action === 'style-prev') {
         cycleVisualizerStyle(-1);
+      } else if (action === 'side-flames-state') {
+        sideFlamesEnabled = value === true;
+        localStorage.setItem(SIDE_FLAMES_STORAGE_KEY, String(sideFlamesEnabled));
+        updateSideFlamesButton();
       } else if (action === 'visual-lock') {
         setVisualLockActive(true);
       } else if (action === 'visual-unlock') {
@@ -4446,10 +4732,11 @@ body {
          hasDuration: false,
          remainingSeconds: null,
          muted: false,
-         volume: 1
+         volume: preferredMediaVolume
        });
        updateVisualizerPlaybackState();
        updateVisualLockAnimationState(); // Ensure visual lock reflects playing state
+       applyPreferredVolumeToTarget(webview);
        refreshMediaPlayingType(webview);
        setTimeout(() => updateBubblePlaybackState(), 160);
        // Optimize buffering when both videos are playing
@@ -4559,10 +4846,11 @@ body {
            hasDuration: false,
            remainingSeconds: null,
            muted: false,
-           volume: 1
+           volume: preferredMediaVolume
          });
          updateVisualizerPlaybackState();
          updateVisualLockAnimationState(); // Ensure visual lock reflects playing state
+         applyPreferredVolumeToTarget(splitWebview);
          refreshMediaPlayingType(splitWebview);
          setTimeout(() => updateBubblePlaybackState(), 160);
          // Optimize buffering when both videos are playing
@@ -4612,7 +4900,22 @@ body {
         if (mediaPanelOpen) {
           scheduleMediaPanelSyncStart();
         }
-      }).catch(() => { });
+        updateSideFlamesButton();
+      }).catch(() => {
+        updateSideFlamesButton();
+      });
+    }
+
+    if (window.cardAPI && typeof window.cardAPI.setSideFlamesEnabled === 'function') {
+      window.cardAPI.setSideFlamesEnabled(cardId, sideFlamesEnabled).then((result) => {
+        if (result && typeof result.enabled === 'boolean') {
+          sideFlamesEnabled = !!result.enabled;
+        }
+        localStorage.setItem(SIDE_FLAMES_STORAGE_KEY, String(sideFlamesEnabled));
+        updateSideFlamesButton();
+      }).catch(() => {
+        updateSideFlamesButton();
+      });
     }
 
     // Check if current page is bookmarked

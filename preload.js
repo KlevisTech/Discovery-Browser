@@ -11,7 +11,7 @@ const electronAPI = {
   // ========================
   // Card management
   // ========================
-  createCard: (cardId, url, position, themeKey, launchSizeMode, isBubbleMode) => ipcRenderer.invoke('create-card', cardId, url, position, themeKey, launchSizeMode, isBubbleMode),
+  createCard: (cardId, url, position, themeKey, launchSizeMode, isBubbleMode, shapeKey) => ipcRenderer.invoke('create-card', cardId, url, position, themeKey, launchSizeMode, isBubbleMode, shapeKey),
   closeCard: (cardId) => ipcRenderer.invoke('close-card', cardId),
 
   // Card navigation
@@ -149,6 +149,8 @@ const electronAPI = {
   getCardTheme: () => ipcRenderer.invoke('get-card-theme'),
   setCardLaunchSizeMode: (mode) => ipcRenderer.invoke('set-card-launch-size-mode', mode),
   getCardLaunchSizeMode: () => ipcRenderer.invoke('get-card-launch-size-mode'),
+  setCardShape: (shapeKey) => ipcRenderer.invoke('set-card-shape', shapeKey),
+  getCardShape: () => ipcRenderer.invoke('get-card-shape'),
   setSiteLayoutOverrides: (overrides) => ipcRenderer.invoke('set-site-layout-overrides', overrides),
 
   // Favorites management

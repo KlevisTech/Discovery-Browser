@@ -173,6 +173,9 @@
             <button id="settings-tab-window-size"
               style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🪟
               Window Size</button>
+            <button id="settings-tab-window-shape"
+              style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">◧
+              Window Shape</button>
             <button id="settings-tab-themes"
               style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🎨
               Themes</button>
@@ -261,6 +264,11 @@
             </div>
             <div id="site-layout-list" style="max-height: 180px; overflow-y: auto;"></div>
           </div>
+        </div>
+        <div id="settings-window-shape-tab" style="display: none;">
+          <h3 style="margin: 0 0 10px 0; color: white; font-size: 13px;">Card Window Shape</h3>
+          <p style="margin: 0 0 10px 0; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.4;">Choose the default card shell for new site cards. Default keeps the original rounded window.</p>
+          <div id="window-shape-options" class="theme-options"></div>
         </div>
         <!-- Themes tab content (hidden by default) -->
         <div id="settings-themes-tab" style="display: none;">

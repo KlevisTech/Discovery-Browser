@@ -63,6 +63,8 @@ contextBridge.exposeInMainWorld('cardAPI', {
 
   // Get card launch size mode (normal, wide, fullscreen)
   getCardLaunchSizeMode: () => ipcRenderer.invoke('get-card-launch-size-mode'),
+  getSideFlamesEnabled: (cardId) => ipcRenderer.invoke('get-side-flames-enabled', cardId),
+  setSideFlamesEnabled: (cardId, enabled) => ipcRenderer.invoke('set-side-flames-enabled', cardId, enabled),
 
   // Get current window position
   getWindowPosition: () => {

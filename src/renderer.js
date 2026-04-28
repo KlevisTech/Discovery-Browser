@@ -78,6 +78,7 @@ class DiscoveryBrowser {
     this.searchEngineKey = 'google';
     this.cardThemeKey = 'primary';
     this.cardLaunchSizeMode = 'normal';
+    this.cardShapeKey = 'default';
     this.siteLayoutOverrides = {}; // hostname -> 'normal' | 'wide' | 'fullscreen'
     this.cardThemes = [
       {
@@ -149,6 +150,20 @@ class DiscoveryBrowser {
         preview: 'linear-gradient(135deg, rgba(41,45,58,0.9), rgba(20,22,32,0.92))',
       },
     ];
+    this.cardShapes = [
+      {
+        key: 'default',
+        name: 'Default',
+        description: 'Original rounded card window used by Discovery.',
+        preview: 'linear-gradient(135deg, rgba(102,126,234,0.58), rgba(240,147,251,0.58))',
+      },
+      {
+        key: 'wave',
+        name: 'Wave',
+        description: 'Rounded top with the custom flowing bottom edge.',
+        preview: 'linear-gradient(135deg, rgba(78,132,255,0.65), rgba(255,140,196,0.62))',
+      },
+    ];
 
     // Layout constants
     this.headerBarHeight = 88;
@@ -190,6 +205,7 @@ class DiscoveryBrowser {
     this.searchEngineSelect = document.getElementById('search-engine-select');
     this.themeOptionsEl = document.getElementById('theme-options');
     this.windowSizeOptionsEl = document.getElementById('window-size-options');
+    this.windowShapeOptionsEl = document.getElementById('window-shape-options');
     this.googleSearchInput = googleSearchInput;
 
     // Search input handler - create card on Enter key
@@ -286,10 +302,12 @@ class DiscoveryBrowser {
     this.loadSearchEngine();
     this.loadCardTheme();
     await this.loadCardLaunchSizeMode();
+    await this.loadCardShape();
     this.loadSiteLayoutOverrides();
     this.applySearchEngineToUI();
     this.renderThemeOptions();
     this.renderWindowSizeOptions();
+    this.renderWindowShapeOptions();
     if (this.searchEngineSelect) {
       this.populateSearchEngineSelect();
       this.searchEngineSelect.value = this.searchEngineKey;
@@ -740,6 +758,7 @@ class DiscoveryBrowser {
     const tabDownloads = document.getElementById('settings-tab-downloads');
     const tabSearch = document.getElementById('settings-tab-search');
     const tabWindowSize = document.getElementById('settings-tab-window-size');
+    const tabWindowShape = document.getElementById('settings-tab-window-shape');
     const tabThemes = document.getElementById('settings-tab-themes');
     const tabDeleteData = document.getElementById('settings-tab-delete-data');
     const paneHistory = document.getElementById('settings-history-tab');
@@ -748,6 +767,7 @@ class DiscoveryBrowser {
     const paneDownloads = document.getElementById('settings-downloads-tab');
     const paneSearch = document.getElementById('settings-search-tab');
     const paneWindowSize = document.getElementById('settings-window-size-tab');
+    const paneWindowShape = document.getElementById('settings-window-shape-tab');
     const paneThemes = document.getElementById('settings-themes-tab');
     const paneDeleteData = document.getElementById('settings-delete-data-tab');
     const deleteDataBtn = document.getElementById('delete-data-btn');
@@ -822,6 +842,7 @@ class DiscoveryBrowser {
       setActive(tabDownloads, tabName === 'downloads');
       setActive(tabSearch, tabName === 'search');
       setActive(tabWindowSize, tabName === 'window-size');
+      setActive(tabWindowShape, tabName === 'window-shape');
       setActive(tabThemes, tabName === 'themes');
       setActive(tabDeleteData, tabName === 'delete-data');
 
@@ -830,6 +851,7 @@ class DiscoveryBrowser {
       setPane(paneDownloads, tabName === 'downloads');
       setPane(paneSearch, tabName === 'search');
       setPane(paneWindowSize, tabName === 'window-size');
+      setPane(paneWindowShape, tabName === 'window-shape');
       setPane(paneThemes, tabName === 'themes');
       setPane(paneDeleteData, tabName === 'delete-data');
 
@@ -837,6 +859,7 @@ class DiscoveryBrowser {
       if (tabName === 'bookmarks') this.renderBookmarks();
       if (tabName === 'downloads') this.renderDownloadHistory();
       if (tabName === 'window-size') this.renderWindowSizeOptions();
+      if (tabName === 'window-shape') this.renderWindowShapeOptions();
       if (tabName === 'themes') this.renderThemeOptions();
     };
 
@@ -848,8 +871,8 @@ class DiscoveryBrowser {
       }
     };
 
-    console.warn('[Settings] Tab buttons - History:', !!tabHistory, 'Bookmarks:', !!tabBookmarks, 'Downloads:', !!tabDownloads, 'Search:', !!tabSearch, 'WindowSize:', !!tabWindowSize);
-    if (tabHistory && tabBookmarks && tabDownloads && tabSearch && tabWindowSize && tabThemes && tabDeleteData) {
+    console.warn('[Settings] Tab buttons - History:', !!tabHistory, 'Bookmarks:', !!tabBookmarks, 'Downloads:', !!tabDownloads, 'Search:', !!tabSearch, 'WindowSize:', !!tabWindowSize, 'WindowShape:', !!tabWindowShape);
+    if (tabHistory && tabBookmarks && tabDownloads && tabSearch && tabWindowSize && tabWindowShape && tabThemes && tabDeleteData) {
       tabHistory.addEventListener('click', () => {
         toggleSettingsTab('history');
       });
@@ -868,6 +891,10 @@ class DiscoveryBrowser {
 
       tabWindowSize.addEventListener('click', () => {
         toggleSettingsTab('window-size');
+      });
+
+      tabWindowShape.addEventListener('click', () => {
+        toggleSettingsTab('window-shape');
       });
 
       tabThemes.addEventListener('click', () => {
@@ -1174,6 +1201,52 @@ class DiscoveryBrowser {
     this.renderWindowSizeOptions();
   }
 
+  async loadCardShape() {
+    try {
+      const saved = localStorage.getItem('cardShapeKey');
+      if (saved && this.cardShapes.some((shape) => shape.key === saved)) {
+        this.cardShapeKey = saved;
+      }
+    } catch (e) { }
+
+    try {
+      if (window.electronAPI && window.electronAPI.setCardShape) {
+        await window.electronAPI.setCardShape(this.cardShapeKey);
+      }
+    } catch (e) { }
+  }
+
+  async setCardShape(key) {
+    if (!this.cardShapes.some((shape) => shape.key === key)) return;
+    this.cardShapeKey = key;
+    try {
+      localStorage.setItem('cardShapeKey', key);
+    } catch (e) { }
+    try {
+      if (window.electronAPI && window.electronAPI.setCardShape) {
+        await window.electronAPI.setCardShape(key);
+      }
+    } catch (e) { }
+    this.renderWindowShapeOptions();
+  }
+
+  renderWindowShapeOptions() {
+    if (!this.windowShapeOptionsEl) return;
+    this.windowShapeOptionsEl.innerHTML = '';
+    this.cardShapes.forEach((shape) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = `theme-option${this.cardShapeKey === shape.key ? ' is-selected' : ''}`;
+      item.innerHTML = `
+        <div class="theme-option__preview" style="background:${shape.preview};"></div>
+        <div class="theme-option__name">${shape.name}</div>
+        <div class="theme-option__desc">${shape.description}</div>
+      `;
+      item.addEventListener('click', () => this.setCardShape(shape.key));
+      this.windowShapeOptionsEl.appendChild(item);
+    });
+  }
+
   renderWindowSizeOptions() {
     if (!this.windowSizeOptionsEl) return;
     this.windowSizeOptionsEl.innerHTML = '';
@@ -1296,11 +1369,17 @@ class DiscoveryBrowser {
     });
   }
 
-  getCardLaunchWindowDimensions() {
-    if (this.cardLaunchSizeMode === 'wide') {
-      return { width: 1100, height: 600 };
+  getCardLaunchWindowDimensions(mode = this.cardLaunchSizeMode, shapeKey = this.cardShapeKey) {
+    const normalizedMode = mode === 'wide' ? 'wide' : (mode === 'fullscreen' ? 'fullscreen' : 'normal');
+    const normalizedShape = shapeKey === 'wave' ? 'wave' : 'default';
+    if (normalizedMode === 'wide') {
+      return normalizedShape === 'wave'
+        ? { width: 1100, height: 660 }
+        : { width: 1100, height: 600 };
     }
-    return { width: 800, height: 500 };
+    return normalizedShape === 'wave'
+      ? { width: 850, height: 560 }
+      : { width: 850, height: 500 };
   }
 
   getCardLaunchVerticalOffset() {
@@ -3212,6 +3291,8 @@ class DiscoveryBrowser {
     }
     this.searchEngineKey = 'google';
     this.cardThemeKey = 'primary';
+    this.cardLaunchSizeMode = 'normal';
+    this.cardShapeKey = 'default';
     this.siteLayoutOverrides = {};
 
     try {
@@ -3229,6 +3310,9 @@ class DiscoveryBrowser {
       }
       if (window.electronAPI && window.electronAPI.setCardLaunchSizeMode) {
         window.electronAPI.setCardLaunchSizeMode('normal');
+      }
+      if (window.electronAPI && window.electronAPI.setCardShape) {
+        window.electronAPI.setCardShape('default');
       }
       if (window.electronAPI && window.electronAPI.setSiteLayoutOverrides) {
         window.electronAPI.setSiteLayoutOverrides({});
@@ -3248,6 +3332,7 @@ class DiscoveryBrowser {
     this.renderAddons();
     this.applySearchEngineToUI();
     this.renderWindowSizeOptions();
+    this.renderWindowShapeOptions();
     this.renderThemeOptions();
 
     alert('All local data has been deleted.');
@@ -3565,9 +3650,7 @@ class DiscoveryBrowser {
     try {
       const screenWidth = window.screen.availWidth;
       const screenHeight = window.screen.availHeight;
-      const launchSize = effectiveLaunchMode === 'wide'
-        ? { width: 1100, height: 600 }
-        : { width: 800, height: 500 };
+      const launchSize = this.getCardLaunchWindowDimensions(effectiveLaunchMode, this.cardShapeKey);
 
       x = Math.floor((screenWidth - launchSize.width) / 2);
       y = Math.floor((screenHeight - launchSize.height) / 2) + this.getCardLaunchVerticalOffset();
@@ -3590,7 +3673,7 @@ class DiscoveryBrowser {
     this.cards.set(cardId, cardData);
 
     try {
-      const result = await window.electronAPI.createCard(cardId, url, { x, y }, this.cardThemeKey, effectiveLaunchMode);
+      const result = await window.electronAPI.createCard(cardId, url, { x, y }, this.cardThemeKey, effectiveLaunchMode, null, this.cardShapeKey);
 
       if (!result || !result.success) {
         this.cards.delete(cardId);

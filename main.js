@@ -762,17 +762,20 @@ const cardWindows = new Map(); // cardId -> BrowserWindow
 const promotedChallengeWindows = new Map(); // normalizedUrl -> BrowserWindow
 const cardBubbles = new Map(); // cardId -> bubble BrowserWindow
 const visualizerWidgets = new Map(); // cardId -> visualizer BrowserWindow
+const sideFlameWidgets = new Map(); // cardId -> side flames BrowserWindow
 const bubbleNotifications = new Map(); // cardId -> notification count
 const bubbleNotificationSources = new Map(); // cardId -> 'api' | 'title'
 const bubbleMediaStates = new Map(); // cardId -> { isPlaying, isVideo, isLive }
 const visualizerWidgetStates = new Map(); // cardId -> { isPlaying, isVideo, isLive, visualizerStyle, themeKey }
 const visualizerWidgetLockStates = new Map(); // cardId -> boolean
+const sideFlamesEnabledStates = new Map(); // cardId -> boolean
 const visualizerRestoreBoosts = new Map(); // cardId -> timestamp until widget may remain attached during restore handoff
 const visualizerRestoreSuppressions = new Map(); // cardId -> timestamp until widget must remain hidden during restore animation
 let activeVisualizerCardId = null;
 let visualizerEnabled = false;
 let currentCardTheme = 'primary'; // Store the user's preferred card theme
 let currentCardLaunchSizeMode = 'normal'; // Store user's preferred launch size for new cards
+let currentCardShape = 'default'; // Store user's preferred card window shape for new cards
 let siteLayoutOverrides = {}; // hostname -> 'normal' | 'wide' | 'fullscreen' per-site layout overrides
 const pendingAuthRedirects = new Map(); // requestId -> { authUrl, launchUrl, createdAt }
 const recentAuthRedirects = new Map(); // dedupeKey -> { ts, requestId }
@@ -791,6 +794,7 @@ const VISUALIZER_WIDGET_HEIGHT = 220;
 const CARD_TITLEBAR_HEIGHT = 48;
 const VISUALIZER_WIDGET_SHELL_HEIGHT = 26;
 const VISUALIZER_WIDGET_TOP_INSET = 6;
+const SIDE_FLAMES_WIDGET_HEIGHT = 188;
 const VISUALIZER_WIDGET_CLOSE_LEAD_MS = 42;
 const VISUALIZER_WIDGET_MINIMIZE_LEAD_MS = 42;
 const VISUALIZER_WIDGET_RESTORE_DELAY_MS = 590;
@@ -820,15 +824,28 @@ function normalizeCardLaunchSizeMode(mode) {
   return CARD_LAUNCH_MODE_NORMAL;
 }
 
-function getLaunchWindowSizeByMode(mode) {
+function normalizeCardShapeKey(shapeKey) {
+  const candidate = String(shapeKey || '').trim().toLowerCase();
+  return candidate === 'wave' ? 'wave' : 'default';
+}
+
+function getLaunchWindowSizeByMode(mode, shapeKey = 'default') {
   const normalized = normalizeCardLaunchSizeMode(mode);
+  const normalizedShape = normalizeCardShapeKey(shapeKey);
   if (normalized === CARD_LAUNCH_MODE_WIDE) {
-    return { width: 1100, height: 600 };
+    return normalizedShape === 'wave'
+      ? { width: 1100, height: 660 }
+      : { width: 1100, height: 600 };
   }
-  return { width: 850, height: 500 };
+  return normalizedShape === 'wave'
+    ? { width: 850, height: 560 }
+    : { width: 850, height: 500 };
 }
 
 function getCardPseudoFullscreenBounds(cardWindow) {
+  const shapeKey = normalizeCardShapeKey(cardWindow && cardWindow.__cardShape);
+  const topGap = shapeKey === 'wave' ? 12 : CARD_PSEUDO_FULLSCREEN_TOP_GAP;
+  const bottomGap = shapeKey === 'wave' ? 0 : CARD_PSEUDO_FULLSCREEN_BOTTOM_GAP;
   let display = null;
   try {
     if (cardWindow && !cardWindow.isDestroyed()) {
@@ -847,9 +864,9 @@ function getCardPseudoFullscreenBounds(cardWindow) {
     : { x: 0, y: 0, width: 1280, height: 720 };
 
   const x = Math.round(workArea.x + CARD_PSEUDO_FULLSCREEN_SIDE_GAP);
-  const y = Math.round(workArea.y + CARD_PSEUDO_FULLSCREEN_TOP_GAP);
+  const y = Math.round(workArea.y + topGap);
   const width = Math.max(640, Math.round(workArea.width - (CARD_PSEUDO_FULLSCREEN_SIDE_GAP * 2)));
-  const height = Math.max(420, Math.round(workArea.height - CARD_PSEUDO_FULLSCREEN_TOP_GAP - CARD_PSEUDO_FULLSCREEN_BOTTOM_GAP));
+  const height = Math.max(420, Math.round(workArea.height - topGap - bottomGap));
 
   return { x, y, width, height };
 }
@@ -976,12 +993,13 @@ function updateBubbleMediaState(cardId, mediaState = {}) {
    bubbleMediaStates.set(cardId, nextState);
    visualizerWidgetStates.set(cardId, nextState);
    const bubble = cardBubbles.get(cardId);
-   if (bubble && !bubble.isDestroyed()) {
-     try {
-       bubble.webContents.send('bubble-media-state', nextState);
-     } catch (e) { }
+  if (bubble && !bubble.isDestroyed()) {
+    try {
+      bubble.webContents.send('bubble-media-state', nextState);
+    } catch (e) { }
   }
   syncVisualizerWidget(cardId);
+  syncSideFlamesWidget(cardId);
 }
 
 function closeVisualizerWidget(cardId) {
@@ -1061,7 +1079,141 @@ function sendVisualizerWidgetState(cardId) {
       widget.webContents.send('visualizer-widget-state', {
         ...state,
         visualLock: visualizerWidgetLockStates.get(Number(cardId)) === true,
+        sideFlamesEnabled: sideFlamesEnabledStates.get(Number(cardId)) === true,
+        cardShape: normalizeCardShapeKey(cardWindows.get(Number(cardId)) && cardWindows.get(Number(cardId)).__cardShape),
       });
+    }
+  } catch (e) { }
+}
+
+function closeSideFlamesWidget(cardId) {
+  const widget = sideFlameWidgets.get(cardId);
+  if (!widget) return;
+  try {
+    if (!widget.isDestroyed()) widget.close();
+  } catch (e) { }
+  sideFlameWidgets.delete(cardId);
+}
+
+function hideSideFlamesWidget(cardId) {
+  const widget = sideFlameWidgets.get(cardId);
+  if (!widget || widget.isDestroyed()) return;
+  try {
+    if (widget.isVisible()) widget.hide();
+  } catch (e) { }
+}
+
+function getSideFlamesWidgetBounds(cardWindow) {
+  if (!cardWindow || cardWindow.isDestroyed()) {
+    return { x: 0, y: 0, width: 640, height: SIDE_FLAMES_WIDGET_HEIGHT };
+  }
+  const bounds = cardWindow.getBounds();
+  return {
+    x: Math.round(bounds.x),
+    y: Math.round(bounds.y + Math.max(0, bounds.height - SIDE_FLAMES_WIDGET_HEIGHT)),
+    width: Math.max(320, Math.round(bounds.width)),
+    height: SIDE_FLAMES_WIDGET_HEIGHT,
+  };
+}
+
+function sendSideFlamesWidgetState(cardId) {
+  const widget = sideFlameWidgets.get(cardId);
+  const state = visualizerWidgetStates.get(cardId);
+  const cardWindow = cardWindows.get(Number(cardId));
+  if (!widget || widget.isDestroyed() || !state || !cardWindow || cardWindow.isDestroyed()) return;
+  try {
+    if (widget.webContents && !widget.webContents.isDestroyed()) {
+      widget.webContents.send('side-flames-widget-state', {
+        ...state,
+        sideFlamesEnabled: sideFlamesEnabledStates.get(Number(cardId)) === true,
+        cardShape: normalizeCardShapeKey(cardWindow.__cardShape),
+      });
+    }
+  } catch (e) { }
+}
+
+function shouldShowSideFlamesWidget(cardId, cardWindow) {
+  if (sideFlamesEnabledStates.get(Number(cardId)) !== true) return false;
+  if (!cardWindow || cardWindow.isDestroyed()) return false;
+  if (normalizeCardShapeKey(cardWindow.__cardShape) !== 'wave') return false;
+  return shouldShowVisualizerWidget(cardId, cardWindow);
+}
+
+function ensureSideFlamesWidget(cardId, cardWindow) {
+  const existing = sideFlameWidgets.get(cardId);
+  if (existing && !existing.isDestroyed()) return existing;
+  if (!cardWindow || cardWindow.isDestroyed()) return null;
+  const widgetBounds = getSideFlamesWidgetBounds(cardWindow);
+  const widget = new BrowserWindow({
+    width: widgetBounds.width,
+    height: widgetBounds.height,
+    x: widgetBounds.x,
+    y: widgetBounds.y,
+    parent: cardWindow,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    focusable: false,
+    show: false,
+    hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload-side-flames-widget.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false,
+    },
+  });
+  try {
+    widget.setIgnoreMouseEvents(true, { forward: false });
+  } catch (e) { }
+  const widgetPath = path.join(__dirname, 'src', 'side-flames-widget.html');
+  const widgetState = visualizerWidgetStates.get(cardId) || {};
+  widget.loadFile(widgetPath, {
+    query: {
+      cardId: String(cardId),
+      theme: normalizeCardThemeKey(widgetState.themeKey || cardWindow.__cardTheme || currentCardTheme),
+    }
+  }).catch((err) => {
+    console.error('Error loading side flames widget:', err);
+  });
+  widget.webContents.on('did-finish-load', () => {
+    sendSideFlamesWidgetState(cardId);
+  });
+  widget.on('closed', () => {
+    sideFlameWidgets.delete(cardId);
+  });
+  sideFlameWidgets.set(cardId, widget);
+  return widget;
+}
+
+function syncSideFlamesWidget(cardId) {
+  const cardWindow = cardWindows.get(cardId);
+  if (!cardWindow || cardWindow.isDestroyed()) {
+    closeSideFlamesWidget(cardId);
+    return;
+  }
+  const state = visualizerWidgetStates.get(cardId);
+  if (!state) {
+    closeSideFlamesWidget(cardId);
+    return;
+  }
+  const widget = ensureSideFlamesWidget(cardId, cardWindow);
+  if (!widget || widget.isDestroyed()) return;
+  try {
+    widget.setBounds(getSideFlamesWidgetBounds(cardWindow), false);
+  } catch (e) { }
+  sendSideFlamesWidgetState(cardId);
+  const shouldShow = shouldShowSideFlamesWidget(cardId, cardWindow);
+  try {
+    if (shouldShow) {
+      if (!widget.isVisible()) widget.showInactive();
+    } else if (widget.isVisible()) {
+      widget.hide();
     }
   } catch (e) { }
 }
@@ -1069,6 +1221,12 @@ function sendVisualizerWidgetState(cardId) {
 function syncAllVisualizerWidgets() {
   for (const [cardId] of visualizerWidgetStates) {
     syncVisualizerWidget(cardId);
+  }
+}
+
+function syncAllSideFlamesWidgets() {
+  for (const [cardId] of visualizerWidgetStates) {
+    syncSideFlamesWidget(cardId);
   }
 }
 
@@ -1252,14 +1410,19 @@ function registerVisualizerWidgetLifecycle(cardId, cardWindow, themeKey) {
     setActiveVisualizerCard(cardId);
     syncAllVisualizerWidgets();
     syncVisualizerWidget(cardId);
+    syncAllSideFlamesWidgets();
+    syncSideFlamesWidget(cardId);
   };
   const deferSync = () => {
     setTimeout(() => syncVisualizerWidget(cardId), 40);
+    setTimeout(() => syncSideFlamesWidget(cardId), 40);
   };
   const hideNow = () => {
     clearActiveVisualizerCard(cardId);
     hideVisualizerWidget(cardId);
+    hideSideFlamesWidget(cardId);
     setTimeout(() => syncAllVisualizerWidgets(), 16);
+    setTimeout(() => syncAllSideFlamesWidgets(), 16);
   };
 
   cardWindow.on('show', sync);
@@ -1275,7 +1438,9 @@ function registerVisualizerWidgetLifecycle(cardId, cardWindow, themeKey) {
   cardWindow.on('close', () => {
     clearActiveVisualizerCard(cardId);
     hideVisualizerWidget(cardId);
+    hideSideFlamesWidget(cardId);
     closeVisualizerWidget(cardId);
+    closeSideFlamesWidget(cardId);
   });
 }
 
@@ -1439,6 +1604,7 @@ function restoreCardFromBubble(cardId) {
     // Clear notifications when restoring
     clearBubbleNotifications(cardId);
     hideVisualizerWidget(cardId);
+    hideSideFlamesWidget(cardId);
     suppressVisualizerUntil(cardId, VISUALIZER_WIDGET_RESTORE_DELAY_MS);
 
     closeCardBubble(cardId);
@@ -1449,6 +1615,7 @@ function restoreCardFromBubble(cardId) {
     setTimeout(() => {
       markVisualizerRestoreBoost(cardId);
       syncVisualizerWidget(cardId);
+      syncSideFlamesWidget(cardId);
     }, VISUALIZER_WIDGET_RESTORE_DELAY_MS);
 
     // Send restore animation after a brief delay so the window
@@ -1476,16 +1643,21 @@ function broadcastVisualizerSetting(enabled) {
     } catch (e) { }
   }
   syncAllVisualizerWidgets();
+  syncAllSideFlamesWidgets();
 }
 
 app.on('browser-window-focus', () => {
   syncAllVisualizerWidgets();
+  syncAllSideFlamesWidgets();
   setTimeout(() => syncAllVisualizerWidgets(), 16);
+  setTimeout(() => syncAllSideFlamesWidgets(), 16);
 });
 
 app.on('browser-window-blur', () => {
   syncAllVisualizerWidgets();
+  syncAllSideFlamesWidgets();
   setTimeout(() => syncAllVisualizerWidgets(), 16);
+  setTimeout(() => syncAllSideFlamesWidgets(), 16);
 });
 
 function isHttpUrl(rawUrl) {
@@ -2037,17 +2209,18 @@ let directCardIdCounter = 100000;
 
 // Direct card creation function - creates card window immediately without renderer round-trip
 // This ensures instant visual feedback when external apps call the browser
-// Options: { showHidden: boolean, themeKey: string, launchSizeMode: 'normal'|'wide'|'fullscreen' }
+// Options: { showHidden: boolean, themeKey: string, launchSizeMode: 'normal'|'wide'|'fullscreen', shapeKey: 'default'|'wave' }
 function createCardDirectly(url, options = {}) {
   try {
     // Support both old signature (themeKey as string) and new options object
     const opts = typeof options === 'string' ? { themeKey: options } : options;
     const minimizeAfterShow = opts.minimizeAfterShow === true;
     const isBubbleMode = opts.bubble === true || minimizeAfterShow;
+    const cardShape = normalizeCardShapeKey(opts.shapeKey || currentCardShape);
     const siteLayout = getSiteLayoutForUrl(url);
     const requestedLaunchMode = normalizeCardLaunchSizeMode(opts.launchSizeMode || siteLayout || currentCardLaunchSizeMode);
     const launchMode = minimizeAfterShow ? CARD_LAUNCH_MODE_NORMAL : requestedLaunchMode;
-    const launchSize = getLaunchWindowSizeByMode(launchMode);
+    const launchSize = getLaunchWindowSizeByMode(launchMode, cardShape);
 
     const targetUrl = normalizeTypedNavigationTarget(url);
     if (!targetUrl) {
@@ -2115,6 +2288,7 @@ function createCardDirectly(url, options = {}) {
     });
     attachWindowHangRecovery(cardWindow, `direct-card-${cardId}`);
     registerVisualizerWidgetLifecycle(cardId, cardWindow, cardTheme);
+    cardWindow.__cardShape = cardShape;
 
     if (launchMode === CARD_LAUNCH_MODE_FULLSCREEN && !minimizeAfterShow) {
       const applyFullscreen = () => {
@@ -2177,6 +2351,7 @@ function createCardDirectly(url, options = {}) {
         cardId: String(cardId),
         url: encodedUrl,
         theme: cardTheme,
+        shape: cardShape,
         bubble: isBubbleMode ? '1' : '0'
       }
     }).catch((err) => {
@@ -2299,14 +2474,17 @@ function createCardDirectly(url, options = {}) {
     cardWindow.on('show', () => {
       closeCardBubble(cardId);
       syncVisualizerWidget(cardId);
+      syncSideFlamesWidget(cardId);
     });
 
     cardWindow.on('closed', () => {
       clearCardLoadTimeout(cardWindow);
       closeCardBubble(cardId);
       closeVisualizerWidget(cardId);
+      closeSideFlamesWidget(cardId);
       bubbleMediaStates.delete(cardId);
       visualizerWidgetStates.delete(cardId);
+      sideFlamesEnabledStates.delete(cardId);
       cardWindows.delete(cardId);
       if (mainWindow && !mainWindow.isDestroyed()) {
         safeIpcSend(mainWindow.webContents, 'card-closed', cardId);
@@ -2334,7 +2512,7 @@ function openUrlInCard(url, context = {}) {
     }
 
     // Pass currentCardTheme so external launches always use the correct theme
-    launchExternalCardUrlOnce(targetUrl, { themeKey: currentCardTheme });
+    launchExternalCardUrlOnce(targetUrl, { themeKey: currentCardTheme, shapeKey: currentCardShape });
   } catch (e) {
     // ignore
   }
@@ -2757,6 +2935,23 @@ ipcMain.handle('set-card-theme', async (event, themeKey) => {
 
 ipcMain.handle('get-card-theme', async () => {
   return currentCardTheme;
+});
+
+ipcMain.handle('set-card-shape', async (event, shapeKey) => {
+  try {
+    currentCardShape = normalizeCardShapeKey(shapeKey);
+    return { success: true, shape: currentCardShape };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('get-card-shape', async () => {
+  try {
+    return currentCardShape;
+  } catch (e) {
+    return 'default';
+  }
 });
 
 ipcMain.handle('set-card-launch-size-mode', async (event, mode) => {
@@ -3392,7 +3587,7 @@ function setupAddonBlocking() {
 // ========================
 
 // Enhanced create-card handler with beautiful animations
-ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'primary', launchSizeMode = null, isBubbleMode = null) => {
+ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'primary', launchSizeMode = null, isBubbleMode = null, shapeKey = null) => {
   try {
     if (updateEnforcementState.isForcedUpdate) {
       return {
@@ -3406,6 +3601,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       ? String(themeKey || '').toLowerCase()
       : 'primary';
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
+    const cardShape = normalizeCardShapeKey(shapeKey || currentCardShape);
 
     let targetUrl = normalizeTypedNavigationTarget(url);
     if (!targetUrl) {
@@ -3429,7 +3625,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       || getSiteLayoutForUrl(targetUrl)
       || currentCardLaunchSizeMode;
     const launchMode = normalizeCardLaunchSizeMode(resolvedMode);
-    const launchSize = getLaunchWindowSizeByMode(launchMode);
+    const launchSize = getLaunchWindowSizeByMode(launchMode, cardShape);
 
     // Calculate center position if not provided
     let finalX = position && Number.isFinite(Number(position.x)) ? Number(position.x) : null;
@@ -3481,6 +3677,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
     });
     attachWindowHangRecovery(cardWindow, `card-${cardId}`);
     registerVisualizerWidgetLifecycle(cardId, cardWindow, cardTheme);
+    cardWindow.__cardShape = cardShape;
 
     if (launchMode === CARD_LAUNCH_MODE_FULLSCREEN) {
       cardWindow.once('ready-to-show', () => {
@@ -3521,6 +3718,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
         cardId: String(cardId),
         url: encodedUrl,
         theme: cardTheme,
+        shape: cardShape,
         bubble: isBubbleMode ? '1' : '0'
       }
     }).catch((err) => {
@@ -3563,13 +3761,16 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
     cardWindow.on('show', () => {
       closeCardBubble(cardId);
       syncVisualizerWidget(cardId);
+      syncSideFlamesWidget(cardId);
     });
 
     cardWindow.on('closed', () => {
       closeCardBubble(cardId);
       closeVisualizerWidget(cardId);
+      closeSideFlamesWidget(cardId);
       bubbleMediaStates.delete(cardId);
       visualizerWidgetStates.delete(cardId);
+      sideFlamesEnabledStates.delete(cardId);
       cardWindows.delete(cardId);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('card-closed', cardId);
@@ -3657,6 +3858,7 @@ ipcMain.handle('close-card', async (event, cardId) => {
     }
 
     closeVisualizerWidget(cardId);
+    closeSideFlamesWidget(cardId);
     await new Promise((resolve) => setTimeout(resolve, VISUALIZER_WIDGET_CLOSE_LEAD_MS));
     cardWindow.close();
     return { success: true };
@@ -3676,6 +3878,7 @@ ipcMain.handle('hide-visualizer-now', async (event, cardId) => {
 
     clearActiveVisualizerCard(numericCardId);
     hideVisualizerWidget(numericCardId);
+    hideSideFlamesWidget(numericCardId);
     return { success: true };
   } catch (error) {
     console.error('Error hiding visualizer immediately:', error);
@@ -3786,6 +3989,7 @@ ipcMain.handle('minimize-card', async (event, cardId, pageUrl = '', pageTitle = 
     }
 
     hideVisualizerWidget(cardId);
+    hideSideFlamesWidget(cardId);
     await new Promise((resolve) => setTimeout(resolve, VISUALIZER_WIDGET_MINIMIZE_LEAD_MS));
     createCardBubble(cardId, cardWindow, { pageUrl, pageTitle, themeKey });
     cardWindow.hide();
@@ -3813,6 +4017,7 @@ ipcMain.handle('close-bubble-and-card', async (event, cardId) => {
     if (cardWindow && !cardWindow.isDestroyed()) {
       try {
         closeVisualizerWidget(cardId);
+        closeSideFlamesWidget(cardId);
         await new Promise((resolve) => setTimeout(resolve, VISUALIZER_WIDGET_CLOSE_LEAD_MS));
         cardWindow.close();
       } catch (e) { }
@@ -4588,6 +4793,19 @@ ipcMain.handle('visualizer-widget-action', async (event, cardId, action, value =
       visualizerWidgetLockStates.set(numericCardId, normalizedAction === 'visual-lock');
       syncVisualizerWidget(numericCardId);
     }
+    if (normalizedAction === 'side-flames-toggle') {
+      const nextEnabled = typeof value === 'boolean'
+        ? !!value
+        : !(sideFlamesEnabledStates.get(numericCardId) === true);
+      sideFlamesEnabledStates.set(numericCardId, nextEnabled);
+      syncVisualizerWidget(numericCardId);
+      syncSideFlamesWidget(numericCardId);
+      cardWindow.webContents.send('visualizer-widget-command', {
+        action: 'side-flames-state',
+        value: nextEnabled,
+      });
+      return { success: true, enabled: nextEnabled };
+    }
     cardWindow.webContents.send('visualizer-widget-command', {
       action: String(action || ''),
       value,
@@ -5033,6 +5251,38 @@ ipcMain.handle('get-update-status', async () => {
       updateUrl: getConfiguredUpdateUrl(),
       updateMessage: 'Unable to check update status right now.'
     };
+  }
+});
+
+ipcMain.handle('get-side-flames-enabled', async (event, cardId) => {
+  try {
+    const numericCardId = Number(cardId);
+    return sideFlamesEnabledStates.get(numericCardId) === true;
+  } catch (e) {
+    return false;
+  }
+});
+
+ipcMain.handle('set-side-flames-enabled', async (event, cardId, enabled) => {
+  try {
+    const numericCardId = Number(cardId);
+    if (!Number.isFinite(numericCardId)) {
+      return { success: false, error: 'Invalid card id' };
+    }
+    const nextEnabled = !!enabled;
+    sideFlamesEnabledStates.set(numericCardId, nextEnabled);
+    syncVisualizerWidget(numericCardId);
+    syncSideFlamesWidget(numericCardId);
+    const cardWindow = cardWindows.get(numericCardId);
+    if (cardWindow && !cardWindow.isDestroyed() && cardWindow.webContents && !cardWindow.webContents.isDestroyed()) {
+      cardWindow.webContents.send('visualizer-widget-command', {
+        action: 'side-flames-state',
+        value: nextEnabled,
+      });
+    }
+    return { success: true, enabled: nextEnabled };
+  } catch (e) {
+    return { success: false, error: e.message };
   }
 });
 
