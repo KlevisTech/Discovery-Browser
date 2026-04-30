@@ -54,9 +54,9 @@
 
     .flame-side {
       position: absolute;
-      bottom: 24px;
-      width: 132px;
-      height: 102px;
+      bottom: clamp(22px, calc(22px + ((100vw - 850px) * 0.05)), 36px);
+      width: 96px;
+      height: 98px;
       display: flex;
       align-items: flex-end;
       justify-content: center;
@@ -68,36 +68,74 @@
     }
 
     .flame-side.left {
-      left: 28px;
+      left: clamp(22px, calc(22px + ((100vw - 850px) * 0.12)), 48px);
     }
 
     .flame-side.right {
-      right: 28px;
+      right: clamp(22px, calc(22px + ((100vw - 850px) * 0.12)), 48px);
       transform: scaleX(-1);
+    }
+
+    .flame-side::before {
+      content: "";
+      position: absolute;
+      inset: 18px 8px 4px 0;
+      border-radius: 68% 38% 24% 74% / 54% 46% 24% 34%;
+      background:
+        radial-gradient(ellipse at 62% 8%, color-mix(in srgb, var(--flame-core) 42%, transparent) 0%, transparent 42%),
+        radial-gradient(ellipse at 54% 36%, color-mix(in srgb, var(--flame-hot) 72%, transparent) 0%, transparent 68%),
+        radial-gradient(ellipse at 30% 78%, color-mix(in srgb, var(--flame-warm) 76%, transparent) 0%, transparent 72%);
+      filter: blur(5px);
+      opacity: calc(0.42 + (var(--flame-energy) * 0.22));
+      transform: skewX(-8deg) scaleY(var(--flame-scale));
+      transform-origin: bottom left;
+      animation: flameBodyBreath calc(2.6s - (var(--flame-energy) * 0.36s)) ease-in-out infinite;
+    }
+
+    .flame-side::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 14px;
+      bottom: 5px;
+      height: 22px;
+      border-radius: 0 999px 999px 0;
+      background:
+        linear-gradient(90deg,
+          color-mix(in srgb, var(--flame-hot) 86%, transparent) 0%,
+          color-mix(in srgb, var(--flame-warm) 70%, transparent) 42%,
+          transparent 100%);
+      filter: blur(8px);
+      opacity: calc(0.5 + (var(--flame-energy) * 0.18));
     }
 
     .flame-bed {
       position: absolute;
-      bottom: 8px;
-      left: 22px;
-      right: 22px;
-      height: 20px;
-      border-radius: 999px;
+      bottom: 9px;
+      left: 0;
+      right: 18px;
+      height: 18px;
+      border-radius: 0 999px 999px 0;
       background:
-        radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--flame-core) 72%, transparent) 0%, transparent 68%),
-        radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--flame-hot) 86%, transparent) 0%, transparent 78%);
-      opacity: calc(0.62 + (var(--flame-energy) * 0.24));
-      filter: blur(7px);
+        radial-gradient(ellipse at 36% 52%, color-mix(in srgb, var(--flame-core) 72%, transparent) 0%, transparent 58%),
+        linear-gradient(90deg,
+          color-mix(in srgb, var(--flame-hot) 92%, transparent) 0%,
+          color-mix(in srgb, var(--flame-warm) 72%, transparent) 58%,
+          transparent 100%);
+      opacity: calc(0.7 + (var(--flame-energy) * 0.2));
+      filter: blur(6px);
     }
 
     .flame-column {
       position: relative;
-      width: 15px;
-      height: 82px;
-      margin: 0 2px;
+      width: 24px;
+      height: 78px;
+      margin: 0 -4px;
       transform-origin: bottom center;
+      --x: 0px;
       animation: flameBounce calc(1.7s - (var(--flame-energy) * 0.22s)) ease-in-out infinite;
       animation-delay: var(--delay, 0s);
+      mix-blend-mode: screen;
     }
 
     .flame-side.idle .flame-column {
@@ -122,12 +160,13 @@
           color-mix(in srgb, var(--flame-core) 28%, transparent) 0%,
           color-mix(in srgb, var(--flame-hot) 92%, transparent) 52%,
           color-mix(in srgb, var(--flame-warm) 74%, transparent) 100%);
-      filter: blur(1px);
+      filter: blur(1.6px);
       opacity: calc(0.78 + (var(--flame-energy) * 0.16));
+      clip-path: polygon(52% 0%, 74% 20%, 84% 46%, 72% 76%, 100% 100%, 0 100%, 22% 74%, 14% 43%, 28% 17%);
     }
 
     .flame-core {
-      width: 58%;
+      width: 50%;
       height: calc(24px + (var(--size, 1) * 18px * var(--flame-scale)));
       background:
         linear-gradient(180deg,
@@ -139,17 +178,18 @@
     }
 
     .flame-mist {
-      width: 138%;
-      height: calc(20px + (var(--size, 1) * 14px * var(--flame-scale)));
+      width: 126%;
+      height: calc(22px + (var(--size, 1) * 15px * var(--flame-scale)));
       background:
         radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--flame-core) 70%, transparent) 0%, transparent 70%),
         radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--flame-hot) 46%, transparent) 0%, transparent 82%);
-      filter: blur(6px);
+      filter: blur(9px);
       opacity: calc(0.36 + (var(--flame-energy) * 0.18));
     }
 
-    .flame-column:nth-child(2) { --size: 0.88; --delay: -0.14s; }
-    .flame-column:nth-child(3) { --size: 1.02; --delay: -0.28s; }
+    .flame-column:nth-child(2) { --size: 0.88; --delay: -0.14s; --x: -3px; }
+    .flame-column:nth-child(3) { --size: 1.08; --delay: -0.28s; --x: -7px; }
+    .flame-column:nth-child(4) { --size: 0.98; --delay: -0.38s; --x: -11px; }
 
     .flame-side.playing .flame-column:nth-child(2n) {
       animation-name: flameLean;
@@ -157,25 +197,37 @@
 
     @keyframes flameBounce {
       0%, 100% {
-        transform: translateY(0) scaleY(0.84) scaleX(0.94);
+        transform: translateX(var(--x)) translateY(0) scaleY(0.84) scaleX(0.94);
       }
       35% {
-        transform: translateY(-3px) scaleY(1.03) scaleX(1);
+        transform: translateX(var(--x)) translateY(-3px) scaleY(1.03) scaleX(1);
       }
       70% {
-        transform: translateY(-6px) scaleY(1.11) scaleX(1.03);
+        transform: translateX(var(--x)) translateY(-6px) scaleY(1.11) scaleX(1.03);
       }
     }
 
     @keyframes flameLean {
       0%, 100% {
-        transform: translateY(0) rotate(-2deg) scaleY(0.84);
+        transform: translateX(var(--x)) translateY(0) rotate(-2deg) scaleY(0.84);
       }
       40% {
-        transform: translateY(-4px) rotate(3deg) scaleY(1.05);
+        transform: translateX(var(--x)) translateY(-4px) rotate(3deg) scaleY(1.05);
       }
       75% {
-        transform: translateY(-7px) rotate(-4deg) scaleY(1.12);
+        transform: translateX(var(--x)) translateY(-7px) rotate(-4deg) scaleY(1.12);
+      }
+    }
+
+    @keyframes flameBodyBreath {
+      0%, 100% {
+        transform: skewX(-8deg) translateY(0) scaleY(calc(var(--flame-scale) * 0.94));
+      }
+      45% {
+        transform: skewX(-11deg) translateY(-4px) scaleY(calc(var(--flame-scale) * 1.05));
+      }
+      72% {
+        transform: skewX(-5deg) translateY(-2px) scaleY(calc(var(--flame-scale) * 1.01));
       }
     }
 

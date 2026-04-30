@@ -66,10 +66,24 @@
       padding: 0 10px;
       gap: 8px;
       margin-top: 2px;
+      transform: translateZ(0);
+      transition:
+        box-shadow 0.24s ease,
+        border-color 0.24s ease,
+        transform 0.24s cubic-bezier(0.2, 0.85, 0.25, 1);
     }
 
     body.lock-mode .widget-shell {
       display: none;
+    }
+
+    .widget-shell.panel-open {
+      border-color: rgba(255, 214, 92, 0.32);
+      box-shadow:
+        0 14px 30px rgba(0, 0, 0, 0.26),
+        0 0 0 1px rgba(255,255,255,0.07) inset,
+        0 0 24px rgba(104, 184, 255, 0.32);
+      transform: translateY(-1px) translateZ(0);
     }
 
     .widget-shell.theme-sunset {
@@ -175,15 +189,63 @@
       background: linear-gradient(180deg, rgba(13, 23, 48, 0.96), rgba(8, 13, 28, 0.94));
       border: 1px solid rgba(112, 172, 255, 0.18);
       box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
-      display: none;
+      display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
       z-index: 10;
       overflow: hidden;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      filter: blur(5px);
+      transform: translateX(-50%) translateY(-9px) scale(0.92);
+      transform-origin: top center;
+      transition:
+        opacity 0.2s ease,
+        filter 0.2s ease,
+        transform 0.26s cubic-bezier(0.18, 0.92, 0.25, 1),
+        visibility 0s linear 0.22s;
     }
 
     .widget-shell.panel-open .control-panel {
-      display: grid;
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      filter: blur(0);
+      transform: translateX(-50%) translateY(0) scale(1);
+      transition-delay: 0s;
+    }
+
+    .control-panel > * {
+      opacity: 0;
+      transform: translateY(-5px) scale(0.98);
+      transition:
+        opacity 0.18s ease,
+        transform 0.22s cubic-bezier(0.18, 0.92, 0.25, 1);
+    }
+
+    .widget-shell.panel-open .control-panel > * {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .widget-shell.panel-open .control-panel > *:nth-child(1) { transition-delay: 0.04s; }
+    .widget-shell.panel-open .control-panel > *:nth-child(2) { transition-delay: 0.07s; }
+    .widget-shell.panel-open .control-panel > *:nth-child(3) { transition-delay: 0.1s; }
+    .widget-shell.panel-open .control-panel > *:nth-child(4) { transition-delay: 0.13s; }
+    .widget-shell.panel-open .control-panel > *:nth-child(5) { transition-delay: 0.16s; }
+    .widget-shell.panel-open .control-panel > *:nth-child(6) { transition-delay: 0.19s; }
+    .widget-shell.panel-open .control-panel > *:nth-child(7) { transition-delay: 0.22s; }
+    .widget-shell.panel-open .control-panel > *:nth-child(8) { transition-delay: 0.25s; }
+    .widget-shell.panel-open .control-panel > *:nth-child(9) { transition-delay: 0.28s; }
+    .widget-shell.panel-open .control-panel > *:nth-child(10) { transition-delay: 0.31s; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .widget-shell,
+      .control-panel,
+      .control-panel > * {
+        transition: none;
+      }
     }
 
     .control-btn,
@@ -218,6 +280,12 @@
       grid-column: span 1;
       background: linear-gradient(135deg, rgba(104, 184, 255, 0.22), rgba(255, 214, 92, 0.18));
       box-shadow: 0 8px 18px rgba(7, 14, 31, 0.2);
+    }
+
+    .control-btn.cinema,
+    .control-btn.video-full {
+      grid-column: span 2;
+      background: linear-gradient(135deg, rgba(255, 214, 92, 0.22), rgba(104, 184, 255, 0.16));
     }
 
     .control-btn.flames[disabled] {
@@ -576,6 +644,8 @@
       <button class="control-btn wide" id="seek-forward-btn" type="button">Forward 10s</button>
       <button class="control-btn lock" id="visual-lock-btn" type="button">Lock View</button>
       <button class="control-btn flames" id="side-flames-btn" type="button">Flames Off</button>
+      <button class="control-btn cinema" id="cinema-btn" type="button">Cinema</button>
+      <button class="control-btn video-full" id="video-full-btn" type="button">Full</button>
       <input class="volume-slider" id="volume-slider" type="range" min="0" max="100" value="100" />
     </div>
   </div>
@@ -628,6 +698,8 @@
     const seekForwardBtn = document.getElementById('seek-forward-btn');
     const visualLockBtn = document.getElementById('visual-lock-btn');
     const sideFlamesBtn = document.getElementById('side-flames-btn');
+    const cinemaBtn = document.getElementById('cinema-btn');
+    const videoFullBtn = document.getElementById('video-full-btn');
     const volumeSlider = document.getElementById('volume-slider');
     const themeClasses = ['theme-primary', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-frost'];
     const styleClasses = ['style-bars', 'style-pulse', 'style-ladder', 'style-orbit'];
@@ -647,6 +719,8 @@
       visualLock: false,
     };
     let remainingTickTimer = null;
+    let panelResizeTimer = null;
+    const PANEL_CLOSE_ANIMATION_MS = 240;
     function applyTheme(themeKey) {
       const normalized = String(themeKey || 'primary').toLowerCase() === 'alt'
         ? 'sunset'
@@ -761,6 +835,9 @@
       applyTheme(next.themeKey || initialTheme);
       applyStyle(widgetState.visualizerStyle || 'bars');
       document.body.classList.toggle('lock-mode', !!widgetState.visualLock);
+      if (widgetState.visualLock) {
+        widgetShell.classList.remove('panel-open');
+      }
       if (lockScene) lockScene.setAttribute('aria-hidden', widgetState.visualLock ? 'false' : 'true');
       if (lockScene) lockScene.classList.toggle('playing', !!widgetState.isPlaying);
       widgetShell.classList.toggle('video-mode', !!next.isVideo);
@@ -794,8 +871,27 @@
     async function sendAction(action, value) {
       if (!window.visualizerWidgetAPI || !window.visualizerWidgetAPI.sendAction) return;
       try {
-        await window.visualizerWidgetAPI.sendAction(cardId, action, value);
+        return await window.visualizerWidgetAPI.sendAction(cardId, action, value);
       } catch (e) { }
+    }
+
+    async function setPanelOpen(isOpen) {
+      const nextOpen = !!isOpen && !widgetState.visualLock;
+      clearTimeout(panelResizeTimer);
+      if (nextOpen) {
+        await sendAction('panel-state', true);
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            widgetShell.classList.add('panel-open');
+          });
+        });
+        return;
+      }
+
+      widgetShell.classList.remove('panel-open');
+      panelResizeTimer = setTimeout(() => {
+        sendAction('panel-state', false);
+      }, PANEL_CLOSE_ANIMATION_MS);
     }
 
     applyTheme(initialTheme);
@@ -803,12 +899,12 @@
 
     widgetShell.addEventListener('click', (event) => {
       if (controlPanel && controlPanel.contains(event.target)) return;
-      widgetShell.classList.toggle('panel-open');
+      setPanelOpen(!widgetShell.classList.contains('panel-open'));
     });
 
     document.addEventListener('click', (event) => {
       if (!widgetShell.contains(event.target)) {
-        widgetShell.classList.remove('panel-open');
+        setPanelOpen(false);
       }
     });
 
@@ -852,6 +948,20 @@
         event.stopPropagation();
         if (sideFlamesBtn.disabled) return;
         sendAction('side-flames-toggle');
+      });
+    }
+
+    if (cinemaBtn) {
+      cinemaBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        sendAction('cinema-toggle', 'cover');
+      });
+    }
+
+    if (videoFullBtn) {
+      videoFullBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        sendAction('video-full-toggle');
       });
     }
 

@@ -4125,5 +4125,9 @@ class DiscoveryBrowser {
 
 // Initialize browser when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+  document.body.classList.add('startup-opening');
+  window.setTimeout(() => {
+    document.body.classList.remove('startup-opening');
+  }, 700);
   window.discoveryBrowser = new DiscoveryBrowser();
 });
