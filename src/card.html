@@ -460,10 +460,6 @@ body {
       flex-shrink: 0;
       position: relative;
       z-index: 10;
-      contain: layout style;
-      backface-visibility: hidden;
-      will-change: transform;
-      transform: translateZ(0);
     }
 
     .theme-sunset .card-titlebar,
@@ -817,8 +813,6 @@ body {
 
     .card-content.is-awaiting-first-content {
       background: inherit;
-      contain: paint;
-      isolation: isolate;
     }
 
     .card-window.shape-wave .card-content,
@@ -838,13 +832,9 @@ body {
         linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 24%, transparent 76%, rgba(0, 0, 0, 0.12)),
         inherit;
       isolation: isolate;
-      contain: layout paint;
       box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.14),
         inset 0 -20px 40px rgba(0, 0, 0, 0.08);
-      backface-visibility: hidden;
-      will-change: opacity;
-      transform: translateZ(0);
     }
 
     .card-launch-fill.active {
@@ -1361,10 +1351,6 @@ body {
         linear-gradient(180deg, rgba(6,10,22,0.98) 0%, rgba(8,12,28,0.98) 100%);
       opacity: 0;
       transition: opacity 0.28s ease;
-      contain: layout style paint;
-      backface-visibility: hidden;
-      will-change: opacity;
-      transform: translateZ(0);
     }
 
     .visual-lock-overlay.active {
@@ -1477,10 +1463,6 @@ body {
       border: 1px solid rgba(124, 247, 255, 0.18);
       box-shadow: 0 0 30px rgba(124, 247, 255, 0.08);
       animation: visualLockBreath 4.8s ease-in-out infinite;
-      contain: layout;
-      backface-visibility: hidden;
-      will-change: transform;
-      transform: translateZ(0);
     }
 
     .visual-lock-rings span:nth-child(1) { width: 180px; height: 180px; }
@@ -1534,10 +1516,6 @@ body {
       min-height: 24px;
       animation: visualLockBars 1.1s ease-in-out infinite;
       transform-origin: bottom;
-      contain: layout;
-      backface-visibility: hidden;
-      will-change: transform;
-      transform: translateZ(0);
     }
 
     .visual-lock-eq span:nth-child(2) { animation-delay: -0.14s; }
@@ -1715,11 +1693,8 @@ body {
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.2s ease;
-        will-change: opacity, transform;
+        will-change: opacity;
         width: auto;
-        contain: paint;
-        backface-visibility: hidden;
-        perspective: 1000px;
       }
 
     .media-hover-control.active {
@@ -1770,11 +1745,9 @@ body {
       animation: audioPulse 2s ease-in-out infinite;
       transform-origin: bottom;
       transform: translateZ(0);
-      will-change: transform;
+      will-change: transform, opacity;
       animation-play-state: paused;
       box-shadow: 0 0 4px rgba(255, 111, 240, 0.5), 0 0 8px rgba(124, 247, 255, 0.3);
-      backface-visibility: hidden;
-      contain: layout;
     }
 
     .audio-visualizer.playing span {
@@ -1876,8 +1849,6 @@ body {
       pointer-events: none;
       transition: opacity 0.2s ease, transform 0.2s ease;
       will-change: transform, opacity;
-      contain: layout style;
-      backface-visibility: hidden;
     }
 
     .media-hover-control.panel-open .media-hover-panel {
@@ -2040,8 +2011,6 @@ body {
       z-index: 1;
       opacity: 1;
       transition: opacity 180ms ease;
-      contain: paint;
-      isolation: isolate;
     }
 
     .card-window.shape-wave .split-container,
@@ -2056,7 +2025,6 @@ body {
       flex-direction: column;
       overflow: hidden;
       border-radius: 14px;
-      contain: layout style;
     }
 
     .split-pane-left {
@@ -2215,7 +2183,7 @@ body {
       </clipPath>
     </defs>
   </svg>
-  <div class="card-window">
+  <div class="card-window shape-default">
     <svg class="card-shape-outline" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true" focusable="false">
       <path d="M1 46 C1 16 12 4 36 4 L964 4 C988 4 999 16 999 46 L999 822 C999 912 958 966 916 966 C863 966 831 908 715 908 C625 908 568 955 500 955 C432 955 375 908 285 908 C169 908 137 966 84 966 C42 966 1 912 1 822 Z" />
     </svg>
@@ -2228,7 +2196,7 @@ body {
         <span style="width:1px; height:16px; background:rgba(255,255,255,0.2); margin:0 3px; border-radius:1px; flex-shrink:0;"></span>
         <!-- Wide view button tooltip reflects actual wide width -->
         <button class="card-button size-btn" id="wide-btn" title="Wide View (1000px)">⇔</button>
-        <button class="card-button size-btn" id="fullscreen-btn" title="Toggle Fullscreen">⛶</button>
+        <button class="card-button size-btn" id="fullscreen-btn" title="Cinema Mode">⛶</button>
         <span style="width:1px; height:16px; background:rgba(255,255,255,0.2); margin:0 3px; border-radius:1px; flex-shrink:0;"></span>
         <button class="card-button minimize-btn" id="minimize-btn" title="Minimize">−</button>
         <span style="width:1px; height:16px; background:rgba(255,255,255,0.2); margin:0 3px; border-radius:1px; flex-shrink:0;"></span>
@@ -2291,8 +2259,6 @@ body {
         <button class="media-control-btn" id="media-visualizer-style-btn" type="button" title="Change visualizer style">Viz</button>
         <button class="media-control-btn" id="media-side-flames-btn" type="button" title="Toggle side flames">Flames</button>
         <button class="media-control-btn" id="media-visual-lock-btn" type="button" title="Enter visual lock">Lock</button>
-        <button class="media-control-btn" id="media-cinema-btn" type="button" title="Fill card with video">Cinema</button>
-        <button class="media-control-btn" id="media-video-full-btn" type="button" title="Fit full video inside card">Full</button>
         <button class="media-control-btn" id="media-mute-btn" type="button">Mute</button>
       </div>
     </div>
@@ -2418,8 +2384,6 @@ body {
     const mediaVisualizerStyleBtn = document.getElementById('media-visualizer-style-btn');
     const mediaSideFlamesBtn = document.getElementById('media-side-flames-btn');
     const mediaVisualLockBtn = document.getElementById('media-visual-lock-btn');
-    const mediaCinemaBtn = document.getElementById('media-cinema-btn');
-    const mediaVideoFullBtn = document.getElementById('media-video-full-btn');
     const mediaMuteBtn = document.getElementById('media-mute-btn');
     const mediaRemainingTime = document.getElementById('media-remaining-time');
     const mediaSeekBackBtn = document.getElementById('media-seek-back-btn');
@@ -2477,7 +2441,9 @@ body {
      let visualLockActive = false;
      let cinemaModeActive = false;
      let cinemaModeTarget = null;
-     let cinemaModeFit = 'cover';
+     let cinemaToggleInFlight = false;
+     let pendingDisplayMode = null;
+     let activeDisplayMode = null;
      const MEDIA_START_GRACE_MS = 3500;
     const mediaPlayingState = new Map();
     const recentMediaStartAt = new WeakMap();
@@ -3050,6 +3016,143 @@ body {
       }
     }
 
+    function getCinemaModeScript(enable) {
+      if (!enable) {
+        return `
+          (() => {
+            const state = window.__discoveryCinemaMode;
+            if (!state) return false;
+            const restore = (el, styles) => {
+              if (!el || !styles) return;
+              for (const [key, value] of Object.entries(styles)) {
+                el.style[key] = value || '';
+              }
+            };
+            restore(state.video, state.videoStyles);
+            restore(document.documentElement, state.htmlStyles);
+            restore(document.body, state.bodyStyles);
+            const backdrop = document.getElementById('__discoveryCinemaBackdrop');
+            if (backdrop && backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
+            if (state.video && state.hadControls === false) {
+              try { state.video.removeAttribute('controls'); } catch (e) {}
+            }
+            window.__discoveryCinemaMode = null;
+            return true;
+          })();
+        `;
+      }
+
+      return `
+        (() => {
+          const isElementVisible = (el) => {
+            if (!el || !el.isConnected) return false;
+            const style = window.getComputedStyle(el);
+            if (!style || style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity || '1') <= 0.05) return false;
+            const rect = el.getBoundingClientRect();
+            return rect && rect.width >= 40 && rect.height >= 40 && rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth;
+          };
+          const videos = Array.from(document.querySelectorAll('video'));
+          const video = videos.find((item) => !item.paused && !item.ended && isElementVisible(item))
+            || videos.find((item) => isElementVisible(item) && (item.currentSrc || item.src))
+            || videos.find((item) => item.currentSrc || item.src)
+            || videos[0];
+          if (!video) return false;
+
+          const styleKeys = ['position', 'display', 'inset', 'top', 'right', 'bottom', 'left', 'width', 'height', 'maxWidth', 'maxHeight', 'minWidth', 'minHeight', 'zIndex', 'objectFit', 'objectPosition', 'background', 'boxShadow', 'borderRadius', 'transform', 'margin', 'boxSizing', 'aspectRatio'];
+          const pageStyleKeys = ['overflow', 'background'];
+          const capture = (el, keys) => keys.reduce((acc, key) => {
+            acc[key] = el && el.style ? el.style[key] : '';
+            return acc;
+          }, {});
+          const toKebab = (key) => String(key).replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase());
+          const applyImportantStyles = (el, styles) => {
+            if (!el || !el.style) return;
+            for (const [key, value] of Object.entries(styles || {})) {
+              el.style.setProperty(toKebab(key), String(value), 'important');
+            }
+          };
+
+          const existingState = window.__discoveryCinemaMode;
+          const sameVideoState = existingState && existingState.video === video ? existingState : null;
+          const hadControls = sameVideoState ? sameVideoState.hadControls : video.hasAttribute('controls');
+          let backdrop = document.getElementById('__discoveryCinemaBackdrop');
+          if (!backdrop) {
+            backdrop = document.createElement('div');
+            backdrop.id = '__discoveryCinemaBackdrop';
+            backdrop.setAttribute('aria-hidden', 'true');
+            document.documentElement.appendChild(backdrop);
+          }
+          Object.assign(backdrop.style, {
+            position: 'fixed',
+            inset: '0',
+            zIndex: '2147483645',
+            background: '#000',
+            pointerEvents: 'none'
+          });
+          window.__discoveryCinemaMode = {
+            video,
+            hadControls,
+            videoStyles: sameVideoState ? sameVideoState.videoStyles : capture(video, styleKeys),
+            htmlStyles: sameVideoState ? sameVideoState.htmlStyles : capture(document.documentElement, pageStyleKeys),
+            bodyStyles: sameVideoState ? sameVideoState.bodyStyles : capture(document.body, pageStyleKeys)
+          };
+          Object.assign(document.documentElement.style, { overflow: 'hidden', background: '#000' });
+          Object.assign(document.body.style, { overflow: 'hidden', background: '#000' });
+          applyImportantStyles(video, {
+            position: 'fixed',
+            display: 'block',
+            inset: '0',
+            top: '0',
+            right: '0',
+            bottom: '0',
+            left: '0',
+            width: '100vw',
+            height: '100vh',
+            maxWidth: 'none',
+            maxHeight: 'none',
+            minWidth: '0',
+            minHeight: '0',
+            zIndex: '2147483646',
+            objectFit: 'cover',
+            objectPosition: 'center center',
+            background: '#000',
+            boxShadow: 'none',
+            borderRadius: '0',
+            transform: 'none',
+            margin: '0',
+            boxSizing: 'border-box',
+            aspectRatio: 'auto'
+          });
+          try { video.setAttribute('controls', 'controls'); } catch (e) {}
+          return true;
+        })();
+      `;
+    }
+
+    async function setCinemaVideoMode(enabled) {
+      const targets = enabled
+        ? getMediaCommandTargets()
+        : (cinemaModeTarget ? [cinemaModeTarget] : getMediaTargets());
+      let applied = false;
+      for (const target of targets) {
+        const result = await runMediaScript(target, getCinemaModeScript(enabled), { bypassPending: true });
+        if (result) {
+          applied = true;
+          cinemaModeTarget = enabled ? target : null;
+          if (enabled) lastActiveMediaWebview = target;
+          break;
+        }
+      }
+      if (!enabled || applied) {
+        cinemaModeActive = !!enabled && applied;
+      }
+      if (!enabled && !applied) {
+        cinemaModeTarget = null;
+        cinemaModeActive = false;
+      }
+      return applied;
+    }
+
     // Detect if both videos are currently playing and optimize buffering
     async function optimizeSplitScreenVideoBuffering() {
       if (!isSplitView || !splitWebview) return;
@@ -3603,16 +3706,6 @@ body {
       if (mediaVisualLockBtn) {
         mediaVisualLockBtn.disabled = !shouldShow;
       }
-      if (mediaCinemaBtn) {
-        mediaCinemaBtn.disabled = !cinemaModeActive && (!shouldShow || !isVideo);
-        mediaCinemaBtn.textContent = cinemaModeActive && cinemaModeFit === 'cover' ? 'Exit' : 'Cinema';
-        mediaCinemaBtn.title = cinemaModeActive && cinemaModeFit === 'cover' ? 'Exit cinema mode' : 'Fill card edge-to-edge';
-      }
-      if (mediaVideoFullBtn) {
-        mediaVideoFullBtn.disabled = !cinemaModeActive && (!shouldShow || !isVideo);
-        mediaVideoFullBtn.textContent = cinemaModeActive && cinemaModeFit === 'contain' ? 'Exit' : 'Full';
-        mediaVideoFullBtn.title = cinemaModeActive && cinemaModeFit === 'contain' ? 'Exit full-card video' : 'Fit full video inside card';
-      }
       if (mediaSideFlamesBtn) {
         mediaSideFlamesBtn.disabled = !shouldShow || normalizedShape !== 'wave';
       }
@@ -3751,211 +3844,6 @@ body {
       } finally {
         mediaSyncInFlight = false;
       }
-    }
-
-    function updateCinemaButtons() {
-      if (mediaCinemaBtn) {
-        mediaCinemaBtn.textContent = cinemaModeActive && cinemaModeFit === 'cover' ? 'Exit' : 'Cinema';
-        mediaCinemaBtn.title = cinemaModeActive && cinemaModeFit === 'cover' ? 'Exit cinema mode' : 'Fill card edge-to-edge';
-      }
-      if (mediaVideoFullBtn) {
-        mediaVideoFullBtn.textContent = cinemaModeActive && cinemaModeFit === 'contain' ? 'Exit' : 'Full';
-        mediaVideoFullBtn.title = cinemaModeActive && cinemaModeFit === 'contain' ? 'Exit full-card video' : 'Fit full video inside card';
-      }
-    }
-
-    function getCinemaModeScript(enable, fitMode = 'cover') {
-      const isFullWidthMode = fitMode === 'contain';
-      const objectFit = isFullWidthMode ? 'contain' : 'cover';
-      if (!enable) {
-        return `
-          (() => {
-            const state = window.__discoveryCinemaMode;
-            if (!state) return false;
-            const restore = (el, styles) => {
-              if (!el || !styles) return;
-              for (const [key, value] of Object.entries(styles)) {
-                el.style[key] = value || '';
-              }
-            };
-            restore(state.video, state.videoStyles);
-            restore(document.documentElement, state.htmlStyles);
-            restore(document.body, state.bodyStyles);
-            const backdrop = document.getElementById('__discoveryCinemaBackdrop');
-            if (backdrop && backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
-            if (state.video && state.hadControls === false) {
-              try { state.video.removeAttribute('controls'); } catch (e) {}
-            }
-            window.__discoveryCinemaMode = null;
-            return true;
-          })();
-        `;
-      }
-
-      return `
-        (() => {
-          const isElementVisible = (el) => {
-            if (!el || !el.isConnected) return false;
-            const style = window.getComputedStyle(el);
-            if (!style || style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity || '1') <= 0.05) return false;
-            const rect = el.getBoundingClientRect();
-            return rect && rect.width >= 40 && rect.height >= 40 && rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth;
-          };
-          const videos = Array.from(document.querySelectorAll('video'));
-          const video = videos.find((item) => !item.paused && !item.ended && isElementVisible(item))
-            || videos.find((item) => isElementVisible(item) && (item.currentSrc || item.src))
-            || videos.find((item) => item.currentSrc || item.src)
-            || videos[0];
-          if (!video) return false;
-
-          const existingCinemaState = window.__discoveryCinemaMode || null;
-          if (existingCinemaState && existingCinemaState.video !== video) {
-            try {
-              const previous = existingCinemaState;
-              for (const [key, value] of Object.entries(previous.videoStyles || {})) previous.video.style[key] = value || '';
-            } catch (e) {}
-          }
-
-          const styleKeys = ['position', 'display', 'inset', 'top', 'right', 'bottom', 'left', 'width', 'height', 'maxWidth', 'maxHeight', 'minWidth', 'minHeight', 'zIndex', 'objectFit', 'objectPosition', 'background', 'boxShadow', 'borderRadius', 'transform', 'margin', 'boxSizing', 'aspectRatio'];
-          const pageStyleKeys = ['overflow', 'background'];
-          const capture = (el, keys) => keys.reduce((acc, key) => {
-            acc[key] = el && el.style ? el.style[key] : '';
-            return acc;
-          }, {});
-          const toKebab = (key) => String(key).replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase());
-          const applyImportantStyles = (el, styles) => {
-            if (!el || !el.style) return;
-            for (const [key, value] of Object.entries(styles || {})) {
-              el.style.setProperty(toKebab(key), String(value), 'important');
-            }
-          };
-          const sameVideoState = existingCinemaState && existingCinemaState.video === video
-            ? existingCinemaState
-            : null;
-          const hadControls = sameVideoState ? sameVideoState.hadControls : video.hasAttribute('controls');
-          let backdrop = document.getElementById('__discoveryCinemaBackdrop');
-          if (!backdrop) {
-            backdrop = document.createElement('div');
-            backdrop.id = '__discoveryCinemaBackdrop';
-            backdrop.setAttribute('aria-hidden', 'true');
-            document.documentElement.appendChild(backdrop);
-          }
-          Object.assign(backdrop.style, {
-            position: 'fixed',
-            inset: '0',
-            zIndex: '2147483645',
-            background: '#000',
-            pointerEvents: 'none'
-          });
-          window.__discoveryCinemaMode = {
-            video,
-            hadControls,
-            videoStyles: sameVideoState ? sameVideoState.videoStyles : capture(video, styleKeys),
-            htmlStyles: sameVideoState ? sameVideoState.htmlStyles : capture(document.documentElement, pageStyleKeys),
-            bodyStyles: sameVideoState ? sameVideoState.bodyStyles : capture(document.body, pageStyleKeys)
-          };
-          Object.assign(document.documentElement.style, { overflow: 'hidden', background: '#000' });
-          Object.assign(document.body.style, { overflow: 'hidden', background: '#000' });
-          applyImportantStyles(video, ${isFullWidthMode ? `{
-            position: 'fixed',
-            display: 'block',
-            inset: 'auto',
-            top: '50%',
-            right: 'auto',
-            bottom: 'auto',
-            left: '0',
-            width: '100vw',
-            height: 'auto',
-            maxWidth: 'none',
-            maxHeight: 'none',
-            minWidth: '100vw',
-            minHeight: '0',
-            zIndex: '2147483646',
-            objectFit: ${JSON.stringify(objectFit)},
-            objectPosition: 'center center',
-            background: '#000',
-            boxShadow: 'none',
-            borderRadius: '0',
-            transform: 'translateY(-50%)',
-            margin: '0',
-            boxSizing: 'border-box',
-            aspectRatio: 'auto'
-          }` : `{
-            position: 'fixed',
-            display: 'block',
-            inset: '0',
-            top: '0',
-            right: '0',
-            bottom: '0',
-            left: '0',
-            width: '100vw',
-            height: '100vh',
-            maxWidth: 'none',
-            maxHeight: 'none',
-            minWidth: '0',
-            minHeight: '0',
-            zIndex: '2147483646',
-            objectFit: ${JSON.stringify(objectFit)},
-            objectPosition: 'center center',
-            background: '#000',
-            boxShadow: 'none',
-            borderRadius: '0',
-            transform: 'none',
-            margin: '0',
-            boxSizing: 'border-box',
-            aspectRatio: 'auto'
-          }`});
-          try { video.setAttribute('controls', 'controls'); } catch (e) {}
-          try { video.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {}
-          return true;
-        })();
-      `;
-    }
-
-    async function setCinemaMode(enabled, fitMode = 'cover') {
-      const nextEnabled = !!enabled;
-      const normalizedFit = fitMode === 'contain' ? 'contain' : 'cover';
-      const targets = nextEnabled
-        ? getMediaCommandTargets()
-        : (cinemaModeTarget ? [cinemaModeTarget] : getMediaTargets());
-      let applied = false;
-
-      for (const target of targets) {
-        const result = await runMediaScript(target, getCinemaModeScript(nextEnabled, normalizedFit), { bypassPending: true });
-        if (result) {
-          applied = true;
-          cinemaModeTarget = nextEnabled ? target : null;
-          if (nextEnabled) cinemaModeFit = normalizedFit;
-          lastActiveMediaWebview = nextEnabled ? target : lastActiveMediaWebview;
-          break;
-        }
-      }
-
-      if (!applied && !nextEnabled) {
-        cinemaModeTarget = null;
-      }
-      cinemaModeActive = nextEnabled && applied;
-      updateCinemaButtons();
-      if (applied) {
-        setTimeout(() => syncMediaControlState(), 80);
-      }
-      return applied;
-    }
-
-    async function toggleCinemaMode(fitMode = 'cover') {
-      const normalizedFit = fitMode === 'contain' ? 'contain' : 'cover';
-      const shouldExit = cinemaModeActive && cinemaModeFit === normalizedFit;
-      await setCinemaMode(!shouldExit, normalizedFit);
-    }
-
-    function clearCinemaModeStateForTarget(targetWebview) {
-      if (!cinemaModeActive && cinemaModeTarget !== targetWebview) return;
-      cinemaModeActive = false;
-      if (!targetWebview || cinemaModeTarget === targetWebview) {
-        cinemaModeTarget = null;
-      }
-      cinemaModeFit = 'cover';
-      updateCinemaButtons();
     }
 
     function setAudioVisualizer(isActive) {
@@ -4395,22 +4283,6 @@ body {
       });
     }
 
-    if (mediaCinemaBtn) {
-      mediaCinemaBtn.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleCinemaMode('cover');
-      });
-    }
-
-    if (mediaVideoFullBtn) {
-      mediaVideoFullBtn.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleCinemaMode('contain');
-      });
-    }
-
     document.addEventListener('pointerdown', (event) => {
       if (!mediaPanelOpen || !mediaHoverControl) return;
       if (mediaHoverControl.contains(event.target)) return;
@@ -4466,6 +4338,20 @@ body {
       });
     }
 
+    function toggleCinemaMode() {
+      pendingDisplayMode = 'cinema';
+      if (fullscreenBtn && typeof fullscreenBtn.click === 'function') {
+        fullscreenBtn.click();
+      }
+    }
+
+    function toggleFullMode() {
+      pendingDisplayMode = 'full';
+      if (fullscreenBtn && typeof fullscreenBtn.click === 'function') {
+        fullscreenBtn.click();
+      }
+    }
+
     window.addEventListener('visualizer-widget-command', (event) => {
       const detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
       const action = String(detail.action || '').toLowerCase();
@@ -4491,11 +4377,11 @@ body {
         return;
       }
       if (action === 'cinema-toggle') {
-        toggleCinemaMode(value === 'contain' ? 'contain' : 'cover');
+        toggleCinemaMode();
         return;
       }
       if (action === 'video-full-toggle') {
-        toggleCinemaMode('contain');
+        toggleFullMode();
         return;
       }
       if (action === 'style-next') {
@@ -4730,7 +4616,6 @@ body {
     // Update URL and title when webview navigates
     webview.addEventListener('did-navigate', (e) => {
       try {
-        clearCinemaModeStateForTarget(webview);
         if (isHttpUrl(e && e.url)) {
           hideSecurityNoticeWhenAppropriate(true);
         } else {
@@ -4775,7 +4660,6 @@ body {
 
     if (splitWebview) {
       splitWebview.addEventListener('did-navigate', (e) => {
-        clearCinemaModeStateForTarget(splitWebview);
         if (isHttpUrl(e && e.url)) {
           hideSecurityNoticeWhenAppropriate(true);
         } else {
@@ -5480,6 +5364,10 @@ if (isClosingCard || isMinimizingCard) return;
 
     // Fullscreen toggle button
     fullscreenBtn.addEventListener('click', async () => {
+      if (cinemaToggleInFlight) return;
+      cinemaToggleInFlight = true;
+      const requestedDisplayMode = pendingDisplayMode === 'full' ? 'full' : 'cinema';
+      pendingDisplayMode = null;
       try {
         if (!isFullscreen) {
           // Save current bounds and mode before entering fullscreen-like view
@@ -5492,52 +5380,61 @@ if (isClosingCard || isMinimizingCard) return;
           };
           wasWideBeforeFullscreen = isWideView;
 
-          await window.cardAPI.toggleFullscreen(cardId, true);
+          await window.cardAPI.toggleFullscreen(cardId, true, requestedDisplayMode);
+          await setCinemaVideoMode(true);
           isFullscreen = true;
+          activeDisplayMode = requestedDisplayMode;
           fullscreenBtn.style.background = 'rgba(100, 255, 100, 0.8)'; // Green when active
           fullscreenBtn.textContent = '⛶';
-          fullscreenBtn.title = 'Exit Fullscreen';
+          fullscreenBtn.title = requestedDisplayMode === 'full' ? 'Exit Full Mode' : 'Exit Cinema Mode';
           setSplitVisibility();
+        } else if (requestedDisplayMode !== activeDisplayMode) {
+          await window.cardAPI.toggleFullscreen(cardId, true, requestedDisplayMode);
+          activeDisplayMode = requestedDisplayMode;
+          fullscreenBtn.title = requestedDisplayMode === 'full' ? 'Exit Full Mode' : 'Exit Cinema Mode';
         } else {
+          const restoreBounds = preFullscreenBounds ? { ...preFullscreenBounds } : null;
+          const restoreWide = wasWideBeforeFullscreen;
+          await setCinemaVideoMode(false);
           await window.cardAPI.toggleFullscreen(cardId, false);
 
           // Restore the exact size/mode the card had before entering fullscreen
-          if (wasWideBeforeFullscreen) {
-            setTimeout(async () => {
-              const screenWidth = window.screen.availWidth;
-              const wideX = Math.floor((screenWidth - WIDE_WIDTH) / 2);
-              await window.cardAPI.resizeCard(
-                cardId,
-                wideX,
-                preFullscreenBounds ? preFullscreenBounds.y : window.screenY,
-                WIDE_WIDTH,
-                WIDE_HEIGHT
-              );
-            }, 100);
-          } else if (preFullscreenBounds) {
-            setTimeout(async () => {
-              await window.cardAPI.resizeCard(
-                cardId,
-                preFullscreenBounds.x,
-                preFullscreenBounds.y,
-                preFullscreenBounds.width,
-                preFullscreenBounds.height
-              );
-            }, 100);
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          if (restoreWide) {
+            const screenWidth = window.screen.availWidth;
+            const wideX = Math.floor((screenWidth - WIDE_WIDTH) / 2);
+            await window.cardAPI.resizeCard(
+              cardId,
+              wideX,
+              restoreBounds ? restoreBounds.y : window.screenY,
+              WIDE_WIDTH,
+              WIDE_HEIGHT
+            );
+          } else if (restoreBounds) {
+            await window.cardAPI.resizeCard(
+              cardId,
+              restoreBounds.x,
+              restoreBounds.y,
+              restoreBounds.width,
+              restoreBounds.height
+            );
           }
 
           isFullscreen = false;
-          isWideView = wasWideBeforeFullscreen;
+          activeDisplayMode = null;
+          isWideView = restoreWide;
           preFullscreenBounds = null;
           wasWideBeforeFullscreen = false;
           wideBtn.style.background = isWideView ? 'rgba(100, 255, 100, 0.8)' : 'rgba(100, 200, 255, 0.7)';
           wideBtn.title = isWideView ? `Normal View (${NORMAL_WIDTH}px)` : `Wide View (${WIDE_WIDTH}px)`;
           fullscreenBtn.style.background = 'rgba(100, 200, 255, 0.7)';
-          fullscreenBtn.title = 'Toggle Fullscreen';
+          fullscreenBtn.title = 'Cinema Mode';
           setSplitVisibility();
         }
       } catch (err) {
         console.error('Error toggling fullscreen:', err);
+      } finally {
+        cinemaToggleInFlight = false;
       }
     });
 

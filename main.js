@@ -1,4 +1,4 @@
-// main.js
+﻿// main.js
 const electron = require('electron');
 const app = electron.app;
 const BrowserWindow = electron.BrowserWindow;
@@ -14,19 +14,6 @@ const { pathToFileURL } = require('url');
 
 const { Menu, MenuItem } = require('electron');
 const APP_ICON_PATH = path.join(__dirname, 'assets', 'discoverybrowser.ico');
-
-function readJsonFileIfPresent(filePath) {
-  if (!filePath || !fs.existsSync(filePath)) {
-    return { exists: false, empty: false, value: null };
-  }
-
-  const raw = fs.readFileSync(filePath, 'utf8');
-  if (!raw || !raw.trim()) {
-    return { exists: true, empty: true, value: null };
-  }
-
-  return { exists: true, empty: false, value: JSON.parse(raw) };
-}
 
 function dirLooksLikeBrowserProfile(dirPath) {
   if (!dirPath) return false;
@@ -781,7 +768,6 @@ const bubbleNotificationSources = new Map(); // cardId -> 'api' | 'title'
 const bubbleMediaStates = new Map(); // cardId -> { isPlaying, isVideo, isLive }
 const visualizerWidgetStates = new Map(); // cardId -> { isPlaying, isVideo, isLive, visualizerStyle, themeKey }
 const visualizerWidgetLockStates = new Map(); // cardId -> boolean
-const visualizerWidgetPanelStates = new Map(); // cardId -> boolean
 const sideFlamesEnabledStates = new Map(); // cardId -> boolean
 const visualizerRestoreBoosts = new Map(); // cardId -> timestamp until widget may remain attached during restore handoff
 const visualizerRestoreSuppressions = new Map(); // cardId -> timestamp until widget must remain hidden during restore animation
@@ -800,13 +786,13 @@ const CARD_LAUNCH_MODE_WIDE = 'wide';
 const CARD_LAUNCH_MODE_FULLSCREEN = 'fullscreen';
 const CARD_LAUNCH_VERTICAL_OFFSET = 36;
 const CARD_PSEUDO_FULLSCREEN_TOP_GAP = 28;
-const CARD_PSEUDO_FULLSCREEN_SIDE_GAP = 12;
 const CARD_PSEUDO_FULLSCREEN_BOTTOM_GAP = 4;
+const CARD_CINEMA_HEIGHT = 560;
+const CARD_FULL_MODE_TOP_GAP = 8;
+const CARD_FULL_MODE_BOTTOM_GAP = 8;
 const EXTERNAL_CARD_LAUNCH_DEDUPE_MS = 2500;
 const VISUALIZER_WIDGET_WIDTH = 352;
-const VISUALIZER_WIDGET_HEIGHT = 276;
-const VISUALIZER_WIDGET_COLLAPSED_WIDTH = 96;
-const VISUALIZER_WIDGET_COLLAPSED_HEIGHT = 32;
+const VISUALIZER_WIDGET_HEIGHT = 220;
 const CARD_TITLEBAR_HEIGHT = 48;
 const VISUALIZER_WIDGET_SHELL_HEIGHT = 26;
 const VISUALIZER_WIDGET_TOP_INSET = 6;
@@ -858,10 +844,15 @@ function getLaunchWindowSizeByMode(mode, shapeKey = 'default') {
     : { width: 850, height: 500 };
 }
 
-function getCardPseudoFullscreenBounds(cardWindow) {
+function getCardPseudoFullscreenBounds(cardWindow, mode = 'cinema') {
   const shapeKey = normalizeCardShapeKey(cardWindow && cardWindow.__cardShape);
-  const topGap = shapeKey === 'wave' ? 12 : CARD_PSEUDO_FULLSCREEN_TOP_GAP;
-  const bottomGap = shapeKey === 'wave' ? 0 : CARD_PSEUDO_FULLSCREEN_BOTTOM_GAP;
+  const normalizedMode = String(mode || '').toLowerCase() === 'full' ? 'full' : 'cinema';
+  const topGap = normalizedMode === 'full'
+    ? CARD_FULL_MODE_TOP_GAP
+    : (shapeKey === 'wave' ? 12 : CARD_PSEUDO_FULLSCREEN_TOP_GAP);
+  const bottomGap = normalizedMode === 'full'
+    ? CARD_FULL_MODE_BOTTOM_GAP
+    : (shapeKey === 'wave' ? 0 : CARD_PSEUDO_FULLSCREEN_BOTTOM_GAP);
   let display = null;
   try {
     if (cardWindow && !cardWindow.isDestroyed()) {
@@ -879,15 +870,19 @@ function getCardPseudoFullscreenBounds(cardWindow) {
     ? display.workArea
     : { x: 0, y: 0, width: 1280, height: 720 };
 
-  const x = Math.round(workArea.x + CARD_PSEUDO_FULLSCREEN_SIDE_GAP);
+  const availableHeight = Math.max(360, workArea.height - topGap - bottomGap);
+  const targetHeight = normalizedMode === 'full' ? availableHeight : CARD_CINEMA_HEIGHT;
+  const cinemaHeight = Math.min(availableHeight, targetHeight);
+
+  const x = Math.round(workArea.x);
   const y = Math.round(workArea.y + topGap);
-  const width = Math.max(640, Math.round(workArea.width - (CARD_PSEUDO_FULLSCREEN_SIDE_GAP * 2)));
-  const height = Math.max(420, Math.round(workArea.height - topGap - bottomGap));
+  const width = Math.max(640, Math.round(workArea.width));
+  const height = Math.round(cinemaHeight);
 
   return { x, y, width, height };
 }
 
-function applyCardPseudoFullscreen(cardWindow) {
+function applyCardPseudoFullscreen(cardWindow, mode = 'cinema') {
   if (!cardWindow || cardWindow.isDestroyed()) return;
   try {
     if (typeof cardWindow.setFullScreen === 'function') {
@@ -895,7 +890,7 @@ function applyCardPseudoFullscreen(cardWindow) {
     }
   } catch (e) { }
   try {
-    cardWindow.setBounds(getCardPseudoFullscreenBounds(cardWindow));
+    cardWindow.setBounds(getCardPseudoFullscreenBounds(cardWindow, mode));
   } catch (e) { }
 }
 
@@ -1026,14 +1021,12 @@ function closeVisualizerWidget(cardId) {
   } catch (e) { }
   visualizerWidgets.delete(cardId);
   visualizerWidgetLockStates.delete(Number(cardId));
-  visualizerWidgetPanelStates.delete(Number(cardId));
   visualizerRestoreBoosts.delete(cardId);
   visualizerRestoreSuppressions.delete(Number(cardId));
 }
 
 function hideVisualizerWidget(cardId) {
   const widget = visualizerWidgets.get(cardId);
-  visualizerWidgetPanelStates.delete(Number(cardId));
   visualizerRestoreBoosts.delete(cardId);
   visualizerRestoreSuppressions.delete(Number(cardId));
   if (!widget || widget.isDestroyed()) return;
@@ -1070,7 +1063,6 @@ function getVisualizerWidgetBounds(cardWindow) {
   const bounds = cardWindow.getBounds();
   const cardId = Number(cardWindow.__cardId);
   const isLocked = visualizerWidgetLockStates.get(cardId) === true;
-  const isPanelOpen = visualizerWidgetPanelStates.get(cardId) === true;
   if (isLocked) {
     return {
       x: Math.round(bounds.x),
@@ -1081,13 +1073,11 @@ function getVisualizerWidgetBounds(cardWindow) {
   }
   const centeredTitlebarOffset = VISUALIZER_WIDGET_TOP_INSET
     + Math.round((CARD_TITLEBAR_HEIGHT - VISUALIZER_WIDGET_SHELL_HEIGHT) / 2);
-  const width = isPanelOpen ? VISUALIZER_WIDGET_WIDTH : VISUALIZER_WIDGET_COLLAPSED_WIDTH;
-  const height = isPanelOpen ? VISUALIZER_WIDGET_HEIGHT : VISUALIZER_WIDGET_COLLAPSED_HEIGHT;
   return {
-    x: Math.round(bounds.x + ((bounds.width - width) / 2)),
+    x: Math.round(bounds.x + ((bounds.width - VISUALIZER_WIDGET_WIDTH) / 2)),
     y: Math.round(bounds.y + centeredTitlebarOffset),
-    width,
-    height,
+    width: VISUALIZER_WIDGET_WIDTH,
+    height: VISUALIZER_WIDGET_HEIGHT,
   };
 }
 
@@ -1381,7 +1371,6 @@ function ensureVisualizerWidget(cardId, cardWindow) {
   });
   widget.on('closed', () => {
     visualizerWidgets.delete(cardId);
-    visualizerWidgetPanelStates.delete(Number(cardId));
   });
 
   visualizerWidgets.set(cardId, widget);
@@ -1418,7 +1407,6 @@ function syncVisualizerWidget(cardId) {
       if (!widget.isVisible()) widget.show();
       widget.setAlwaysOnTop(false);
     } else if (widget.isVisible()) {
-      visualizerWidgetPanelStates.delete(Number(cardId));
       widget.hide();
     }
   } catch (e) { }
@@ -1789,11 +1777,11 @@ function loadPermissionDecisionsFromDisk() {
   if (permissionDecisionsLoaded) return;
   permissionDecisionsLoaded = true;
   const filePath = getPermissionDecisionsFilePath();
+  if (!filePath || !fs.existsSync(filePath)) return;
 
   try {
-    const jsonFile = readJsonFileIfPresent(filePath);
-    if (!jsonFile.exists || jsonFile.empty) return;
-    const parsed = jsonFile.value;
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const parsed = JSON.parse(raw);
     const decisions = parsed && parsed.decisions && typeof parsed.decisions === 'object'
       ? parsed.decisions
       : {};
@@ -3432,76 +3420,6 @@ function applyAddons(addonsArray) {
     'spotxchange.com',
     'brightroll.com',
 
-    // ========================
-    // Hidden Click Ads & Redirect Services (NEW)
-    // ========================
-    // Redirect/URL Shortener Services Used for Ad Redirects
-    'bit.ly', 'bitly.com', 'j.mp',
-    'tinyurl.com', 'short.link', 'shortened.me',
-    'ow.ly', 'owly.com',
-    'buff.ly', 'bufferize.com',
-    'is.gd', 'isgd.com',
-    'clickserve.com', 'click.links.com', 'links.click',
-    'adfly.click', 'adf.ly', 'ad.fly',
-    'linkvertise.com', 'lnk.to', 'link.to',
-    'linkredirect.com', 'lnk.red', 'lnk.click',
-    'clk.best', 'clk.link', 'clk.sh',
-    'short2url.com', 'short2.com',
-    'ourl.co', 'ourl.io', 'ourlnk.com',
-    'clksite.com', 'clkads.com',
-    'xn--80akhbyknj4f.com', // IDN domain for ads
-    'fastclick.com', 'fastlnk.com',
-    'clicktrack.com', 'tracking.click',
-    
-    // Click Fraud Networks
-    'adcash.com', 'adcashpublisher.com',
-    'adnow.com', 'adnow.net',
-    'clicksfly.com', 'clicksflying.com',
-    'cpacircus.com',
-    'exoclick.com',
-    'popads.net', 'popads.com',
-    'poppular.com',
-    'popadblock.com',
-    'clickadu.com', 'clickadu.net',
-    
-    // Hidden Overlay Networks
-    'adthrive.com', 'adthrive-cdn.com',
-    'adnetwork.com', 'adnetwork.net',
-    'oversee.com', 'oversee.net',
-    'parked-content.com',
-    'parkingcrew.net', 'parkingcrew.com',
-    'clickmedia.com', 'click-media.net',
-    'overlay.net', 'overlayads.com',
-    'floatingads.com', 'floating-ads.net',
-    
-    // Scroll-jacking & Video Overlay Networks
-    'video-ad.net', 'videoadex.com',
-    'floatingleads.net',
-    'adspirit.de',
-    'smartadserver.com',
-    'pulsepoint.com', 'pulsepointadv.com',
-    'adreactor.com',
-    'adextent.com', 'adx.co',
-    
-    // Pop-under & Malicious Redirect Networks
-    'popunder.com', 'popunders.net',
-    'pop-under.com', 'pop-ads.net',
-    'pops.network', 'popsadvert.com',
-    'redirects.trade', 'redirect.xxx',
-    'redirecting.host', 'redirecturl.com',
-    'click-redirect.com', 'click-ads.com',
-    'adredirect.com', 'ad-redirect.net',
-    'instantredirect.com', 'instant-redirect.net',
-    
-    // Social Malware & PPI Networks
-    'nonstopads.com',
-    'trafficjunky.com',
-    'ero-advertising.com',
-    'yesadvertising.com',
-    'adultadvertising.com',
-    'youporn-ads.com',
-    'pornhub-ads.com',
-
     // Ad Pattern Blockers
     'ads.', 'ad.', 'adv.', 'adserver', 'advertising',
   ];
@@ -4054,7 +3972,7 @@ ipcMain.handle('resize-card', async (event, cardId, x, y, width, height) => {
 });
 
 // Toggle fullscreen
-ipcMain.handle('toggle-fullscreen', async (event, cardId, shouldBeFullscreen) => {
+ipcMain.handle('toggle-fullscreen', async (event, cardId, shouldBeFullscreen, mode = 'cinema') => {
   try {
     const cardWindow = cardWindows.get(cardId);
     if (!cardWindow || cardWindow.isDestroyed()) {
@@ -4062,7 +3980,7 @@ ipcMain.handle('toggle-fullscreen', async (event, cardId, shouldBeFullscreen) =>
     }
 
     if (shouldBeFullscreen) {
-      applyCardPseudoFullscreen(cardWindow);
+      applyCardPseudoFullscreen(cardWindow, mode);
     } else if (typeof cardWindow.setFullScreen === 'function') {
       cardWindow.setFullScreen(false);
     }
@@ -4882,16 +4800,8 @@ ipcMain.handle('visualizer-widget-action', async (event, cardId, action, value =
       return { success: false, error: 'Card window unavailable' };
     }
     const normalizedAction = String(action || '').toLowerCase();
-    if (normalizedAction === 'panel-state') {
-      visualizerWidgetPanelStates.set(numericCardId, !!value);
-      syncVisualizerWidget(numericCardId);
-      return { success: true, panelOpen: !!value };
-    }
     if (normalizedAction === 'visual-lock' || normalizedAction === 'visual-unlock') {
       visualizerWidgetLockStates.set(numericCardId, normalizedAction === 'visual-lock');
-      if (normalizedAction === 'visual-lock') {
-        visualizerWidgetPanelStates.set(numericCardId, false);
-      }
       syncVisualizerWidget(numericCardId);
     }
     if (normalizedAction === 'side-flames-toggle') {
@@ -5041,13 +4951,10 @@ function loadFavoritesFromDisk() {
   if (favoritesLoaded) return;
   favoritesLoaded = true;
   const filePath = getFavoritesFilePath();
+  if (!filePath || !fs.existsSync(filePath)) return;
   try {
-    const jsonFile = readJsonFileIfPresent(filePath);
-    if (!jsonFile.exists || jsonFile.empty) {
-      favoritesCache = [];
-      return;
-    }
-    const parsed = jsonFile.value;
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const parsed = JSON.parse(raw);
     favoritesCache = Array.isArray(parsed && parsed.favorites) ? parsed.favorites : [];
   } catch (e) {
     console.warn('Failed to load favorites:', e.message || e);
