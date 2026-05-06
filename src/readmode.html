@@ -1036,6 +1036,24 @@
       cursor: none !important;
     }
 
+    body.magic-cursor-active,
+    body.magic-cursor-active * {
+      cursor: none !important;
+    }
+
+    body.magic-cursor-active .readmode-titlebar,
+    body.magic-cursor-active .readmode-titlebar *,
+    body.magic-cursor-active .status-bar,
+    body.magic-cursor-active .status-bar *,
+    body.magic-cursor-active .font-dropdown,
+    body.magic-cursor-active .font-dropdown *,
+    body.magic-cursor-active .magic-effects-menu,
+    body.magic-cursor-active .magic-effects-menu *,
+    body.magic-cursor-active .highlights-panel,
+    body.magic-cursor-active .highlights-panel * {
+      cursor: auto !important;
+    }
+
     .magic-cursor-active .magic-para:hover {
       background: rgba(255,235,0,0.18);
       box-shadow: 0 0 0 2px rgba(255,210,0,0.12);
@@ -1980,6 +1998,8 @@
     let articleRendered      = false;
     let userNavigating       = false;
     let lastExtractedPayload = null;
+    let extractionRetryUrl   = '';
+    let extractionRetryCount = 0;
 
     pageTitleEl.textContent    = initialTitle || 'Read Mode';
     pageSubtitleEl.textContent = isLocalFileUrl(initialUrl) ? getReadableFileLabel(initialUrl) : (initialUrl || 'Loading source');
@@ -2014,6 +2034,10 @@
       fullscreenBtn.textContent = isFullscreen ? '⊡' : '⛶';
       fullscreenBtn.title = isFullscreen ? 'Exit fullscreen' : 'Fullscreen';
       phoneFrame.classList.toggle('is-fullscreen', isFullscreen);
+      if (isFullscreen && magicCursorActive) {
+        magicSelectionPause = false;
+        magicCursorEl.classList.remove('visible');
+      }
 
       if (!isFullscreen) {
         requestAnimationFrame(refreshDragRegions);
@@ -2140,9 +2164,8 @@ function buildExtractionFailureMarkup(errorOrPayload, pageUrl) {
       const intro = details.shift() || 'The page content could not be converted into reader mode.';
       const items = details.map((detail) => `<li>${escapeHtml(detail)}</li>`).join('');
       return `<strong>We could not build the reader view.</strong>
-        <p>Try reloading the page. If the issue persists, check your internet connection.</p>
+        <p>Try reloading the page or opening it again in Read Mode. Some pages delay article text until after the first load event.</p>
         <p>${escapeHtml(intro)}</p>
-        <p>Try again once before assuming it is a network issue. Some pages need another extraction pass to finish cleanly.</p>
         ${items ? `<ul class="reader-empty-details">${items}</ul>` : ''}`;
     }
 
@@ -2161,6 +2184,22 @@ function buildExtractionFailureMarkup(errorOrPayload, pageUrl) {
         .join(' ');
 
       return /no internet|internet disconnected|err_internet_disconnected|check your network|network settings/.test(signalText);
+    }
+
+    function getPayloadBlockCount(payload) {
+      return Array.isArray(payload?.blocks) ? payload.blocks.length : 0;
+    }
+
+    function shouldRetryWeakExtraction(payload, pageUrl, reason) {
+      if (!pageUrl || reason === 'refresh') return false;
+      if (isLocalFileUrl(pageUrl)) return false;
+      if (isOfflineExtractionPayload(payload)) return false;
+      if (getPayloadBlockCount(payload) > 0) return false;
+      if (extractionRetryUrl !== pageUrl) {
+        extractionRetryUrl = pageUrl;
+        extractionRetryCount = 0;
+      }
+      return extractionRetryCount < 2;
     }
 
     function showReaderFailureState(title, message, statusLabel = title) {
@@ -2935,7 +2974,10 @@ function buildExtractionFailureMarkup(errorOrPayload, pageUrl) {
           const titleText = norm(document.title || '');
           const bodyText = norm(document.body ? (document.body.innerText || document.body.textContent || '') : '');
           const offlinePagePattern = /no internet|internet disconnected|err_internet_disconnected|check your network|network settings|check your internet connection/i;
-          if (offlinePagePattern.test(titleText) || offlinePagePattern.test(bodyText)) {
+          const chromiumErrorPage = /ERR_(INTERNET_DISCONNECTED|NAME_NOT_RESOLVED|CONNECTION_FAILED|CONNECTION_TIMED_OUT|NETWORK_ACCESS_DENIED|ADDRESS_UNREACHABLE)/i.test(bodyText);
+          const pageLooksLikeNetworkError = chromiumErrorPage
+            || (/^\\s*(no internet|this site can.t be reached|this page isn.t working)/i.test(titleText) && offlinePagePattern.test(bodyText));
+          if (pageLooksLikeNetworkError) {
             return {
               title: 'No internet connection',
               excerpt: '',
@@ -3336,7 +3378,7 @@ function buildExtractionFailureMarkup(errorOrPayload, pageUrl) {
           articleRendered = false;
           userNavigating = false;
           currentUrl = pageUrl;
-          showReaderFailureState('No internet connection', 'Check your network and try again.', 'No internet');
+          showReaderFailureState('This page did not load', 'The source page showed a browser network error. Check the page in the browser view, then try Read Mode again.', 'Load failed');
           return;
         }
 
@@ -3350,18 +3392,37 @@ function buildExtractionFailureMarkup(errorOrPayload, pageUrl) {
           return;
         }
 
+        if (shouldRetryWeakExtraction(payload, pageUrl, reason)) {
+          extractionRetryCount += 1;
+          const retryDelay = extractionRetryCount === 1 ? 1200 : 2400;
+          stopProgressTick();
+          setProgress(72, 'Waiting for article text...');
+          scheduleExtraction(`retry-${extractionRetryCount}`, retryDelay);
+          return;
+        }
+
         stopProgressTick();
         setProgress(80, 'Rendering article...');
         renderArticle(payload || {});
         // Store payload for offline saving
-        lastExtractedPayload = payload;
-        extractedUrl        = pageUrl;
-        articleRendered     = true;
+        const renderedBlocks = getPayloadBlockCount(payload);
+        lastExtractedPayload = renderedBlocks > 0 ? payload : null;
+        extractedUrl        = renderedBlocks > 0 ? pageUrl : '';
+        articleRendered     = renderedBlocks > 0;
         userNavigating      = false;
         currentUrl          = pageUrl;
-        loadHighlights(pageUrl);
-        setProgress(100, 'Complete!');
-        setTimeout(() => {
+        if (renderedBlocks > 0) {
+          extractionRetryUrl = pageUrl;
+          extractionRetryCount = 0;
+        }
+        if (renderedBlocks > 0) {
+          loadHighlights(pageUrl);
+          setProgress(100, 'Complete!');
+        } else {
+          wordCountLabel.textContent = 'Unavailable';
+          setProgress(0, 'Failed');
+        }
+        if (renderedBlocks > 0) setTimeout(() => {
           const savedBookmark = getStoredBookmark(currentUrl);
           const hasSavedBookmark = savedBookmark && Number.isInteger(savedBookmark.magicActiveIdx) && savedBookmark.magicActiveIdx >= 0;
 
@@ -3389,14 +3450,15 @@ function buildExtractionFailureMarkup(errorOrPayload, pageUrl) {
         clearTimeout(timeoutId);
         if (token !== extractionToken) return;
 
-        const errMsg = String(err?.message || '').toUpperCase();
-        const isNetErr = /NETWORK|INTERNET|CONNECTION|TIMED OUT|DNS|ADDRESS|REACHABLE|RESET|DISCONNECTED|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_FAILED|ERR_INTERNET_DISCONNECTED/i.test(errMsg);
+        const errMsg = String(err?.message || '');
+        const isExtractionTimeout = /Extraction timed out/i.test(errMsg);
+        const isNetErr = !isExtractionTimeout && /NETWORK|INTERNET|CONNECTION|DNS|ADDRESS|REACHABLE|RESET|DISCONNECTED|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_FAILED|ERR_INTERNET_DISCONNECTED|ERR_CONNECTION_TIMED_OUT/i.test(errMsg);
         const pageExt = getFileExtensionFromUrl(pageUrl);
         if (isNetErr || (isLocalFileUrl(pageUrl) && pageExt === 'pdf')) {
           if (isNetErr) {
             articleRendered = false;
             userNavigating = false;
-            showReaderFailureState('No internet connection', 'Check your network and try again.', 'No internet');
+            showReaderFailureState('This page did not load', 'The source page reported a network load error. Check the page in the browser view, then try Read Mode again.', 'Load failed');
             return;
           }
           currentUrl = pageUrl;
@@ -3426,6 +3488,8 @@ function buildExtractionFailureMarkup(errorOrPayload, pageUrl) {
       extractionInProgress = false;
       articleRendered      = false;
       userNavigating       = true;
+      extractionRetryUrl    = '';
+      extractionRetryCount  = 0;
       disableMagicCursor();
       closeLightbox();
     }
@@ -3596,9 +3660,9 @@ function isNetworkFailure(code, desc) {
       let title = 'This page could not load in read mode.';
       let statusLabel = title;
       if (isNetworkFailure(ev?.errorCode, ev?.errorDescription)) {
-        title = 'No internet connection';
-        message = 'Check your network and try again.';
-        statusLabel = 'No internet';
+        title = 'This page did not load';
+        message = 'The source page reported a network load error. Check the page in the browser view, then try Read Mode again.';
+        statusLabel = 'Load failed';
       }
       showReaderFailureState(title, message, statusLabel);
     });
@@ -3942,10 +4006,14 @@ function isNetworkFailure(code, desc) {
     let magicParaWordCounts = [];
     let magicHintDismissed = localStorage.getItem(MAGIC_HINT_DISMISSED_STORAGE_KEY) === 'true';
     let lastMagicWheelAt = 0;
+    let magicSelectionPause = false;
+    let magicPausedIdx = -1;
 
     const MAGIC_SCROLL_EDGE = 90;
     const MAGIC_SCROLL_STEP = 200;
     const MAGIC_WHEEL_COOLDOWN_MS = 160;
+    const MAGIC_HOVER_SNAP_PX = 34;
+    const MAGIC_WHEEL_LISTENER_OPTIONS = { passive: false, capture: true };
 
     function isValidMagicEffect(key) { return MAGIC_EFFECTS.some(e => e.key === key); }
     if (!isValidMagicEffect(activeMagicEffectKey)) activeMagicEffectKey = 'none';
@@ -4029,6 +4097,7 @@ function isNetworkFailure(code, desc) {
         });
         wrapper.addEventListener('click', (e) => {
           if (!magicCursorActive) return;
+          if (magicSelectionPause) return;
           e.stopPropagation();
           setMagicActive(parseInt(wrapper.dataset.magicIdx, 10), true);
         });
@@ -4089,9 +4158,77 @@ function isNetworkFailure(code, desc) {
       if (er.top < sr.top + MAGIC_SCROLL_EDGE) readerStage.scrollBy({ top: -MAGIC_SCROLL_STEP, behavior: 'smooth' });
     }
 
-    function onMagicMouseMove(e) { magicCursorEl.style.left = e.clientX + 'px'; magicCursorEl.style.top = e.clientY + 'px'; magicCursorEl.classList.add('visible'); }
+    function placeMagicCursor(e) {
+      if (magicSelectionPause) return;
+      magicCursorEl.style.left = e.clientX + 'px';
+      magicCursorEl.style.top = e.clientY + 'px';
+      magicCursorEl.classList.add('visible');
+    }
+
+    function onMagicMouseMove(e) { placeMagicCursor(e); }
     function onMagicMouseLeave() { magicCursorEl.classList.remove('visible'); }
-    function onMagicMouseEnter(e) { magicCursorEl.style.left = e.clientX + 'px'; magicCursorEl.style.top = e.clientY + 'px'; magicCursorEl.classList.add('visible'); }
+    function onMagicMouseEnter(e) { placeMagicCursor(e); }
+
+    function getMagicParaFromPoint(x, y) {
+      const getTextNodeAtPoint = () => {
+        try {
+          if (document.caretPositionFromPoint) {
+            const pos = document.caretPositionFromPoint(x, y);
+            if (pos && pos.offsetNode) return pos.offsetNode;
+          }
+        } catch (e) { }
+        try {
+          if (document.caretRangeFromPoint) {
+            const range = document.caretRangeFromPoint(x, y);
+            if (range && range.startContainer) return range.startContainer;
+          }
+        } catch (e) { }
+        return null;
+      };
+
+      const textNode = getTextNodeAtPoint();
+      const textPara = textNode && textNode.parentElement && textNode.parentElement.closest
+        ? textNode.parentElement.closest('.magic-para')
+        : null;
+      if (textPara && readerArticle.contains(textPara)) return textPara;
+
+      const target = document.elementFromPoint(x, y);
+      const directPara = target && target.closest ? target.closest('.magic-para') : null;
+      if (directPara && readerArticle.contains(directPara)) return directPara;
+
+      let closestPara = null;
+      let closestDistance = Number.POSITIVE_INFINITY;
+      for (const para of magicParaNodes) {
+        const rect = para.getBoundingClientRect();
+        if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
+        const horizontalHit = x >= rect.left - 12 && x <= rect.right + 12;
+        if (!horizontalHit) continue;
+        const verticalDistance = y < rect.top ? rect.top - y : (y > rect.bottom ? y - rect.bottom : 0);
+        if (verticalDistance < closestDistance) {
+          closestDistance = verticalDistance;
+          closestPara = para;
+        }
+      }
+      return closestDistance <= MAGIC_HOVER_SNAP_PX ? closestPara : null;
+    }
+
+    function syncMagicHoverFromPoint(e) {
+      if (!magicCursorActive || magicSelectionPause) return;
+      const stageRect = readerStage.getBoundingClientRect();
+      const insideReaderStage = e.clientX >= stageRect.left
+        && e.clientX <= stageRect.right
+        && e.clientY >= stageRect.top
+        && e.clientY <= stageRect.bottom;
+      if (!insideReaderStage) {
+        magicCursorEl.classList.remove('visible');
+        return;
+      }
+      placeMagicCursor(e);
+      const para = getMagicParaFromPoint(e.clientX, e.clientY);
+      if (!para || !readerArticle.contains(para)) return;
+      const idx = parseInt(para.dataset.magicIdx, 10);
+      if (Number.isFinite(idx) && idx !== magicActiveIdx) setMagicActive(idx, false);
+    }
 
     function showMagicHint() {
       if (magicHintDismissed) return;
@@ -4129,7 +4266,13 @@ function isNetworkFailure(code, desc) {
     }
 
     function handleMagicWheel(ev) {
-      if (!magicCursorActive) return;
+      if (!magicCursorActive || magicSelectionPause) return;
+      const stageRect = readerStage.getBoundingClientRect();
+      const isInsideReaderStage = ev.clientX >= stageRect.left
+        && ev.clientX <= stageRect.right
+        && ev.clientY >= stageRect.top
+        && ev.clientY <= stageRect.bottom;
+      if (!isInsideReaderStage) return;
       const delta = Math.abs(ev.deltaY) >= Math.abs(ev.deltaX) ? ev.deltaY : ev.deltaX;
       if (Math.abs(delta) < 6) return;
       ev.preventDefault();
@@ -4146,8 +4289,10 @@ function isNetworkFailure(code, desc) {
 
     function enableMagicCursor() {
       magicCursorActive = true;
+      magicSelectionPause = false;
       magicCursorBtn.classList.add('active');
       magicCursorBtn.title = 'Magic Cursor ON — click to disable';
+      document.body.classList.add('magic-cursor-active');
       readerStage.classList.add('magic-cursor-active');
       readerArticle.classList.add('magic-cursor-active');
       if (magicParaNodes.length === 0) instrumentMagicParas();
@@ -4159,17 +4304,26 @@ function isNetworkFailure(code, desc) {
         }
         setMagicActive(firstVisible, false);
       }
-      readerStage.addEventListener('mousemove',  onMagicMouseMove);
-      readerStage.addEventListener('mouseleave', onMagicMouseLeave);
-      readerStage.addEventListener('mouseenter', onMagicMouseEnter);
-      readerStage.addEventListener('wheel', handleMagicWheel, { passive: false });
+      if (isFullscreen) {
+        readerStage.addEventListener('mousemove', onMagicMouseMove);
+        readerStage.addEventListener('mouseleave', onMagicMouseLeave);
+        readerStage.addEventListener('mouseenter', onMagicMouseEnter);
+        readerStage.addEventListener('wheel', handleMagicWheel, { passive: false });
+      } else {
+        window.addEventListener('mousemove', syncMagicHoverFromPoint, true);
+        window.addEventListener('mouseleave', onMagicMouseLeave);
+        window.addEventListener('mouseenter', onMagicMouseEnter);
+        window.addEventListener('wheel', handleMagicWheel, MAGIC_WHEEL_LISTENER_OPTIONS);
+      }
       showMagicHint();
     }
 
     function disableMagicCursor() {
       magicCursorActive = false;
+      magicSelectionPause = false;
       magicCursorBtn.classList.remove('active');
       magicCursorBtn.title = 'Magic Cursor — hover paragraphs to highlight, ↓↑ to navigate';
+      document.body.classList.remove('magic-cursor-active');
       readerStage.classList.remove('magic-cursor-active');
       readerArticle.classList.remove('magic-cursor-active');
       magicCursorEl.classList.remove('visible');
@@ -4177,14 +4331,80 @@ function isNetworkFailure(code, desc) {
       if (totalWordCount > 0) {
         wordCountLabel.textContent = `${totalWordCount.toLocaleString()} words`;
       }
-      readerStage.removeEventListener('mousemove',  onMagicMouseMove);
+      readerStage.removeEventListener('mousemove', onMagicMouseMove);
       readerStage.removeEventListener('mouseleave', onMagicMouseLeave);
       readerStage.removeEventListener('mouseenter', onMagicMouseEnter);
       readerStage.removeEventListener('wheel', handleMagicWheel);
+      window.removeEventListener('mousemove', syncMagicHoverFromPoint, true);
+      window.removeEventListener('mouseleave', onMagicMouseLeave);
+      window.removeEventListener('mouseenter', onMagicMouseEnter);
+      window.removeEventListener('wheel', handleMagicWheel, MAGIC_WHEEL_LISTENER_OPTIONS);
+    }
+
+    function setMagicSelectionPause(nextPaused) {
+      if (!magicCursorActive) return;
+      if (isFullscreen) {
+        magicSelectionPause = false;
+        return;
+      }
+      const shouldPause = !!nextPaused;
+      if (shouldPause === magicSelectionPause) return;
+      magicSelectionPause = shouldPause;
+      if (magicSelectionPause) {
+        magicPausedIdx = magicActiveIdx;
+        magicCursorEl.classList.remove('visible');
+        clearMagicHighlights();
+      } else {
+        if (magicPausedIdx >= 0 && magicPausedIdx < magicParaNodes.length) {
+          setMagicActive(magicPausedIdx, false);
+        }
+        magicPausedIdx = -1;
+      }
+    }
+
+    function hasActiveReaderSelection() {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return false;
+      const readerBody = document.querySelector('.reader-body');
+      if (!readerBody) return false;
+      try {
+        return readerBody.contains(selection.getRangeAt(0).commonAncestorContainer);
+      } catch (e) {
+        return false;
+      }
     }
 
     if (magicHintCloseBtn) magicHintCloseBtn.addEventListener('click', hideMagicHint);
     if (magicHintDismissBtn) magicHintDismissBtn.addEventListener('click', dismissMagicHintForever);
+
+    document.addEventListener('mousedown', (e) => {
+      if (!magicCursorActive) return;
+      if (isFullscreen) return;
+      const readerBody = document.querySelector('.reader-body');
+      if (!readerBody) return;
+      if (readerBody.contains(e.target)) setMagicSelectionPause(true);
+    }, true);
+
+    document.addEventListener('mouseup', () => {
+      if (!magicCursorActive) return;
+      if (isFullscreen) return;
+      setMagicSelectionPause(hasActiveReaderSelection());
+    }, true);
+
+    document.addEventListener('selectionchange', () => {
+      if (!magicCursorActive) return;
+      if (isFullscreen) return;
+      setMagicSelectionPause(hasActiveReaderSelection());
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!magicCursorActive) return;
+      if (isFullscreen) return;
+      const readerBody = document.querySelector('.reader-body');
+      if (!readerBody || !readerBody.contains(e.target)) {
+        setMagicSelectionPause(false);
+      }
+    });
 
     magicEffectsBtn.addEventListener('click', (e) => { e.stopPropagation(); magicEffectsMenuOpen ? closeMagicEffectsMenu() : openMagicEffectsMenu(); });
     document.addEventListener('click', (e) => { if (magicEffectsMenuOpen && !magicEffectsPicker.contains(e.target)) closeMagicEffectsMenu(); });

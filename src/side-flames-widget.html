@@ -5,16 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Side Flames Widget</title>
   <style>
-    :root {
-      --flame-hot: rgba(255, 144, 220, 0.92);
-      --flame-core: rgba(120, 238, 255, 0.95);
-      --flame-warm: rgba(255, 214, 120, 0.74);
-      --flame-shadow: rgba(18, 12, 36, 0.5);
-      --flame-energy: 0.85;
-      --flame-opacity: 0.96;
-      --flame-scale: 1;
-    }
-
     * {
       box-sizing: border-box;
     }
@@ -32,7 +22,7 @@
 
     body {
       opacity: 0;
-      transition: opacity 180ms ease;
+      transition: opacity 140ms ease;
     }
 
     body.ready {
@@ -43,265 +33,35 @@
       opacity: 0;
     }
 
-    .flames-root {
-      position: relative;
+    canvas {
+      display: block;
       width: 100%;
       height: 100%;
-      padding: 0 0 18px;
-      overflow: hidden;
-      isolation: isolate;
-    }
-
-    .flame-side {
-      position: absolute;
-      bottom: clamp(22px, calc(22px + ((100vw - 850px) * 0.05)), 36px);
-      width: 70px;
-      height: 72px;
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
-      transform-origin: bottom center;
-      opacity: var(--flame-opacity);
-      filter:
-        drop-shadow(0 0 10px color-mix(in srgb, var(--flame-hot) 56%, transparent))
-        drop-shadow(0 0 24px color-mix(in srgb, var(--flame-core) 50%, transparent));
-    }
-
-    .flame-side.left {
-      left: clamp(12px, calc(12px + ((100vw - 850px) * 0.12)), 32px);
-    }
-
-    .flame-side.right {
-      right: clamp(12px, calc(12px + ((100vw - 850px) * 0.12)), 32px);
-      transform: scaleX(-1);
-    }
-
-    .flame-side::before {
-      content: "";
-      position: absolute;
-      inset: 18px 8px 4px 0;
-      border-radius: 68% 38% 24% 74% / 54% 46% 24% 34%;
-      background:
-        radial-gradient(ellipse at 62% 8%, color-mix(in srgb, var(--flame-core) 42%, transparent) 0%, transparent 42%),
-        radial-gradient(ellipse at 54% 36%, color-mix(in srgb, var(--flame-hot) 72%, transparent) 0%, transparent 68%),
-        radial-gradient(ellipse at 30% 78%, color-mix(in srgb, var(--flame-warm) 76%, transparent) 0%, transparent 72%);
-      filter: blur(5px);
-      opacity: calc(0.42 + (var(--flame-energy) * 0.22));
-      transform: skewX(-8deg) scaleY(var(--flame-scale));
-      transform-origin: bottom left;
-      animation: flameBodyBreath calc(2.6s - (var(--flame-energy) * 0.36s)) ease-in-out infinite;
-    }
-
-    .flame-side::after {
-      content: "";
-      position: absolute;
-      left: 0;
-      right: 14px;
-      bottom: 5px;
-      height: 22px;
-      border-radius: 0 999px 999px 0;
-      background:
-        linear-gradient(90deg,
-          color-mix(in srgb, var(--flame-hot) 86%, transparent) 0%,
-          color-mix(in srgb, var(--flame-warm) 70%, transparent) 42%,
-          transparent 100%);
-      filter: blur(8px);
-      opacity: calc(0.5 + (var(--flame-energy) * 0.18));
-    }
-
-    .flame-bed {
-      position: absolute;
-      bottom: 9px;
-      left: 0;
-      right: 18px;
-      height: 18px;
-      border-radius: 0 999px 999px 0;
-      background:
-        radial-gradient(ellipse at 36% 52%, color-mix(in srgb, var(--flame-core) 72%, transparent) 0%, transparent 58%),
-        linear-gradient(90deg,
-          color-mix(in srgb, var(--flame-hot) 92%, transparent) 0%,
-          color-mix(in srgb, var(--flame-warm) 72%, transparent) 58%,
-          transparent 100%);
-      opacity: calc(0.7 + (var(--flame-energy) * 0.2));
-      filter: blur(6px);
-    }
-
-    .flame-column {
-      position: relative;
-      width: 24px;
-      height: 78px;
-      margin: 0 -4px;
-      transform-origin: bottom center;
-      --x: 0px;
-      animation: flameBounce calc(1.7s - (var(--flame-energy) * 0.22s)) ease-in-out infinite;
-      animation-delay: var(--delay, 0s);
-      mix-blend-mode: screen;
-    }
-
-    .flame-side.idle .flame-column {
-      animation-duration: 2.35s;
-    }
-
-    .flame-core,
-    .flame-outer,
-    .flame-mist {
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      border-radius: 50% 50% 44% 44% / 70% 70% 30% 30%;
-    }
-
-    .flame-outer {
-      width: 100%;
-      height: calc(34px + (var(--size, 1) * 24px * var(--flame-scale)));
-      background:
-        linear-gradient(180deg,
-          color-mix(in srgb, var(--flame-core) 28%, transparent) 0%,
-          color-mix(in srgb, var(--flame-hot) 92%, transparent) 52%,
-          color-mix(in srgb, var(--flame-warm) 74%, transparent) 100%);
-      filter: blur(1.6px);
-      opacity: calc(0.78 + (var(--flame-energy) * 0.16));
-      clip-path: polygon(52% 0%, 74% 20%, 84% 46%, 72% 76%, 100% 100%, 0 100%, 22% 74%, 14% 43%, 28% 17%);
-    }
-
-    .flame-core {
-      width: 50%;
-      height: calc(24px + (var(--size, 1) * 18px * var(--flame-scale)));
-      background:
-        linear-gradient(180deg,
-          rgba(255, 255, 255, 0.96) 0%,
-          color-mix(in srgb, var(--flame-core) 96%, white 4%) 42%,
-          color-mix(in srgb, var(--flame-hot) 72%, transparent) 100%);
-      filter: blur(0.6px);
-      opacity: calc(0.82 + (var(--flame-energy) * 0.14));
-    }
-
-    .flame-mist {
-      width: 126%;
-      height: calc(22px + (var(--size, 1) * 15px * var(--flame-scale)));
-      background:
-        radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--flame-core) 70%, transparent) 0%, transparent 70%),
-        radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--flame-hot) 46%, transparent) 0%, transparent 82%);
-      filter: blur(9px);
-      opacity: calc(0.36 + (var(--flame-energy) * 0.18));
-    }
-
-    .flame-column:nth-child(2) { --size: 0.88; --delay: -0.14s; --x: -3px; }
-    .flame-column:nth-child(3) { --size: 1.08; --delay: -0.28s; --x: -7px; }
-    .flame-column:nth-child(4) { --size: 0.98; --delay: -0.38s; --x: -11px; }
-
-    .flame-side.playing .flame-column:nth-child(2n) {
-      animation-name: flameLean;
-    }
-
-    @keyframes flameBounce {
-      0%, 100% {
-        transform: translateX(var(--x)) translateY(0) scaleY(0.84) scaleX(0.94);
-      }
-      35% {
-        transform: translateX(var(--x)) translateY(-3px) scaleY(1.03) scaleX(1);
-      }
-      70% {
-        transform: translateX(var(--x)) translateY(-6px) scaleY(1.11) scaleX(1.03);
-      }
-    }
-
-    @keyframes flameLean {
-      0%, 100% {
-        transform: translateX(var(--x)) translateY(0) rotate(-2deg) scaleY(0.84);
-      }
-      40% {
-        transform: translateX(var(--x)) translateY(-4px) rotate(3deg) scaleY(1.05);
-      }
-      75% {
-        transform: translateX(var(--x)) translateY(-7px) rotate(-4deg) scaleY(1.12);
-      }
-    }
-
-    @keyframes flameBodyBreath {
-      0%, 100% {
-        transform: skewX(-8deg) translateY(0) scaleY(calc(var(--flame-scale) * 0.94));
-      }
-      45% {
-        transform: skewX(-11deg) translateY(-4px) scaleY(calc(var(--flame-scale) * 1.05));
-      }
-      72% {
-        transform: skewX(-5deg) translateY(-2px) scaleY(calc(var(--flame-scale) * 1.01));
-      }
-    }
-
-    .theme-primary {
-      --flame-hot: rgba(255, 118, 222, 0.94);
-      --flame-core: rgba(92, 222, 255, 0.96);
-      --flame-warm: rgba(255, 196, 108, 0.74);
-    }
-
-    .theme-sunset {
-      --flame-hot: rgba(255, 118, 178, 0.96);
-      --flame-core: rgba(255, 164, 116, 0.94);
-      --flame-warm: rgba(255, 213, 133, 0.8);
-    }
-
-    .theme-ocean {
-      --flame-hot: rgba(92, 184, 255, 0.92);
-      --flame-core: rgba(116, 248, 255, 0.96);
-      --flame-warm: rgba(162, 236, 255, 0.7);
-    }
-
-    .theme-emerald {
-      --flame-hot: rgba(72, 240, 172, 0.94);
-      --flame-core: rgba(190, 255, 236, 0.94);
-      --flame-warm: rgba(121, 248, 197, 0.74);
-    }
-
-    .theme-amber {
-      --flame-hot: rgba(255, 134, 72, 0.96);
-      --flame-core: rgba(255, 212, 126, 0.95);
-      --flame-warm: rgba(255, 237, 174, 0.82);
-    }
-
-    .theme-midnight {
-      --flame-hot: rgba(152, 168, 255, 0.86);
-      --flame-core: rgba(194, 220, 255, 0.9);
-      --flame-warm: rgba(120, 144, 212, 0.66);
-    }
-
-    .theme-cocoa {
-      --flame-hot: rgba(214, 150, 104, 0.92);
-      --flame-core: rgba(255, 220, 188, 0.94);
-      --flame-warm: rgba(186, 126, 88, 0.76);
-    }
-
-    .theme-frost {
-      --flame-hot: rgba(194, 226, 255, 0.92);
-      --flame-core: rgba(255, 255, 255, 0.98);
-      --flame-warm: rgba(215, 242, 255, 0.78);
     }
   </style>
 </head>
-<body>
-  <div class="flames-root" aria-hidden="true">
-    <div class="flame-side left idle" id="left-flame">
-      <div class="flame-bed"></div>
-      <div class="flame-column"><span class="flame-mist"></span><span class="flame-outer"></span><span class="flame-core"></span></div>
-      <div class="flame-column"><span class="flame-mist"></span><span class="flame-outer"></span><span class="flame-core"></span></div>
-      <div class="flame-column"><span class="flame-mist"></span><span class="flame-outer"></span><span class="flame-core"></span></div>
-    </div>
-    <div class="flame-side right idle" id="right-flame">
-      <div class="flame-bed"></div>
-      <div class="flame-column"><span class="flame-mist"></span><span class="flame-outer"></span><span class="flame-core"></span></div>
-      <div class="flame-column"><span class="flame-mist"></span><span class="flame-outer"></span><span class="flame-core"></span></div>
-      <div class="flame-column"><span class="flame-mist"></span><span class="flame-outer"></span><span class="flame-core"></span></div>
-    </div>
-  </div>
+<body class="hidden">
+  <canvas id="flame-canvas" aria-hidden="true"></canvas>
 
   <script>
     const params = new URLSearchParams(window.location.search || '');
     const initialTheme = String(params.get('theme') || 'primary').toLowerCase();
-    const leftFlame = document.getElementById('left-flame');
-    const rightFlame = document.getElementById('right-flame');
-    const themeClasses = ['theme-primary', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-frost'];
+    const canvas = document.getElementById('flame-canvas');
+    const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
+    const MAX_DPR = 1.35;
+    const FPS_PLAYING = 20;
+    const FPS_IDLE = 12;
+    const MOTION_SPEED = 0.45;
+    const palettes = {
+      primary: { hot: [255, 118, 222], core: [92, 222, 255], warm: [255, 196, 108] },
+      sunset: { hot: [255, 118, 178], core: [255, 164, 116], warm: [255, 213, 133] },
+      ocean: { hot: [92, 184, 255], core: [116, 248, 255], warm: [162, 236, 255] },
+      emerald: { hot: [72, 240, 172], core: [190, 255, 236], warm: [121, 248, 197] },
+      amber: { hot: [255, 134, 72], core: [255, 212, 126], warm: [255, 237, 174] },
+      midnight: { hot: [152, 168, 255], core: [194, 220, 255], warm: [120, 144, 212] },
+      cocoa: { hot: [214, 150, 104], core: [255, 220, 188], warm: [186, 126, 88] },
+      frost: { hot: [194, 226, 255], core: [255, 255, 255], warm: [215, 242, 255] },
+    };
     let widgetState = {
       isPlaying: false,
       volume: 1,
@@ -309,39 +69,210 @@
       cardShape: 'default',
       themeKey: initialTheme,
     };
+    let isEnabled = false;
+    let rafId = 0;
+    let lastFrameAt = 0;
+    let dpr = 1;
+    let width = 1;
+    let height = 1;
+    const sparks = Array.from({ length: 22 }, (_, index) => ({
+      seed: index * 37.91,
+      side: index % 2 === 0 ? -1 : 1,
+      lane: (index % 11) / 10,
+      phase: (index * 0.19) % 1,
+    }));
 
-    function applyTheme(themeKey) {
+    function normalizeTheme(themeKey) {
       const normalized = String(themeKey || 'primary').toLowerCase() === 'alt'
         ? 'sunset'
         : String(themeKey || 'primary').toLowerCase();
-      themeClasses.forEach((name) => document.body.classList.remove(name));
-      document.body.classList.add(`theme-${normalized}`);
+      return palettes[normalized] ? normalized : 'primary';
+    }
+
+    function rgba(rgb, alpha) {
+      return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${Math.max(0, Math.min(1, alpha))})`;
+    }
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      dpr = Math.min(MAX_DPR, Math.max(1, window.devicePixelRatio || 1));
+      width = Math.max(1, Math.round(rect.width));
+      height = Math.max(1, Math.round(rect.height));
+      const nextWidth = Math.max(1, Math.round(width * dpr));
+      const nextHeight = Math.max(1, Math.round(height * dpr));
+      if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+        canvas.width = nextWidth;
+        canvas.height = nextHeight;
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function makeRadial(x, y, r0, r1, stops) {
+      const gradient = ctx.createRadialGradient(x, y, r0, x, y, r1);
+      stops.forEach(([offset, color]) => gradient.addColorStop(offset, color));
+      return gradient;
+    }
+
+    function drawCurvedGlow(cx, mirror, time, palette, energy, playing) {
+      const baseY = height - 18;
+      const t = time * MOTION_SPEED;
+      const pulse = 0.88 + Math.sin(t * 0.0032 + mirror) * 0.06;
+      const reach = Math.min(190, Math.max(116, width * 0.19));
+      const lift = playing ? 24 : 16;
+      ctx.save();
+      ctx.translate(cx, baseY);
+      ctx.scale(mirror, 1);
+      ctx.globalCompositeOperation = 'lighter';
+
+      ctx.fillStyle = makeRadial(0, 0, 0, reach * pulse, [
+        [0, rgba(palette.core, 0.36 * energy)],
+        [0.32, rgba(palette.hot, 0.24 * energy)],
+        [0.72, rgba(palette.warm, 0.09 * energy)],
+        [1, rgba(palette.hot, 0)],
+      ]);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, reach, 32 + lift, -0.22, Math.PI, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = makeRadial(28, -4, 0, reach * 0.58, [
+        [0, rgba(palette.core, 0.42 * energy)],
+        [0.44, rgba(palette.hot, 0.2 * energy)],
+        [1, rgba(palette.hot, 0)],
+      ]);
+      ctx.beginPath();
+      ctx.ellipse(26, -2, reach * 0.62, 22 + lift * 0.45, -0.12, Math.PI, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawTongue(cx, mirror, time, palette, energy, index) {
+      const baseY = height - 16;
+      const t = time * MOTION_SPEED;
+      const sway = Math.sin(t * 0.004 + index * 1.7) * 6;
+      const flameHeight = (34 + index * 9) * (0.82 + energy * 0.42);
+      const flameWidth = 18 + index * 4;
+      const x = cx + mirror * (24 + index * 19 + sway);
+      const y = baseY - 6;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = makeRadial(x, y - flameHeight * 0.18, 0, flameHeight * 0.92, [
+        [0, rgba(palette.core, 0.5 * energy)],
+        [0.38, rgba(palette.hot, 0.34 * energy)],
+        [0.78, rgba(palette.warm, 0.12 * energy)],
+        [1, rgba(palette.hot, 0)],
+      ]);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.bezierCurveTo(
+        x - mirror * flameWidth,
+        y - flameHeight * 0.28,
+        x - mirror * (flameWidth * 0.24),
+        y - flameHeight * 0.82,
+        x + mirror * (flameWidth * 0.15),
+        y - flameHeight
+      );
+      ctx.bezierCurveTo(
+        x + mirror * (flameWidth * 1.05),
+        y - flameHeight * 0.58,
+        x + mirror * (flameWidth * 0.68),
+        y - flameHeight * 0.18,
+        x,
+        y
+      );
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawSpark(spark, time, palette, energy) {
+      const sideX = spark.side < 0 ? Math.max(34, width * 0.055) : width - Math.max(34, width * 0.055);
+      const localWidth = Math.min(160, width * 0.18);
+      const t = time * MOTION_SPEED;
+      const progress = (spark.phase + (t * 0.00008 * (0.7 + energy))) % 1;
+      const x = sideX + spark.side * (spark.lane * localWidth + Math.sin(t * 0.002 + spark.seed) * 6);
+      const y = height - 18 - progress * (46 + energy * 30);
+      const radius = 1.1 + (1 - progress) * 2.2;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = rgba(progress < 0.42 ? palette.core : palette.hot, (1 - progress) * 0.34 * energy);
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function render(timestamp) {
+      if (!isEnabled) {
+        rafId = 0;
+        return;
+      }
+      const targetFps = widgetState.isPlaying ? FPS_PLAYING : FPS_IDLE;
+      const minFrameMs = 1000 / targetFps;
+      if (timestamp - lastFrameAt < minFrameMs) {
+        rafId = requestAnimationFrame(render);
+        return;
+      }
+      lastFrameAt = timestamp;
+      resizeCanvas();
+      ctx.clearRect(0, 0, width, height);
+
+      const theme = normalizeTheme(widgetState.themeKey);
+      const palette = palettes[theme];
+      const volume = Number.isFinite(Number(widgetState.volume))
+        ? Math.max(0.14, Math.min(1, Number(widgetState.volume)))
+        : 0.72;
+      const energy = widgetState.isPlaying ? (0.72 + volume * 0.34) : 0.5;
+      const leftX = Math.max(36, width * 0.055);
+      const rightX = width - leftX;
+
+      drawCurvedGlow(leftX, 1, timestamp, palette, energy, widgetState.isPlaying);
+      drawCurvedGlow(rightX, -1, timestamp, palette, energy, widgetState.isPlaying);
+      for (let i = 0; i < 3; i += 1) {
+        drawTongue(leftX, 1, timestamp, palette, energy, i);
+        drawTongue(rightX, -1, timestamp + 120, palette, energy, i);
+      }
+      if (widgetState.isPlaying) {
+        sparks.forEach((spark) => drawSpark(spark, timestamp, palette, energy));
+      }
+
+      rafId = requestAnimationFrame(render);
+    }
+
+    function startRenderer() {
+      if (rafId) return;
+      lastFrameAt = 0;
+      rafId = requestAnimationFrame(render);
+    }
+
+    function stopRenderer() {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = 0;
+      ctx.clearRect(0, 0, width, height);
     }
 
     function applyState(payload) {
       const next = payload && typeof payload === 'object' ? payload : {};
       widgetState = { ...widgetState, ...next };
-      applyTheme(widgetState.themeKey || initialTheme);
       const isWave = String(widgetState.cardShape || 'default').toLowerCase() === 'wave';
-      const enabled = widgetState.sideFlamesEnabled === true && isWave;
-      const playing = enabled && widgetState.isPlaying === true;
-      const volume = Number.isFinite(Number(widgetState.volume))
-        ? Math.max(0.14, Math.min(1, Number(widgetState.volume)))
-        : 0.72;
-      document.body.classList.toggle('hidden', !enabled);
+      isEnabled = widgetState.sideFlamesEnabled === true && isWave;
       document.body.classList.add('ready');
-      document.documentElement.style.setProperty('--flame-energy', volume.toFixed(3));
-      document.documentElement.style.setProperty('--flame-scale', (0.88 + (volume * 0.34)).toFixed(3));
-      document.documentElement.style.setProperty('--flame-opacity', playing ? '0.98' : '0.72');
-      [leftFlame, rightFlame].forEach((element) => {
-        if (!element) return;
-        element.classList.toggle('playing', playing);
-        element.classList.toggle('idle', !playing);
-      });
+      document.body.classList.toggle('hidden', !isEnabled);
+      if (isEnabled) {
+        startRenderer();
+      } else {
+        stopRenderer();
+      }
     }
 
-    applyTheme(initialTheme);
-    document.body.classList.add('ready', 'hidden');
+    resizeCanvas();
+    document.body.classList.add('ready');
+    window.addEventListener('resize', resizeCanvas);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopRenderer();
+      } else if (isEnabled) {
+        startRenderer();
+      }
+    });
 
     if (window.sideFlamesWidgetAPI && window.sideFlamesWidgetAPI.onStateUpdate) {
       window.sideFlamesWidgetAPI.onStateUpdate((payload) => {

@@ -796,7 +796,8 @@ const VISUALIZER_WIDGET_HEIGHT = 220;
 const CARD_TITLEBAR_HEIGHT = 48;
 const VISUALIZER_WIDGET_SHELL_HEIGHT = 26;
 const VISUALIZER_WIDGET_TOP_INSET = 6;
-const SIDE_FLAMES_WIDGET_HEIGHT = 188;
+const SIDE_FLAMES_WIDGET_HEIGHT = 132;
+const SIDE_FLAMES_CARD_OVERLAP = 116;
 const VISUALIZER_WIDGET_CLOSE_LEAD_MS = 42;
 const VISUALIZER_WIDGET_MINIMIZE_LEAD_MS = 42;
 const VISUALIZER_WIDGET_RESTORE_DELAY_MS = 590;
@@ -1121,7 +1122,7 @@ function getSideFlamesWidgetBounds(cardWindow) {
   const bounds = cardWindow.getBounds();
   return {
     x: Math.round(bounds.x),
-    y: Math.round(bounds.y + Math.max(0, bounds.height - SIDE_FLAMES_WIDGET_HEIGHT)),
+    y: Math.round(bounds.y + bounds.height - SIDE_FLAMES_CARD_OVERLAP),
     width: Math.max(320, Math.round(bounds.width)),
     height: SIDE_FLAMES_WIDGET_HEIGHT,
   };
@@ -1754,6 +1755,32 @@ const PERMISSION_DECISIONS_FILENAME = 'permission-decisions.json';
 let permissionDecisionsLoaded = false;
 let permissionPersistTimer = null;
 
+function isJsonParseError(error) {
+  return error instanceof SyntaxError
+    || String(error && error.message || '').toLowerCase().includes('json');
+}
+
+function getStorageErrorMessage(error, label) {
+  const code = String(error && error.code || '').toUpperCase();
+  if (code === 'EACCES' || code === 'EPERM') {
+    return `Discovery Browser does not have permission to access ${label}. Check the file permissions and try again.`;
+  }
+  if (isJsonParseError(error)) {
+    return `${label} is damaged or incomplete. Discovery Browser reset it so the app can continue.`;
+  }
+  return error && error.message ? String(error.message) : `Failed to read ${label}.`;
+}
+
+function backupInvalidJsonFile(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return;
+  try {
+    const backupPath = `${filePath}.invalid-${Date.now()}.bak`;
+    fs.renameSync(filePath, backupPath);
+  } catch (e) {
+    console.warn('Failed to back up invalid JSON file:', e.message || e);
+  }
+}
+
 function getPermissionDecisionsFilePath() {
   try {
     return path.join(app.getPath('userData'), PERMISSION_DECISIONS_FILENAME);
@@ -1790,7 +1817,11 @@ function loadPermissionDecisionsFromDisk() {
       permissionDecisionCache.set(key, value === true);
     }
   } catch (e) {
-    console.warn('Failed to load persisted permission decisions:', e.message || e);
+    console.warn('Failed to load persisted permission decisions:', getStorageErrorMessage(e, 'site permission settings'));
+    if (isJsonParseError(e)) {
+      backupInvalidJsonFile(filePath);
+      writePermissionDecisionsToDisk();
+    }
   }
 }
 
@@ -2008,6 +2039,89 @@ function openChallengeInFullBrowserWindow(url, options = {}) {
   if (!url) return { opened: false, window: null };
   const targetUrl = String(url).trim();
   if (!isHttpUrl(targetUrl)) return { opened: false, window: null };
+  const challengeNoticeMessage = String(
+    options && options.noticeMessage
+      ? options.noticeMessage
+      : 'This site needs Full Browser Mode. Complete the security check in this larger browser window, then continue browsing here.'
+  );
+  const installChallengeNotice = (targetWindow) => {
+    if (!targetWindow || targetWindow.isDestroyed()) return;
+    if (targetWindow.__discoveryChallengeNoticeDismissed) return;
+    const messageJson = JSON.stringify(challengeNoticeMessage);
+    targetWindow.webContents.executeJavaScript(`
+      (() => {
+        const existing = document.getElementById('discovery-cloudflare-challenge-notice');
+        if (existing) existing.remove();
+
+        const host = document.createElement('div');
+        host.id = 'discovery-cloudflare-challenge-notice';
+        host.setAttribute('role', 'dialog');
+        host.setAttribute('aria-live', 'polite');
+        host.setAttribute('aria-label', 'Full Browser Mode notice');
+        host.style.cssText = [
+          'position:fixed',
+          'top:24px',
+          'left:50%',
+          'transform:translateX(-50%)',
+          'z-index:2147483647',
+          'width:min(460px,calc(100vw - 32px))',
+          'box-sizing:border-box',
+          'font-family:Inter,Segoe UI,Roboto,Arial,sans-serif',
+          'color:#eff8ff',
+          'pointer-events:auto'
+        ].join(';');
+
+        host.innerHTML = \`
+          <div style="
+            position:relative;
+            box-sizing:border-box;
+            padding:18px 52px 18px 20px;
+            border:1px solid rgba(125,211,252,.46);
+            border-radius:16px;
+            background:linear-gradient(145deg,rgba(10,20,38,.98),rgba(19,31,53,.97));
+            box-shadow:0 22px 58px rgba(0,0,0,.38);
+            line-height:1.42;
+          ">
+            <button type="button" aria-label="Close Full Browser Mode notice" style="
+              position:absolute;
+              top:12px;
+              right:12px;
+              width:30px;
+              height:30px;
+              border:1px solid rgba(255,255,255,.22);
+              border-radius:8px;
+              background:rgba(255,255,255,.08);
+              color:#eff8ff;
+              font-size:20px;
+              line-height:26px;
+              cursor:pointer;
+            ">&times;</button>
+            <div style="
+              display:inline-flex;
+              align-items:center;
+              margin-bottom:9px;
+              padding:5px 9px;
+              border:1px solid rgba(125,211,252,.25);
+              border-radius:999px;
+              background:rgba(125,211,252,.12);
+              font-size:10px;
+              font-weight:700;
+              letter-spacing:.12em;
+              text-transform:uppercase;
+            ">Full Browser Mode</div>
+            <div style="font-size:18px;font-weight:750;margin-bottom:6px;">Security check opened here</div>
+            <div style="font-size:13px;color:rgba(239,248,255,.86);">\${${messageJson}}</div>
+          </div>
+        \`;
+
+        host.querySelector('button')?.addEventListener('click', () => {
+          try { console.info('DISCOVERY_CHALLENGE_NOTICE_DISMISSED'); } catch (e) {}
+          host.remove();
+        });
+        document.documentElement.appendChild(host);
+      })();
+    `).catch(() => { });
+  };
 
   const windowKeyPrefix = String(options && options.windowKeyPrefix || 'challenge-browser').trim() || 'challenge-browser';
   const normalizedUrl = `${windowKeyPrefix}:${targetUrl.toLowerCase()}`;
@@ -2018,6 +2132,7 @@ function openChallengeInFullBrowserWindow(url, options = {}) {
       existing.show();
       existing.focus();
       existing.loadURL(targetUrl);
+      setTimeout(() => installChallengeNotice(existing), 350);
     } catch (e) { }
     return { opened: true, window: existing };
   }
@@ -2059,6 +2174,7 @@ function openChallengeInFullBrowserWindow(url, options = {}) {
     },
   });
   attachWindowHangRecovery(fullBrowserWindow, `challenge-browser-${Date.now()}`);
+  fullBrowserWindow.__discoveryChallengeNoticeDismissed = false;
   try { fullBrowserWindow.webContents.setUserAgent(CHROME_LIKE_UA); } catch (e) { }
 
   try {
@@ -2079,6 +2195,19 @@ function openChallengeInFullBrowserWindow(url, options = {}) {
     try {
       fullBrowserWindow.show();
       fullBrowserWindow.focus();
+      installChallengeNotice(fullBrowserWindow);
+    } catch (e) { }
+  });
+
+  fullBrowserWindow.webContents.on('did-finish-load', () => {
+    installChallengeNotice(fullBrowserWindow);
+  });
+
+  fullBrowserWindow.webContents.on('console-message', (event, level, message) => {
+    try {
+      if (String(message || '').includes('DISCOVERY_CHALLENGE_NOTICE_DISMISSED')) {
+        fullBrowserWindow.__discoveryChallengeNoticeDismissed = true;
+      }
     } catch (e) { }
   });
 
@@ -3283,7 +3412,11 @@ function loadDownloadHistoryFromDisk() {
       if (it && it.id) downloadHistory.push(it);
     });
   } catch (e) {
-    console.warn('Failed to load download history:', e.message || e);
+    console.warn('Failed to load download history:', getStorageErrorMessage(e, 'download history'));
+    if (isJsonParseError(e)) {
+      backupInvalidJsonFile(filePath);
+      saveDownloadHistoryToDisk();
+    }
   }
 }
 
@@ -4554,7 +4687,14 @@ ipcMain.handle('get-article-payload', async (event, articleId) => {
     const raw = fs.readFileSync(jsonPath, 'utf8');
     return { success: true, exists: true, payload: JSON.parse(raw) };
   } catch (e) {
-    return { success: false, error: e.message };
+    if (isJsonParseError(e)) {
+      return {
+        success: false,
+        exists: true,
+        error: 'This saved offline article is damaged or incomplete. Discovery Browser will reload the live page instead.'
+      };
+    }
+    return { success: false, error: getStorageErrorMessage(e, 'saved offline article') };
   }
 });
 
@@ -4707,16 +4847,20 @@ ipcMain.on('cloudflare-challenge', (event, payload) => {
     recentChallengeRedirects.set(cardId, now);
     const targetUrl = String(payload && (payload.targetUrl || payload.challengeUrl) || '').trim();
     if (!targetUrl) return;
+    const challengeMessage = 'This site needs Full Browser Mode. Complete the security check in this larger browser window, then continue browsing here.';
     const cardWindow = cardWindows.get(cardId);
     if (cardWindow && !cardWindow.isDestroyed()) {
       cardWindow.webContents.send('cloudflare-challenge-banner', {
         url: targetUrl,
         mode: 'full-browser-handoff',
-        message: 'This site needs Full Browser Mode. Your site card experience may change while we move you into a more compatible window.'
+        message: challengeMessage
       });
       setTimeout(() => {
         try {
-          const promoted = openChallengeInFullBrowserWindow(targetUrl, { sourceCardId: cardId });
+          const promoted = openChallengeInFullBrowserWindow(targetUrl, {
+            sourceCardId: cardId,
+            noticeMessage: challengeMessage
+          });
           if (!promoted || !promoted.opened) {
             openExternalBrowserForChallenge(targetUrl);
           }
@@ -4726,7 +4870,10 @@ ipcMain.on('cloudflare-challenge', (event, payload) => {
       }, 900);
       return;
     }
-    const promoted = openChallengeInFullBrowserWindow(targetUrl, { sourceCardId: cardId });
+    const promoted = openChallengeInFullBrowserWindow(targetUrl, {
+      sourceCardId: cardId,
+      noticeMessage: challengeMessage
+    });
     if (!promoted || !promoted.opened) {
       openExternalBrowserForChallenge(targetUrl);
     }
@@ -4957,7 +5104,11 @@ function loadFavoritesFromDisk() {
     const parsed = JSON.parse(raw);
     favoritesCache = Array.isArray(parsed && parsed.favorites) ? parsed.favorites : [];
   } catch (e) {
-    console.warn('Failed to load favorites:', e.message || e);
+    console.warn('Failed to load favorites:', getStorageErrorMessage(e, 'favorite sites'));
+    if (isJsonParseError(e)) {
+      backupInvalidJsonFile(filePath);
+      saveFavoritesToDisk();
+    }
   }
 }
 
