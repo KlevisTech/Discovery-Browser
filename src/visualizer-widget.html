@@ -720,6 +720,7 @@
     };
     let remainingTickTimer = null;
     let panelResizeTimer = null;
+    let mouseEventsIgnored = null;
     const PANEL_CLOSE_ANIMATION_MS = 240;
     function applyTheme(themeKey) {
       const normalized = String(themeKey || 'primary').toLowerCase() === 'alt'
@@ -875,6 +876,26 @@
       } catch (e) { }
     }
 
+    function setMouseEventsIgnored(ignored) {
+      const nextIgnored = !!ignored;
+      if (mouseEventsIgnored === nextIgnored) return;
+      mouseEventsIgnored = nextIgnored;
+      if (!window.visualizerWidgetAPI || !window.visualizerWidgetAPI.setMouseEventsIgnored) return;
+      window.visualizerWidgetAPI.setMouseEventsIgnored(cardId, nextIgnored);
+    }
+
+    function shouldCaptureMouseAt(event) {
+      if (widgetState.visualLock) return true;
+      if (!event || typeof document.elementFromPoint !== 'function') return false;
+      const target = document.elementFromPoint(event.clientX, event.clientY);
+      if (!target) return false;
+      return widgetShell.contains(target);
+    }
+
+    function syncMouseEventPassthrough(event) {
+      setMouseEventsIgnored(!shouldCaptureMouseAt(event));
+    }
+
     async function setPanelOpen(isOpen) {
       const nextOpen = !!isOpen && !widgetState.visualLock;
       clearTimeout(panelResizeTimer);
@@ -896,6 +917,12 @@
 
     applyTheme(initialTheme);
     applyStyle('bars');
+    setMouseEventsIgnored(true);
+
+    document.addEventListener('mousemove', syncMouseEventPassthrough, { passive: true });
+    document.addEventListener('mouseleave', () => {
+      if (!widgetState.visualLock) setMouseEventsIgnored(true);
+    });
 
     widgetShell.addEventListener('click', (event) => {
       if (controlPanel && controlPanel.contains(event.target)) return;

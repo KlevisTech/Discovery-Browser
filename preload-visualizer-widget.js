@@ -8,4 +8,6 @@ contextBridge.exposeInMainWorld('visualizerWidgetAPI', {
   },
   sendAction: (cardId, action, value) =>
     ipcRenderer.invoke('visualizer-widget-action', cardId, action, value),
+  setMouseEventsIgnored: (cardId, ignored) =>
+    ipcRenderer.send('visualizer-widget-mouse-events', cardId, !!ignored),
 });

@@ -1098,6 +1098,22 @@ function sendVisualizerWidgetState(cardId) {
   } catch (e) { }
 }
 
+function setVisualizerWidgetMouseEventsIgnored(cardId, ignored) {
+  const numericCardId = Number(cardId);
+  if (!Number.isFinite(numericCardId)) return;
+  const widget = visualizerWidgets.get(numericCardId);
+  if (!widget || widget.isDestroyed()) return;
+
+  try {
+    const isLocked = visualizerWidgetLockStates.get(numericCardId) === true;
+    if (isLocked || !ignored) {
+      widget.setIgnoreMouseEvents(false);
+      return;
+    }
+    widget.setIgnoreMouseEvents(true, { forward: true });
+  } catch (e) { }
+}
+
 function closeSideFlamesWidget(cardId) {
   const widget = sideFlameWidgets.get(cardId);
   if (!widget) return;
@@ -1347,6 +1363,7 @@ function ensureVisualizerWidget(cardId, cardWindow) {
 
   try {
     widget.setAlwaysOnTop(false);
+    setVisualizerWidgetMouseEventsIgnored(cardId, true);
   } catch (e) { }
 
   const widgetState = visualizerWidgetStates.get(cardId) || {};
@@ -1405,8 +1422,12 @@ function syncVisualizerWidget(cardId) {
   const isLocked = visualizerWidgetLockStates.get(Number(cardId)) === true;
   try {
     if (shouldShow) {
-      if (!widget.isVisible()) widget.show();
+      const wasVisible = widget.isVisible();
+      if (!wasVisible) widget.show();
       widget.setAlwaysOnTop(false);
+      if (isLocked || !wasVisible) {
+        setVisualizerWidgetMouseEventsIgnored(cardId, !isLocked);
+      }
     } else if (widget.isVisible()) {
       widget.hide();
     }
@@ -4972,6 +4993,10 @@ ipcMain.handle('visualizer-widget-action', async (event, cardId, action, value =
   } catch (e) {
     return { success: false, error: e.message };
   }
+});
+
+ipcMain.on('visualizer-widget-mouse-events', (event, cardId, ignored) => {
+  setVisualizerWidgetMouseEventsIgnored(cardId, ignored);
 });
 
 // Clear bubble notifications when card is restored

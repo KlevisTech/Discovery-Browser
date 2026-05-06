@@ -4377,12 +4377,17 @@ function isNetworkFailure(code, desc) {
     if (magicHintCloseBtn) magicHintCloseBtn.addEventListener('click', hideMagicHint);
     if (magicHintDismissBtn) magicHintDismissBtn.addEventListener('click', dismissMagicHintForever);
 
+    // Track whether mousedown started inside reader body, but don't pause yet.
+    // Only pause once a real text selection drag actually forms.
+    let magicMouseDownInBody = false;
     document.addEventListener('mousedown', (e) => {
       if (!magicCursorActive) return;
       if (isFullscreen) return;
       const readerBody = document.querySelector('.reader-body');
       if (!readerBody) return;
-      if (readerBody.contains(e.target)) setMagicSelectionPause(true);
+      magicMouseDownInBody = readerBody.contains(e.target);
+      // Do NOT call setMagicSelectionPause(true) here — that was killing
+      // highlights on every paragraph click before any selection formed.
     }, true);
 
     document.addEventListener('mouseup', () => {
@@ -4394,7 +4399,13 @@ function isNetworkFailure(code, desc) {
     document.addEventListener('selectionchange', () => {
       if (!magicCursorActive) return;
       if (isFullscreen) return;
-      setMagicSelectionPause(hasActiveReaderSelection());
+      // Only pause if the user is actively dragging a selection (mousedown
+      // started inside the body AND a non-empty selection now exists).
+      if (magicMouseDownInBody && hasActiveReaderSelection()) {
+        setMagicSelectionPause(true);
+      } else if (!hasActiveReaderSelection()) {
+        setMagicSelectionPause(false);
+      }
     });
 
     document.addEventListener('click', (e) => {
