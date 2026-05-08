@@ -173,6 +173,7 @@ class DiscoveryBrowser {
     // Container references
     this.cardDock = document.getElementById('dock-content');
     this.uploadBtn = document.getElementById('upload-btn');
+    this.mediaPlayerBtn = document.getElementById('media-player-btn');
     this.recapBtn = document.getElementById('recap-btn');
     this.cardCountSpan = document.getElementById('card-count');
     this.tabsContainer = document.getElementById('tabs-container');
@@ -247,6 +248,15 @@ class DiscoveryBrowser {
           await window.electronAPI.openReadmodeDocument(result.fileUrl, result.title || 'Uploaded Document');
         } catch (e) {
           console.error('Failed to open uploaded document in readmode:', e);
+        }
+      });
+    }
+    if (this.mediaPlayerBtn) {
+      this.mediaPlayerBtn.addEventListener('click', async () => {
+        try {
+          await window.electronAPI.openMediaPlayer();
+        } catch (e) {
+          console.error('Failed to open media player:', e);
         }
       });
     }

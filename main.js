@@ -402,6 +402,7 @@ async function safeExecuteJavaScript(webContents, script, userGesture = false) {
 // Track which webContents have been initialized to prevent duplicate listeners
 const initializedWebContents = new WeakSet();
 let recapWindow = null;
+let mediaPlayerWindow = null;
 
 // Function to create and show the context menu
 app.on('web-contents-created', (event, contents) => {
@@ -4716,6 +4717,157 @@ ipcMain.handle('get-article-payload', async (event, articleId) => {
       };
     }
     return { success: false, error: getStorageErrorMessage(e, 'saved offline article') };
+  }
+});
+
+ipcMain.handle('open-media-player', async (event, initialSource = null) => {
+  try {
+    const mediaPlayerHtmlPath = path.join(__dirname, 'src', 'media-player.html');
+    function getMediaPlayerCinemaBounds() {
+      let finalX = 120;
+      let finalY = 12;
+      let windowWidth = 1280;
+      let windowHeight = CARD_CINEMA_HEIGHT;
+      try {
+        const { screen } = require('electron');
+        const primaryDisplay = screen.getPrimaryDisplay();
+        const { x: workX, y: workY, width: screenWidth, height: screenHeight } = primaryDisplay.workArea;
+        const topGap = 12;
+        const availableHeight = Math.max(360, screenHeight - topGap);
+        windowWidth = Math.max(640, Math.round(screenWidth));
+        windowHeight = Math.round(Math.min(availableHeight, CARD_CINEMA_HEIGHT));
+        finalX = workX;
+        finalY = workY + topGap;
+      } catch (e) { }
+      return { x: finalX, y: finalY, width: windowWidth, height: windowHeight };
+    }
+
+    if (mediaPlayerWindow && !mediaPlayerWindow.isDestroyed()) {
+      await mediaPlayerWindow.loadFile(mediaPlayerHtmlPath);
+      try {
+        mediaPlayerWindow.setBounds(getMediaPlayerCinemaBounds());
+      } catch (e) { }
+      mediaPlayerWindow.show();
+      mediaPlayerWindow.focus();
+      if (initialSource) {
+        mediaPlayerWindow.webContents.send('media-player-open-source', initialSource);
+      }
+      return { success: true };
+    }
+
+    const { x: finalX, y: finalY, width: windowWidth, height: windowHeight } = getMediaPlayerCinemaBounds();
+
+    mediaPlayerWindow = new BrowserWindow({
+      width: windowWidth,
+      height: windowHeight,
+      minWidth: 640,
+      minHeight: 360,
+      x: finalX,
+      y: finalY,
+      icon: APP_ICON_PATH,
+      frame: false,
+      transparent: true,
+      resizable: true,
+      skipTaskbar: false,
+      show: true,
+      backgroundColor: '#00000000',
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: false,
+        webviewTag: true,
+        preload: path.join(__dirname, 'preload-media-player.js'),
+        enableWebSQL: false,
+        spellcheck: true,
+        backgroundThrottling: false,
+        partition: 'persist:webview',
+      },
+    });
+
+    mediaPlayerWindow.on('closed', () => {
+      mediaPlayerWindow = null;
+    });
+
+    await mediaPlayerWindow.loadFile(mediaPlayerHtmlPath);
+    if (initialSource) {
+      mediaPlayerWindow.webContents.send('media-player-open-source', initialSource);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening media player:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('close-media-player-window', async (event) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) win.close();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('minimize-media-player-window', async (event) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) win.minimize();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('toggle-media-player-fullscreen', async (event, shouldBeFullscreen) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win && !win.isDestroyed()) {
+      win.setFullScreen(Boolean(shouldBeFullscreen));
+      win.webContents.send('media-player-fullscreen-changed', Boolean(shouldBeFullscreen));
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('pick-media-file', async (event) => {
+  try {
+    const owner = BrowserWindow.fromWebContents(event.sender) || mediaPlayerWindow || mainWindow || undefined;
+    const result = await dialog.showOpenDialog(owner, {
+      properties: ['openFile'],
+      filters: [
+        { name: 'Media Files', extensions: ['mp4', 'webm', 'm4v', 'mov', 'mp3', 'wav', 'ogg', 'oga', 'aac', 'm4a', 'flac', 'opus'] },
+        { name: 'Video Files', extensions: ['mp4', 'webm', 'm4v', 'mov'] },
+        { name: 'Audio Files', extensions: ['mp3', 'wav', 'ogg', 'oga', 'aac', 'm4a', 'flac', 'opus'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    if (result.canceled || !Array.isArray(result.filePaths) || result.filePaths.length === 0) {
+      return { success: true, canceled: true };
+    }
+    const filePath = result.filePaths[0];
+    return {
+      success: true,
+      canceled: false,
+      filePath,
+      fileUrl: pathToFileURL(filePath).toString(),
+      title: path.basename(filePath),
+    };
+  } catch (error) {
+    console.error('Error picking media file:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('open-media-player-external', async (event, targetUrl) => {
+  try {
+    if (!targetUrl) return { success: false, error: 'Missing URL' };
+    await shell.openExternal(String(targetUrl));
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 });
 

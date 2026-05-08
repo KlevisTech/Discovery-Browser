@@ -168,6 +168,9 @@ const electronAPI = {
   // Articles recap window
   openArticlesRecap: () => ipcRenderer.invoke('open-articles-recap'),
 
+  // Media player window
+  openMediaPlayer: (initialSource) => ipcRenderer.invoke('open-media-player', initialSource || null),
+
   // Open updates/changelog window
   openUpdates: () => ipcRenderer.invoke('open-updates-window'),
 
