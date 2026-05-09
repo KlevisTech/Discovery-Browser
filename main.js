@@ -4861,6 +4861,54 @@ ipcMain.handle('pick-media-file', async (event) => {
   }
 });
 
+ipcMain.handle('pick-media-folder', async (event) => {
+  try {
+    const owner = BrowserWindow.fromWebContents(event.sender) || mediaPlayerWindow || mainWindow || undefined;
+    const result = await dialog.showOpenDialog(owner, {
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || !Array.isArray(result.filePaths) || result.filePaths.length === 0) {
+      return { success: true, canceled: true };
+    }
+    const folderPath = result.filePaths[0];
+    const fs = require('fs');
+    const mediaExtensions = new Set(['mp4', 'webm', 'm4v', 'mov', 'mp3', 'wav', 'ogg', 'oga', 'aac', 'm4a', 'flac', 'opus']);
+    
+    const files = [];
+    try {
+      const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isFile()) {
+          const ext = entry.name.split('.').pop().toLowerCase();
+          if (mediaExtensions.has(ext)) {
+            const filePath = path.join(folderPath, entry.name);
+            files.push({
+              fileName: entry.name,
+              filePath: filePath,
+              url: pathToFileURL(filePath).toString(),
+              title: entry.name,
+            });
+          }
+        }
+      }
+      files.sort((a, b) => a.fileName.localeCompare(b.fileName));
+    } catch (readError) {
+      console.error('Error reading folder:', readError);
+      return { success: false, error: 'Could not read folder contents' };
+    }
+    
+    return {
+      success: true,
+      canceled: false,
+      folderPath,
+      files,
+    };
+  } catch (error) {
+    console.error('Error picking media folder:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('open-media-player-external', async (event, targetUrl) => {
   try {
     if (!targetUrl) return { success: false, error: 'Missing URL' };

@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('mediaPlayerAPI', {
   minimizeWindow: () => ipcRenderer.invoke('minimize-media-player-window'),
   toggleFullscreen: (shouldBeFullscreen) => ipcRenderer.invoke('toggle-media-player-fullscreen', shouldBeFullscreen),
   pickMediaFile: () => ipcRenderer.invoke('pick-media-file'),
+  pickMediaFolder: () => ipcRenderer.invoke('pick-media-folder'),
   openExternal: (targetUrl) => ipcRenderer.invoke('open-media-player-external', targetUrl),
   onOpenSource: (callback) => {
     ipcRenderer.on('media-player-open-source', (event, payload) => callback(payload));
