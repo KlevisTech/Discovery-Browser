@@ -14,7 +14,7 @@
         const rawShape = String(params.get('shape') || 'default').toLowerCase();
         const normalizedTheme = rawTheme === 'alt' ? 'sunset' : rawTheme;
         const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'frost']);
-        const normalizedShape = rawShape === 'wave' ? 'wave' : 'default';
+        const normalizedShape = rawShape === 'wave' || rawShape === 'curve' ? rawShape : 'default';
         const themeClass = allowedThemes.has(normalizedTheme) ? `theme-${normalizedTheme}` : 'theme-primary';
         document.documentElement.classList.add(themeClass);
         document.documentElement.setAttribute('data-card-theme', themeClass.replace('theme-', ''));
@@ -213,15 +213,38 @@ body {
     }
 
     .card-window.shape-wave,
-    html[data-card-shape="wave"] .card-window {
-      --card-final-clip: url(#site-card-shape);
+    .card-window.shape-curve,
+    html[data-card-shape="wave"] .card-window,
+    html[data-card-shape="curve"] .card-window {
       border: none;
       border-radius: 0;
+    }
+
+    .card-window.shape-wave,
+    html[data-card-shape="wave"] .card-window {
+      --card-final-clip: url(#site-card-shape-wave);
+    }
+
+    .card-window.shape-curve,
+    html[data-card-shape="curve"] .card-window {
+      --card-final-clip: url(#site-card-shape-curve);
     }
 
     .card-window.shape-wave .card-titlebar,
     html[data-card-shape="wave"] .card-window .card-titlebar {
       padding: 0 2px;
+    }
+
+    .card-window.shape-curve .card-titlebar,
+    html[data-card-shape="curve"] .card-window .card-titlebar {
+      height: 78px;
+      padding: 30px 14px 0;
+      align-items: center;
+    }
+
+    .card-window.shape-curve .media-hover-control,
+    html[data-card-shape="curve"] .card-window .media-hover-control {
+      top: 52px !important;
     }
 
     /* Theme-specific card window backgrounds and borders */
@@ -299,12 +322,29 @@ body {
       z-index: 6;
     }
 
-    .card-window:not(.shape-wave) .card-shape-outline {
+    .card-window.shape-default .card-shape-outline {
       display: none;
     }
 
-    html[data-card-shape="wave"] .card-window .card-shape-outline {
+    html[data-card-shape="wave"] .card-window .card-shape-outline,
+    html[data-card-shape="curve"] .card-window .card-shape-outline {
       display: block;
+    }
+
+    .card-shape-outline .shape-path {
+      display: none;
+    }
+
+    .card-window.shape-wave .card-shape-outline .shape-path-wave,
+    html[data-card-shape="wave"] .card-window .card-shape-outline .shape-path-wave,
+    .card-window.shape-curve .card-shape-outline .shape-path-curve,
+    html[data-card-shape="curve"] .card-window .card-shape-outline .shape-path-curve {
+      display: block;
+    }
+
+    .card-window.shape-curve .card-shape-outline,
+    html[data-card-shape="curve"] .card-window .card-shape-outline {
+      z-index: 12;
     }
 
     .card-shape-outline path {
@@ -816,7 +856,9 @@ body {
     }
 
     .card-window.shape-wave .card-content,
-    html[data-card-shape="wave"] .card-window .card-content {
+    .card-window.shape-curve .card-content,
+    html[data-card-shape="wave"] .card-window .card-content,
+    html[data-card-shape="curve"] .card-window .card-content {
       background: transparent;
     }
 
@@ -2014,7 +2056,9 @@ body {
     }
 
     .card-window.shape-wave .split-container,
-    html[data-card-shape="wave"] .card-window .split-container {
+    .card-window.shape-curve .split-container,
+    html[data-card-shape="wave"] .card-window .split-container,
+    html[data-card-shape="curve"] .card-window .split-container {
       padding: 0 22px 14px 2px;
     }
 
@@ -2051,12 +2095,16 @@ body {
     }
 
     .card-window.shape-wave #card-webview,
-    html[data-card-shape="wave"] .card-window #card-webview {
+    .card-window.shape-curve #card-webview,
+    html[data-card-shape="wave"] .card-window #card-webview,
+    html[data-card-shape="curve"] .card-window #card-webview {
       margin-right: 0;
     }
 
     .card-window.shape-wave .split-container.split-active #card-webview,
-    html[data-card-shape="wave"] .card-window .split-container.split-active #card-webview {
+    .card-window.shape-curve .split-container.split-active #card-webview,
+    html[data-card-shape="wave"] .card-window .split-container.split-active #card-webview,
+    html[data-card-shape="curve"] .card-window .split-container.split-active #card-webview {
       margin-right: 0;
     }
 
@@ -2178,14 +2226,18 @@ body {
 <body>
   <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
     <defs>
-      <clipPath id="site-card-shape" clipPathUnits="objectBoundingBox">
+      <clipPath id="site-card-shape-wave" clipPathUnits="objectBoundingBox">
         <path d="M0.001,0.046 C0.001,0.016 0.012,0.004 0.036,0.004 L0.964,0.004 C0.988,0.004 0.999,0.016 0.999,0.046 L0.999,0.822 C0.999,0.912 0.958,0.966 0.916,0.966 C0.863,0.966 0.831,0.908 0.715,0.908 C0.625,0.908 0.568,0.955 0.5,0.955 C0.432,0.955 0.375,0.908 0.285,0.908 C0.169,0.908 0.137,0.966 0.084,0.966 C0.042,0.966 0.001,0.912 0.001,0.822 Z" />
+      </clipPath>
+      <clipPath id="site-card-shape-curve" clipPathUnits="objectBoundingBox">
+        <path d="M0.036,0.004 C0.212,0.03 0.357,0.044 0.5,0.044 C0.643,0.044 0.788,0.03 0.964,0.004 C0.988,0.004 0.999,0.018 0.999,0.052 L0.999,0.948 C0.999,0.982 0.984,0.996 0.956,0.996 C0.781,0.97 0.639,0.956 0.5,0.956 C0.361,0.956 0.219,0.97 0.044,0.996 C0.016,0.996 0.001,0.982 0.001,0.948 L0.001,0.052 C0.001,0.018 0.012,0.004 0.036,0.004 Z" />
       </clipPath>
     </defs>
   </svg>
   <div class="card-window shape-default">
     <svg class="card-shape-outline" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-      <path d="M1 46 C1 16 12 4 36 4 L964 4 C988 4 999 16 999 46 L999 822 C999 912 958 966 916 966 C863 966 831 908 715 908 C625 908 568 955 500 955 C432 955 375 908 285 908 C169 908 137 966 84 966 C42 966 1 912 1 822 Z" />
+      <path class="shape-path shape-path-wave" d="M1 46 C1 16 12 4 36 4 L964 4 C988 4 999 16 999 46 L999 822 C999 912 958 966 916 966 C863 966 831 908 715 908 C625 908 568 955 500 955 C432 955 375 908 285 908 C169 908 137 966 84 966 C42 966 1 912 1 822 Z" />
+      <path class="shape-path shape-path-curve" d="M36 4 C212 30 357 44 500 44 C643 44 788 30 964 4 C988 4 999 18 999 52 L999 948 C999 982 984 996 956 996 C781 970 639 956 500 956 C361 956 219 970 44 996 C16 996 1 982 1 948 L1 52 C1 18 12 4 36 4 Z" />
     </svg>
     <!-- Titlebar with navigation and close button -->
     <div class="card-titlebar">
@@ -2320,7 +2372,7 @@ body {
     const theme = (params.get('theme') || 'primary').toLowerCase();
     const normalizedTheme = theme === 'alt' ? 'sunset' : theme;
     const shape = (params.get('shape') || 'default').toLowerCase();
-    const normalizedShape = shape === 'wave' ? 'wave' : 'default';
+    const normalizedShape = shape === 'wave' || shape === 'curve' ? shape : 'default';
 
     let initialUrl = null;
     if (encodedUrl) {
@@ -2337,7 +2389,7 @@ body {
     if (cardWindowEl) {
       const allThemeClasses = ['theme-alt', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-frost'];
       allThemeClasses.forEach((cls) => cardWindowEl.classList.remove(cls));
-      cardWindowEl.classList.remove('shape-default', 'shape-wave');
+      cardWindowEl.classList.remove('shape-default', 'shape-wave', 'shape-curve');
       if (normalizedTheme !== 'primary') {
         cardWindowEl.classList.add(`theme-${normalizedTheme}`);
       }
@@ -3608,18 +3660,18 @@ body {
 
     function updateSideFlamesButton() {
       if (!mediaSideFlamesBtn) return;
-      const flamesAvailable = normalizedShape === 'wave';
+      const flamesAvailable = normalizedShape === 'wave' || normalizedShape === 'curve';
       mediaSideFlamesBtn.textContent = flamesAvailable
         ? (sideFlamesEnabled ? 'Flames On' : 'Flames Off')
         : 'Flames N/A';
       mediaSideFlamesBtn.title = flamesAvailable
         ? 'Toggle side flames'
-        : 'Side flames are available on wave windows only';
+        : 'Side flames are available on wave and curve windows only';
       mediaSideFlamesBtn.setAttribute(
         'aria-label',
         flamesAvailable
           ? `Toggle side flames. Currently ${sideFlamesEnabled ? 'on' : 'off'}`
-          : 'Side flames are available on wave windows only'
+          : 'Side flames are available on wave and curve windows only'
       );
     }
 
@@ -3707,7 +3759,7 @@ body {
         mediaVisualLockBtn.disabled = !shouldShow;
       }
       if (mediaSideFlamesBtn) {
-        mediaSideFlamesBtn.disabled = !shouldShow || normalizedShape !== 'wave';
+        mediaSideFlamesBtn.disabled = !shouldShow || (normalizedShape !== 'wave' && normalizedShape !== 'curve');
       }
       if (mediaSeekBackBtn) {
         mediaSeekBackBtn.disabled = !shouldShow;
@@ -4255,7 +4307,7 @@ body {
       mediaSideFlamesBtn.addEventListener('click', async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        if (normalizedShape !== 'wave') return;
+        if (normalizedShape !== 'wave' && normalizedShape !== 'curve') return;
         const nextEnabled = !sideFlamesEnabled;
         sideFlamesEnabled = nextEnabled;
         updateSideFlamesButton();

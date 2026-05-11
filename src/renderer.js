@@ -162,6 +162,14 @@ class DiscoveryBrowser {
         name: 'Wave',
         description: 'Rounded top with the custom flowing bottom edge.',
         preview: 'linear-gradient(135deg, rgba(78,132,255,0.65), rgba(255,140,196,0.62))',
+        previewPath: 'M5 24 C5 8 14 4 30 4 H170 C186 4 195 8 195 24 V77 C195 91 185 98 173 98 C158 98 150 91 126 91 C108 91 98 97 84 97 C70 97 58 91 38 91 C20 91 5 88 5 77 Z',
+      },
+      {
+        key: 'curve',
+        name: 'Curve',
+        description: 'Concave neon frame with a cinematic curved top and bottom.',
+        preview: 'linear-gradient(135deg, rgba(40,188,255,0.7), rgba(228,72,255,0.62), rgba(255,150,118,0.66))',
+        previewPath: 'M13 8 C56 18 144 18 187 8 C193 8 197 13 197 20 V88 C197 95 192 100 185 100 C139 89 61 89 15 100 C8 100 3 95 3 88 V20 C3 13 7 8 13 8 Z',
       },
     ];
 
@@ -1247,8 +1255,15 @@ class DiscoveryBrowser {
       const item = document.createElement('button');
       item.type = 'button';
       item.className = `theme-option${this.cardShapeKey === shape.key ? ' is-selected' : ''}`;
+      const previewMarkup = shape.previewPath
+        ? `<div class="theme-option__preview shape-preview shape-preview--${shape.key}" style="background:${shape.preview};">
+            <svg viewBox="0 0 200 104" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+              <path d="${shape.previewPath}"></path>
+            </svg>
+          </div>`
+        : `<div class="theme-option__preview shape-preview shape-preview--${shape.key}" style="background:${shape.preview};"></div>`;
       item.innerHTML = `
-        <div class="theme-option__preview" style="background:${shape.preview};"></div>
+        ${previewMarkup}
         <div class="theme-option__name">${shape.name}</div>
         <div class="theme-option__desc">${shape.description}</div>
       `;
@@ -1381,12 +1396,14 @@ class DiscoveryBrowser {
 
   getCardLaunchWindowDimensions(mode = this.cardLaunchSizeMode, shapeKey = this.cardShapeKey) {
     const normalizedMode = mode === 'wide' ? 'wide' : (mode === 'fullscreen' ? 'fullscreen' : 'normal');
-    const normalizedShape = shapeKey === 'wave' ? 'wave' : 'default';
+    const normalizedShape = shapeKey === 'wave' || shapeKey === 'curve' ? shapeKey : 'default';
     if (normalizedMode === 'wide') {
+      if (normalizedShape === 'curve') return { width: 1100, height: 700 };
       return normalizedShape === 'wave'
         ? { width: 1100, height: 660 }
         : { width: 1100, height: 600 };
     }
+    if (normalizedShape === 'curve') return { width: 850, height: 600 };
     return normalizedShape === 'wave'
       ? { width: 850, height: 560 }
       : { width: 850, height: 500 };

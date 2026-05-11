@@ -2780,6 +2780,44 @@ updateProgressFromNative(player);
 
     clearAllMedia();
     loadHomeScreen();
+
+    // Listen for detected streaming URLs from main process
+    if (mediaAPI && typeof mediaAPI.onStreamDetected === 'function') {
+      mediaAPI.onStreamDetected((streamUrl) => {
+        console.log('[MediaPlayer] Stream detected, loading:', streamUrl);
+        try {
+          // Determine media type from URL extension or content
+          const ext = getPathExtension(streamUrl);
+          const isAudio = AUDIO_EXTENSIONS.has(ext);
+          const isVideo = VIDEO_EXTENSIONS.has(ext) || !isAudio;
+          const mode = isAudio ? 'audio' : 'video';
+          
+          // Extract filename from URL for display
+          let title = streamUrl;
+          try {
+            const url = new URL(streamUrl);
+            const pathname = url.pathname || '';
+            const parts = pathname.split('/');
+            title = parts[parts.length - 1] || 'Streaming media';
+          } catch (e) {
+            title = 'Streaming media';
+          }
+          
+          // Load the stream in the media player
+          openNativeSource(mode, streamUrl, streamUrl, title);
+          
+          // Toggle fullscreen to fill the screen
+          setTimeout(() => {
+            if (fullscreenBtn && typeof fullscreenBtn.click === 'function') {
+              fullscreenBtn.click();
+            }
+          }, 100);
+        } catch (e) {
+          console.error('[MediaPlayer] Error handling stream detection:', e);
+          setStatus('Error loading stream');
+        }
+      });
+    }
   </script>
 </body>
 </html>

@@ -335,6 +335,50 @@ body.startup-opening .app-container::before {
   margin-bottom: 7px;
 }
 
+.shape-preview {
+  position: relative;
+  overflow: hidden;
+  background-color: rgba(8, 10, 18, 0.9) !important;
+}
+
+.shape-preview::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  opacity: 0.26;
+}
+
+.shape-preview svg {
+  position: absolute;
+  inset: 4px 5px;
+  width: calc(100% - 10px);
+  height: calc(100% - 8px);
+  overflow: visible;
+}
+
+.shape-preview path {
+  fill: rgba(4, 7, 14, 0.82);
+  stroke: rgba(255, 255, 255, 0.82);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  filter:
+    drop-shadow(0 0 4px rgba(74, 187, 255, 0.82))
+    drop-shadow(0 0 5px rgba(247, 96, 209, 0.64));
+}
+
+.shape-preview--default::after {
+  content: '';
+  position: absolute;
+  inset: 7px 10px;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.78);
+  background: rgba(4, 7, 14, 0.68);
+  box-shadow:
+    0 0 8px rgba(86, 166, 255, 0.56),
+    0 0 12px rgba(230, 108, 255, 0.38);
+}
+
 .theme-option__name {
   color: #fff;
   font-size: 11px;

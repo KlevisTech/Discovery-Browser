@@ -830,17 +830,19 @@ function normalizeCardLaunchSizeMode(mode) {
 
 function normalizeCardShapeKey(shapeKey) {
   const candidate = String(shapeKey || '').trim().toLowerCase();
-  return candidate === 'wave' ? 'wave' : 'default';
+  return candidate === 'wave' || candidate === 'curve' ? candidate : 'default';
 }
 
 function getLaunchWindowSizeByMode(mode, shapeKey = 'default') {
   const normalized = normalizeCardLaunchSizeMode(mode);
   const normalizedShape = normalizeCardShapeKey(shapeKey);
   if (normalized === CARD_LAUNCH_MODE_WIDE) {
+    if (normalizedShape === 'curve') return { width: 1100, height: 700 };
     return normalizedShape === 'wave'
       ? { width: 1100, height: 660 }
       : { width: 1100, height: 600 };
   }
+  if (normalizedShape === 'curve') return { width: 850, height: 600 };
   return normalizedShape === 'wave'
     ? { width: 850, height: 560 }
     : { width: 850, height: 500 };
@@ -854,7 +856,7 @@ function getCardPseudoFullscreenBounds(cardWindow, mode = 'cinema') {
     : (shapeKey === 'wave' ? 12 : CARD_PSEUDO_FULLSCREEN_TOP_GAP);
   const bottomGap = normalizedMode === 'full'
     ? CARD_FULL_MODE_BOTTOM_GAP
-    : (shapeKey === 'wave' ? 0 : CARD_PSEUDO_FULLSCREEN_BOTTOM_GAP);
+    : (shapeKey === 'wave' || shapeKey === 'curve' ? 0 : CARD_PSEUDO_FULLSCREEN_BOTTOM_GAP);
   let display = null;
   try {
     if (cardWindow && !cardWindow.isDestroyed()) {
@@ -1164,7 +1166,8 @@ function sendSideFlamesWidgetState(cardId) {
 function shouldShowSideFlamesWidget(cardId, cardWindow) {
   if (sideFlamesEnabledStates.get(Number(cardId)) !== true) return false;
   if (!cardWindow || cardWindow.isDestroyed()) return false;
-  if (normalizeCardShapeKey(cardWindow.__cardShape) !== 'wave') return false;
+  const shapeKey = normalizeCardShapeKey(cardWindow.__cardShape);
+  if (shapeKey !== 'wave' && shapeKey !== 'curve') return false;
   return shouldShowVisualizerWidget(cardId, cardWindow);
 }
 
@@ -1350,7 +1353,7 @@ function ensureVisualizerWidget(cardId, cardWindow) {
     maximizable: false,
     fullscreenable: false,
     skipTaskbar: true,
-    focusable: true,
+    focusable: false,
     show: false,
     hasShadow: false,
     webPreferences: {
@@ -1380,14 +1383,6 @@ function ensureVisualizerWidget(cardId, cardWindow) {
   widget.webContents.on('did-finish-load', () => {
     sendVisualizerWidgetState(cardId);
   });
-  widget.on('focus', () => {
-    setActiveVisualizerCard(cardId);
-    syncAllVisualizerWidgets();
-    syncVisualizerWidget(cardId);
-  });
-  widget.on('blur', () => {
-    setTimeout(() => syncVisualizerWidget(cardId), 60);
-  });
   widget.on('closed', () => {
     visualizerWidgets.delete(cardId);
   });
@@ -1409,6 +1404,22 @@ function syncVisualizerWidget(cardId) {
     return;
   }
 
+  const shouldShow = shouldShowVisualizerWidget(cardId, cardWindow);
+  const isLocked = visualizerWidgetLockStates.get(Number(cardId)) === true;
+  const existingWidget = visualizerWidgets.get(cardId);
+
+  // Match the media player behavior: do not keep a detached top-center helper
+  // window around when the visualizer should not be visible.
+  if (!shouldShow && !isLocked) {
+    if (existingWidget && !existingWidget.isDestroyed()) {
+      try {
+        if (existingWidget.isVisible()) existingWidget.hide();
+      } catch (e) { }
+      closeVisualizerWidget(cardId);
+    }
+    return;
+  }
+
   const widget = ensureVisualizerWidget(cardId, cardWindow);
   if (!widget || widget.isDestroyed()) return;
 
@@ -1419,8 +1430,6 @@ function syncVisualizerWidget(cardId) {
 
   sendVisualizerWidgetState(cardId);
 
-  const shouldShow = shouldShowVisualizerWidget(cardId, cardWindow);
-  const isLocked = visualizerWidgetLockStates.get(Number(cardId)) === true;
   try {
     if (shouldShow) {
       const wasVisible = widget.isVisible();
@@ -2371,7 +2380,7 @@ let directCardIdCounter = 100000;
 
 // Direct card creation function - creates card window immediately without renderer round-trip
 // This ensures instant visual feedback when external apps call the browser
-// Options: { showHidden: boolean, themeKey: string, launchSizeMode: 'normal'|'wide'|'fullscreen', shapeKey: 'default'|'wave' }
+// Options: { showHidden: boolean, themeKey: string, launchSizeMode: 'normal'|'wide'|'fullscreen', shapeKey: 'default'|'wave'|'curve' }
 function createCardDirectly(url, options = {}) {
   try {
     // Support both old signature (themeKey as string) and new options object

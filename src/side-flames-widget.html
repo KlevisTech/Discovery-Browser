@@ -252,8 +252,9 @@
     function applyState(payload) {
       const next = payload && typeof payload === 'object' ? payload : {};
       widgetState = { ...widgetState, ...next };
-      const isWave = String(widgetState.cardShape || 'default').toLowerCase() === 'wave';
-      isEnabled = widgetState.sideFlamesEnabled === true && isWave;
+      const shapeKey = String(widgetState.cardShape || 'default').toLowerCase();
+      const flamesAvailable = shapeKey === 'wave' || shapeKey === 'curve';
+      isEnabled = widgetState.sideFlamesEnabled === true && flamesAvailable;
       document.body.classList.add('ready');
       document.body.classList.toggle('hidden', !isEnabled);
       if (isEnabled) {

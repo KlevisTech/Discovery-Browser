@@ -13,4 +13,10 @@ contextBridge.exposeInMainWorld('mediaPlayerAPI', {
   onFullscreenChanged: (callback) => {
     ipcRenderer.on('media-player-fullscreen-changed', (event, value) => callback(Boolean(value)));
   },
+  onStreamDetected: (callback) => {
+    ipcRenderer.on('stream-detected', (event, streamUrl) => {
+      console.log('[MediaPlayer Preload] Stream detected:', streamUrl);
+      callback(streamUrl);
+    });
+  },
 });

@@ -851,7 +851,8 @@
         visualLockBtn.textContent = widgetState.visualLock ? 'Lock On' : 'Lock View';
       }
       if (sideFlamesBtn) {
-        const flamesAvailable = String(widgetState.cardShape || 'default').toLowerCase() === 'wave';
+        const shapeKey = String(widgetState.cardShape || 'default').toLowerCase();
+        const flamesAvailable = shapeKey === 'wave' || shapeKey === 'curve';
         const flamesEnabled = widgetState.sideFlamesEnabled === true;
         sideFlamesBtn.disabled = !flamesAvailable;
         sideFlamesBtn.textContent = flamesAvailable
@@ -859,7 +860,7 @@
           : 'Flames N/A';
         sideFlamesBtn.title = flamesAvailable
           ? 'Toggle side flames'
-          : 'Side flames are available on wave windows only';
+          : 'Side flames are available on wave and curve windows only';
       }
       if (volumeSlider && Number.isFinite(Number(widgetState.volume))) {
         volumeSlider.value = String(Math.round(Math.max(0, Math.min(1, Number(widgetState.volume))) * 100));
