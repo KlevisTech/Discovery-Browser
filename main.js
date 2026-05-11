@@ -1,4 +1,5 @@
-﻿// main.js
+﻿
+// main.js
 const electron = require('electron');
 const app = electron.app;
 const BrowserWindow = electron.BrowserWindow;
@@ -777,6 +778,7 @@ let visualizerEnabled = false;
 let currentCardTheme = 'primary'; // Store the user's preferred card theme
 let currentCardLaunchSizeMode = 'normal'; // Store user's preferred launch size for new cards
 let currentCardShape = 'default'; // Store user's preferred card window shape for new cards
+let currentLoadingAnimation = 'static-tv'; // Store user's preferred loading animation for new cards
 let siteLayoutOverrides = {}; // hostname -> 'normal' | 'wide' | 'fullscreen' per-site layout overrides
 const pendingAuthRedirects = new Map(); // requestId -> { authUrl, launchUrl, createdAt }
 const recentAuthRedirects = new Map(); // dedupeKey -> { ts, requestId }
@@ -2411,6 +2413,13 @@ function createCardDirectly(url, options = {}) {
       : 'primary';
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
 
+    // Use provided loading animation or fall back to current saved animation
+    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill']);
+    const effectiveLoadingAnimation = opts.loadingAnimation || currentLoadingAnimation;
+    const normalizedLoadingAnimation = allowedLoadingAnimations.has(String(effectiveLoadingAnimation || '').toLowerCase())
+      ? String(effectiveLoadingAnimation || '').toLowerCase()
+      : 'static-tv';
+
     // Generate unique card ID
     const cardId = ++directCardIdCounter;
 
@@ -2523,7 +2532,8 @@ function createCardDirectly(url, options = {}) {
         url: encodedUrl,
         theme: cardTheme,
         shape: cardShape,
-        bubble: isBubbleMode ? '1' : '0'
+        bubble: isBubbleMode ? '1' : '0',
+        loadingAnimation: normalizedLoadingAnimation
       }
     }).catch((err) => {
       console.error('Error loading card HTML:', err);
@@ -2683,7 +2693,7 @@ function openUrlInCard(url, context = {}) {
     }
 
     // Pass currentCardTheme so external launches always use the correct theme
-    launchExternalCardUrlOnce(targetUrl, { themeKey: currentCardTheme, shapeKey: currentCardShape });
+    launchExternalCardUrlOnce(targetUrl, { themeKey: currentCardTheme, shapeKey: currentCardShape, loadingAnimation: currentLoadingAnimation });
   } catch (e) {
     // ignore
   }
@@ -3122,6 +3132,26 @@ ipcMain.handle('get-card-shape', async () => {
     return currentCardShape;
   } catch (e) {
     return 'default';
+  }
+});
+
+ipcMain.handle('set-loading-animation', async (event, loadingAnimationKey) => {
+  try {
+    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill']);
+    if (allowedLoadingAnimations.has(String(loadingAnimationKey || '').toLowerCase())) {
+      currentLoadingAnimation = String(loadingAnimationKey || '').toLowerCase();
+    }
+    return { success: true, loadingAnimation: currentLoadingAnimation };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('get-loading-animation', async () => {
+  try {
+    return currentLoadingAnimation;
+  } catch (e) {
+    return 'static-tv';
   }
 });
 
@@ -3777,6 +3807,10 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       : 'primary';
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
     const cardShape = normalizeCardShapeKey(shapeKey || currentCardShape);
+    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill']);
+    const normalizedLoadingAnimation = allowedLoadingAnimations.has(String(currentLoadingAnimation || '').toLowerCase())
+      ? String(currentLoadingAnimation || '').toLowerCase()
+      : 'static-tv';
 
     let targetUrl = normalizeTypedNavigationTarget(url);
     if (!targetUrl) {
@@ -3894,7 +3928,8 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
         url: encodedUrl,
         theme: cardTheme,
         shape: cardShape,
-        bubble: isBubbleMode ? '1' : '0'
+        bubble: isBubbleMode ? '1' : '0',
+        loadingAnimation: normalizedLoadingAnimation
       }
     }).catch((err) => {
       console.error('Error loading card HTML:', err);

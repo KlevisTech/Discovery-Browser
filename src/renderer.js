@@ -79,6 +79,7 @@ class DiscoveryBrowser {
     this.cardThemeKey = 'primary';
     this.cardLaunchSizeMode = 'normal';
     this.cardShapeKey = 'default';
+    this.loadingAnimationKey = 'static-tv';
     this.siteLayoutOverrides = {}; // hostname -> 'normal' | 'wide' | 'fullscreen'
     this.cardThemes = [
       {
@@ -170,6 +171,20 @@ class DiscoveryBrowser {
         description: 'Concave neon frame with a cinematic curved top and bottom.',
         preview: 'linear-gradient(135deg, rgba(40,188,255,0.7), rgba(228,72,255,0.62), rgba(255,150,118,0.66))',
         previewPath: 'M13 8 C56 18 144 18 187 8 C193 8 197 13 197 20 V88 C197 95 192 100 185 100 C139 89 61 89 15 100 C8 100 3 95 3 88 V20 C3 13 7 8 13 8 Z',
+      },
+    ];
+    this.loadingAnimations = [
+      {
+        key: 'static-tv',
+        name: 'Static TV',
+        description: 'Classic CRT static effect with scanlines and pixel noise.',
+        preview: 'linear-gradient(135deg, rgba(102,126,234,0.58), rgba(240,147,251,0.58))',
+      },
+      {
+        key: 'water-fill',
+        name: 'Water Fill',
+        description: 'Water rising from bottom with bubbles and wave motion.',
+        preview: 'linear-gradient(180deg, rgba(115,166,255,0.6) 0%, rgba(88,216,255,0.7) 30%, rgba(67,97,238,0.8) 60%, rgba(240,124,217,0.6) 100%)',
       },
     ];
 
@@ -319,7 +334,8 @@ class DiscoveryBrowser {
 
     this.loadSearchEngine();
     this.loadCardTheme();
-    await this.loadCardLaunchSizeMode();
+    this.loadLoadingAnimation();
+    this.loadCardLaunchSizeMode();
     await this.loadCardShape();
     this.loadSiteLayoutOverrides();
     this.applySearchEngineToUI();
@@ -778,6 +794,7 @@ class DiscoveryBrowser {
     const tabWindowSize = document.getElementById('settings-tab-window-size');
     const tabWindowShape = document.getElementById('settings-tab-window-shape');
     const tabThemes = document.getElementById('settings-tab-themes');
+    const tabLoadingAnimation = document.getElementById('settings-tab-loading-animation');
     const tabDeleteData = document.getElementById('settings-tab-delete-data');
     const paneHistory = document.getElementById('settings-history-tab');
     const paneBookmarks = document.getElementById('settings-bookmarks-tab');
@@ -787,6 +804,7 @@ class DiscoveryBrowser {
     const paneWindowSize = document.getElementById('settings-window-size-tab');
     const paneWindowShape = document.getElementById('settings-window-shape-tab');
     const paneThemes = document.getElementById('settings-themes-tab');
+    const paneLoadingAnimation = document.getElementById('settings-loading-animation-tab');
     const paneDeleteData = document.getElementById('settings-delete-data-tab');
     const deleteDataBtn = document.getElementById('delete-data-btn');
     const defaultBrowserBlock = document.getElementById('default-browser-setting');
@@ -862,6 +880,7 @@ class DiscoveryBrowser {
       setActive(tabWindowSize, tabName === 'window-size');
       setActive(tabWindowShape, tabName === 'window-shape');
       setActive(tabThemes, tabName === 'themes');
+      setActive(tabLoadingAnimation, tabName === 'loading-animation');
       setActive(tabDeleteData, tabName === 'delete-data');
 
       setPane(paneHistory, tabName === 'history');
@@ -871,6 +890,7 @@ class DiscoveryBrowser {
       setPane(paneWindowSize, tabName === 'window-size');
       setPane(paneWindowShape, tabName === 'window-shape');
       setPane(paneThemes, tabName === 'themes');
+      setPane(paneLoadingAnimation, tabName === 'loading-animation');
       setPane(paneDeleteData, tabName === 'delete-data');
 
       if (tabName === 'history') this.renderHistory();
@@ -879,6 +899,7 @@ class DiscoveryBrowser {
       if (tabName === 'window-size') this.renderWindowSizeOptions();
       if (tabName === 'window-shape') this.renderWindowShapeOptions();
       if (tabName === 'themes') this.renderThemeOptions();
+      if (tabName === 'loading-animation') this.renderLoadingAnimationOptions();
     };
 
     const toggleSettingsTab = (tabName) => {
@@ -917,6 +938,10 @@ class DiscoveryBrowser {
 
       tabThemes.addEventListener('click', () => {
         toggleSettingsTab('themes');
+      });
+
+      tabLoadingAnimation.addEventListener('click', () => {
+        toggleSettingsTab('loading-animation');
       });
 
       tabDeleteData.addEventListener('click', () => {
@@ -1176,6 +1201,19 @@ class DiscoveryBrowser {
     } catch (e) { }
   }
 
+  loadLoadingAnimation() {
+    try {
+      const saved = localStorage.getItem('loadingAnimationKey');
+      if (saved && this.loadingAnimations.some(a => a.key === saved)) {
+        this.loadingAnimationKey = saved;
+      }
+      // Sync loading animation to main process for external URL cards
+      if (window.electronAPI && window.electronAPI.setLoadingAnimation) {
+        window.electronAPI.setLoadingAnimation(this.loadingAnimationKey);
+      }
+    } catch (e) { }
+  }
+
   setCardTheme(key) {
     if (!this.cardThemes.some(t => t.key === key)) return;
     this.cardThemeKey = key;
@@ -1188,6 +1226,34 @@ class DiscoveryBrowser {
     } catch (e) { }
     this.renderThemeOptions();
     this.showThemeToast(key);
+  }
+
+  setLoadingAnimation(key) {
+    if (!this.loadingAnimations.some(a => a.key === key)) return;
+    this.loadingAnimationKey = key;
+    try {
+      localStorage.setItem('loadingAnimationKey', key);
+      // Sync loading animation to main process for external URL cards
+      if (window.electronAPI && window.electronAPI.setLoadingAnimation) {
+        window.electronAPI.setLoadingAnimation(key);
+      }
+    } catch (e) { }
+    this.renderLoadingAnimationOptions();
+    this.showLoadingAnimationToast(key);
+  }
+
+  showLoadingAnimationToast(animationKey) {
+    try {
+      const animation = this.loadingAnimations.find((a) => a.key === animationKey);
+      const name = animation ? animation.name : 'Loading Animation';
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #1f2430 0%, #2f3548 100%); color: white; padding: 8px 16px; border-radius: 14px; font-size: 11px; z-index: 10000; box-shadow: 0 6px 18px rgba(0,0,0,0.4); white-space: nowrap;';
+      toast.textContent = `Loading animation set: ${name}`;
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        if (toast.parentNode) toast.remove();
+      }, 1800);
+    } catch (e) { }
   }
 
   async loadCardLaunchSizeMode() {
@@ -1427,6 +1493,24 @@ class DiscoveryBrowser {
       `;
       item.addEventListener('click', () => this.setCardTheme(theme.key));
       this.themeOptionsEl.appendChild(item);
+    });
+  }
+
+  renderLoadingAnimationOptions() {
+    const loadingAnimationOptionsEl = document.getElementById('loading-animation-options');
+    if (!loadingAnimationOptionsEl) return;
+    loadingAnimationOptionsEl.innerHTML = '';
+    this.loadingAnimations.forEach((animation) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = `theme-option${this.loadingAnimationKey === animation.key ? ' is-selected' : ''}`;
+      item.innerHTML = `
+        <div class="theme-option__preview" style="background:${animation.preview};"></div>
+        <div class="theme-option__name">${animation.name}</div>
+        <div class="theme-option__desc">${animation.description}</div>
+      `;
+      item.addEventListener('click', () => this.setLoadingAnimation(animation.key));
+      loadingAnimationOptionsEl.appendChild(item);
     });
   }
 

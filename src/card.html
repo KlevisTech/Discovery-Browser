@@ -12,14 +12,18 @@
         const params = new URLSearchParams(window.location.search || '');
         const rawTheme = String(params.get('theme') || 'primary').toLowerCase();
         const rawShape = String(params.get('shape') || 'default').toLowerCase();
+        const rawLoadingAnimation = String(params.get('loadingAnimation') || 'static-tv').toLowerCase();
         const normalizedTheme = rawTheme === 'alt' ? 'sunset' : rawTheme;
         const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'frost']);
+        const allowedLoadingAnimations = new Set(['static-tv', 'water-fill']);
         const normalizedShape = rawShape === 'wave' || rawShape === 'curve' ? rawShape : 'default';
+        const normalizedLoadingAnimation = allowedLoadingAnimations.has(rawLoadingAnimation) ? rawLoadingAnimation : 'static-tv';
         const themeClass = allowedThemes.has(normalizedTheme) ? `theme-${normalizedTheme}` : 'theme-primary';
         document.documentElement.classList.add(themeClass);
         document.documentElement.setAttribute('data-card-theme', themeClass.replace('theme-', ''));
         document.documentElement.classList.add(`card-shape-${normalizedShape}`);
         document.documentElement.setAttribute('data-card-shape', normalizedShape);
+        document.documentElement.setAttribute('data-loading-animation', normalizedLoadingAnimation);
       } catch (e) { }
     })();
   </script>
@@ -1018,6 +1022,191 @@ body {
           50% 100%,
           36px 0,
           0 46px;
+      }
+    }
+
+    /* Water Fill Loading Animation */
+    .card-launch-fill.water-fill {
+      background:
+        linear-gradient(180deg,
+          rgba(255, 255, 255, 0.06),
+          transparent 24%,
+          transparent 76%,
+          rgba(0, 0, 0, 0.12)),
+        inherit;
+    }
+
+    .card-launch-fill.water-fill::before {
+      opacity: 0;
+      animation: none;
+    }
+
+    .card-launch-fill.water-fill::after {
+      opacity: 0;
+      animation: none;
+      background: none;
+    }
+
+    .card-launch-fill.water-fill .water-fill-container {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .card-launch-fill.water-fill .water-fill-wave {
+      position: absolute;
+      bottom: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(180deg,
+        rgba(115, 166, 255, 0.6) 0%,
+        rgba(88, 216, 255, 0.7) 30%,
+        rgba(67, 97, 238, 0.8) 60%,
+        rgba(240, 124, 217, 0.6) 100%);
+      border-radius: 40% 40% 0 0;
+      animation: waterFillRise 2s ease-out forwards, waterWave 3s ease-in-out infinite;
+      transform-origin: center bottom;
+    }
+
+    .card-launch-fill.water-fill .water-fill-wave::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg,
+        rgba(255, 255, 255, 0.3) 0%,
+        transparent 50%);
+      border-radius: inherit;
+    }
+
+    .card-launch-fill.water-fill .water-fill-wave::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 20px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.4) 25%,
+        rgba(255, 255, 255, 0.6) 50%,
+        rgba(255, 255, 255, 0.4) 75%,
+        transparent 100%);
+      animation: waterShimmer 2s ease-in-out infinite;
+    }
+
+    .card-launch-fill.water-fill .water-bubbles {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .card-launch-fill.water-fill .bubble {
+      position: absolute;
+      bottom: -20px;
+      background: rgba(255, 255, 255, 0.4);
+      border-radius: 50%;
+      animation: bubbleRise 3s ease-in infinite;
+    }
+
+    .card-launch-fill.water-fill .bubble:nth-child(1) {
+      left: 10%;
+      width: 8px;
+      height: 8px;
+      animation-delay: 0s;
+      animation-duration: 2.5s;
+    }
+
+    .card-launch-fill.water-fill .bubble:nth-child(2) {
+      left: 25%;
+      width: 12px;
+      height: 12px;
+      animation-delay: 0.5s;
+      animation-duration: 3s;
+    }
+
+    .card-launch-fill.water-fill .bubble:nth-child(3) {
+      left: 40%;
+      width: 6px;
+      height: 6px;
+      animation-delay: 1s;
+      animation-duration: 2s;
+    }
+
+    .card-launch-fill.water-fill .bubble:nth-child(4) {
+      left: 55%;
+      width: 10px;
+      height: 10px;
+      animation-delay: 1.5s;
+      animation-duration: 2.8s;
+    }
+
+    .card-launch-fill.water-fill .bubble:nth-child(5) {
+      left: 70%;
+      width: 8px;
+      height: 8px;
+      animation-delay: 0.8s;
+      animation-duration: 3.2s;
+    }
+
+    .card-launch-fill.water-fill .bubble:nth-child(6) {
+      left: 85%;
+      width: 14px;
+      height: 14px;
+      animation-delay: 1.2s;
+      animation-duration: 2.6s;
+    }
+
+    @keyframes waterFillRise {
+      0% {
+        transform: translateY(100%);
+      }
+      100% {
+        transform: translateY(-30%);
+      }
+    }
+
+    @keyframes waterWave {
+      0%, 100% {
+        border-radius: 40% 40% 0 0;
+      }
+      25% {
+        border-radius: 42% 38% 0 0;
+      }
+      50% {
+        border-radius: 38% 42% 0 0;
+      }
+      75% {
+        border-radius: 41% 39% 0 0;
+      }
+    }
+
+    @keyframes waterShimmer {
+      0%, 100% {
+        opacity: 0.3;
+        transform: translateX(-10px);
+      }
+      50% {
+        opacity: 0.7;
+        transform: translateX(10px);
+      }
+    }
+
+    @keyframes bubbleRise {
+      0% {
+        transform: translateY(0) scale(1);
+        opacity: 0;
+      }
+      10% {
+        opacity: 0.8;
+      }
+      90% {
+        opacity: 0.8;
+      }
+      100% {
+        transform: translateY(-200px) scale(0.5);
+        opacity: 0;
       }
     }
 
@@ -2317,7 +2506,19 @@ body {
 
     <!-- Content area: use webview for full site navigation -->
     <div class="card-content is-awaiting-first-content" id="card-content">
-      <div class="card-launch-fill active" id="card-launch-fill" aria-hidden="true"></div>
+      <div class="card-launch-fill active" id="card-launch-fill" aria-hidden="true">
+        <div class="water-fill-container">
+          <div class="water-fill-wave"></div>
+          <div class="water-bubbles">
+            <div class="bubble"></div>
+            <div class="bubble"></div>
+            <div class="bubble"></div>
+            <div class="bubble"></div>
+            <div class="bubble"></div>
+            <div class="bubble"></div>
+          </div>
+        </div>
+      </div>
       <div class="split-container" id="split-container">
         <div class="split-pane split-pane-left">
           <webview id="card-webview" style="width:100%; height:100%;" partition="persist:webview" allowpopups preload="../preload-webview.js"
@@ -2427,6 +2628,14 @@ body {
     const cardContent = document.getElementById('card-content');
     const cardLaunchFill = document.getElementById('card-launch-fill');
     const loadingWave = document.getElementById('loading-wave');
+
+    // Loading animation is passed in the card query and mirrored onto the html data attribute.
+    const loadingAnimation = String(
+      document.documentElement.getAttribute('data-loading-animation') || 'static-tv'
+    ).toLowerCase();
+    if (cardLaunchFill) {
+      cardLaunchFill.classList.toggle('water-fill', loadingAnimation === 'water-fill');
+    }
     const mediaHoverControl = document.getElementById('media-hover-control');
     const audioVisualizer = document.getElementById('audio-visualizer');
     const visualLockOverlay = document.getElementById('visual-lock-overlay');

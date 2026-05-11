@@ -151,6 +151,8 @@ const electronAPI = {
   getCardLaunchSizeMode: () => ipcRenderer.invoke('get-card-launch-size-mode'),
   setCardShape: (shapeKey) => ipcRenderer.invoke('set-card-shape', shapeKey),
   getCardShape: () => ipcRenderer.invoke('get-card-shape'),
+  setLoadingAnimation: (loadingAnimationKey) => ipcRenderer.invoke('set-loading-animation', loadingAnimationKey),
+  getLoadingAnimation: () => ipcRenderer.invoke('get-loading-animation'),
   setSiteLayoutOverrides: (overrides) => ipcRenderer.invoke('set-site-layout-overrides', overrides),
 
   // Favorites management

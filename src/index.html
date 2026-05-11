@@ -182,6 +182,9 @@
             <button id="settings-tab-themes"
               style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🎨
               Themes</button>
+            <button id="settings-tab-loading-animation"
+              style="flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;">🌊
+              Loading Animation</button>
             <button id='settings-tab-delete-data'
               style='flex: 0 0 auto; padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; color: rgba(255,255,255,0.6); cursor: pointer; white-space: nowrap;'>🗑️
               Delete Data</button>
@@ -279,6 +282,12 @@
           <p style="margin: 0 0 10px 0; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.4;">Pick one
             default theme for all site cards you open next.</p>
           <div id="theme-options" class="theme-options"></div>
+        </div>
+        <!-- Loading Animation tab content (hidden by default) -->
+        <div id="settings-loading-animation-tab" style="display: none;">
+          <h3 style="margin: 0 0 10px 0; color: white; font-size: 13px;">Loading Animation</h3>
+          <p style="margin: 0 0 10px 0; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.4;">Choose the animation style that appears when site cards are loading.</p>
+          <div id="loading-animation-options" class="theme-options"></div>
         </div>
         <!-- Delete Data tab content (hidden by default) -->
         <div id="settings-delete-data-tab" style="display: none;">
