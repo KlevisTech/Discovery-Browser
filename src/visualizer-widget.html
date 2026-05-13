@@ -284,7 +284,7 @@
 
     .control-btn.cinema,
     .control-btn.video-full {
-      grid-column: span 2;
+      grid-column: span 1;
       background: linear-gradient(135deg, rgba(255, 214, 92, 0.22), rgba(104, 184, 255, 0.16));
     }
 
@@ -474,7 +474,7 @@
       left: 18px;
       right: 18px;
       bottom: 14px;
-      height: 4px;
+      height: 3px;
       border-radius: 999px;
       background: rgba(255, 255, 255, 0.12);
       overflow: hidden;
@@ -667,6 +667,7 @@
       <button class="control-btn wide" id="seek-forward-btn" type="button">Forward 10s</button>
       <button class="control-btn lock" id="visual-lock-btn" type="button">Lock View</button>
       <button class="control-btn flames" id="side-flames-btn" type="button">Flames Off</button>
+      <button class="control-btn flames" id="media-progress-btn" type="button">Progress On</button>
       <button class="control-btn cinema" id="cinema-btn" type="button">Cinema</button>
       <button class="control-btn video-full" id="video-full-btn" type="button">Full</button>
       <input class="volume-slider" id="volume-slider" type="range" min="0" max="100" value="100" />
@@ -721,6 +722,7 @@
     const seekForwardBtn = document.getElementById('seek-forward-btn');
     const visualLockBtn = document.getElementById('visual-lock-btn');
     const sideFlamesBtn = document.getElementById('side-flames-btn');
+    const mediaProgressBtn = document.getElementById('media-progress-btn');
     const cinemaBtn = document.getElementById('cinema-btn');
     const videoFullBtn = document.getElementById('video-full-btn');
     const volumeSlider = document.getElementById('volume-slider');
@@ -741,6 +743,8 @@
       visualizerStyle: 'bars',
       visualLock: false,
       cardShape: 'default',
+      sideFlamesEnabled: false,
+      mediaProgressEnabled: true,
     };
     let remainingTickTimer = null;
     let panelResizeTimer = null;
@@ -898,6 +902,13 @@
           ? 'Toggle side flames'
           : 'Side flames are available on wave and curve windows only';
       }
+      if (mediaProgressBtn) {
+        const progressEnabled = widgetState.mediaProgressEnabled === true;
+        mediaProgressBtn.textContent = progressEnabled ? 'Progress On' : 'Progress Off';
+        mediaProgressBtn.title = progressEnabled
+          ? 'Turn off media progress widget'
+          : 'Turn on media progress widget';
+      }
       if (volumeSlider && Number.isFinite(Number(widgetState.volume))) {
         volumeSlider.value = String(Math.round(Math.max(0, Math.min(1, Number(widgetState.volume))) * 100));
       }
@@ -1012,6 +1023,13 @@
         event.stopPropagation();
         if (sideFlamesBtn.disabled) return;
         sendAction('side-flames-toggle');
+      });
+    }
+
+    if (mediaProgressBtn) {
+      mediaProgressBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        sendAction('media-progress-toggle');
       });
     }
 

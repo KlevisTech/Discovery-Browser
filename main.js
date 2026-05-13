@@ -1103,6 +1103,7 @@ function sendVisualizerWidgetState(cardId) {
         ...state,
         visualLock: visualizerWidgetLockStates.get(Number(cardId)) === true,
         sideFlamesEnabled: sideFlamesEnabledStates.get(Number(cardId)) === true,
+        mediaProgressEnabled: mediaProgressEnabledStates.get(Number(cardId)) === true,
         cardShape: normalizeCardShapeKey(cardWindows.get(Number(cardId)) && cardWindows.get(Number(cardId)).__cardShape),
       });
     }
