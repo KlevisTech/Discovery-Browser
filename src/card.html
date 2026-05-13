@@ -427,6 +427,106 @@ body {
       stroke: rgba(255, 255, 255, 0.94);
     }
 
+    .media-progress-border {
+      display: none !important;
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: 8px;
+      height: 20px;
+      z-index: 20;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 220ms ease;
+      overflow: hidden;
+      border-radius: 999px;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        0 0 0 1px rgba(130, 206, 255, 0.1),
+        0 10px 24px rgba(9, 20, 44, 0.24);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(17, 28, 60, 0.2));
+    }
+
+    .media-progress-border.active {
+      opacity: 1;
+    }
+
+    .card-window.shape-wave .media-progress-border,
+    html[data-card-shape="wave"] .card-window .media-progress-border {
+      left: 20px;
+      right: 20px;
+      bottom: 34px;
+      height: 36px;
+      border-radius: 26px 26px 30px 30px;
+    }
+
+    .card-window.shape-curve .media-progress-border,
+    html[data-card-shape="curve"] .card-window .media-progress-border {
+      left: 22px;
+      right: 22px;
+      bottom: 22px;
+      height: 28px;
+      border-radius: 24px;
+    }
+
+    .media-progress-border-track,
+    .media-progress-border-fill {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+    }
+
+    .media-progress-border-track {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 52%),
+        linear-gradient(90deg, rgba(94, 182, 255, 0.1), rgba(62, 127, 255, 0.16));
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        inset 0 -12px 18px rgba(9, 20, 44, 0.2);
+    }
+
+    .media-progress-border-fill {
+      width: 100%;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(170, 226, 255, 0.72) 0%, rgba(73, 182, 255, 0.88) 26%, rgba(28, 124, 255, 0.95) 64%, rgba(14, 79, 214, 0.98) 100%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.22),
+        inset 0 -10px 18px rgba(5, 44, 128, 0.3),
+        0 0 20px rgba(58, 162, 255, 0.22);
+      transform-origin: left center;
+      transform: scaleX(var(--media-progress-scale, 0));
+      transition: transform 300ms linear, opacity 180ms ease;
+    }
+
+    .media-progress-border-fill::before,
+    .media-progress-border-fill::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .media-progress-border-fill::before {
+      background:
+        radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.5), transparent 22%),
+        radial-gradient(circle at 54% 22%, rgba(176, 239, 255, 0.36), transparent 28%),
+        radial-gradient(circle at 84% 18%, rgba(255, 255, 255, 0.28), transparent 20%);
+      mix-blend-mode: screen;
+      animation: mediaProgressLiquidDrift 7.2s linear infinite;
+    }
+
+    .media-progress-border-fill::after {
+      top: auto;
+      bottom: 0;
+      height: min(18px, 68%);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0)),
+        radial-gradient(120% 100% at 50% 0%, rgba(134, 222, 255, 0.55), transparent 68%);
+      transform: translateY(2px);
+      animation: mediaProgressSurfaceWave 2.8s ease-in-out infinite;
+    }
+
     /* Shimmer effect on card appearance */
     .card-window::before {
       content: '';
@@ -2170,6 +2270,17 @@ body {
       100% { transform: rotate(360deg) translateY(-56px) scale(0.7); opacity: 0.62; }
     }
 
+    @keyframes mediaProgressLiquidDrift {
+      0% { transform: translateX(-8%) scaleX(1); }
+      50% { transform: translateX(4%) scaleX(1.04); }
+      100% { transform: translateX(-8%) scaleX(1); }
+    }
+
+    @keyframes mediaProgressSurfaceWave {
+      0%, 100% { transform: translateY(2px) scaleX(1); opacity: 0.66; }
+      50% { transform: translateY(-1px) scaleX(1.03); opacity: 0.94; }
+    }
+
     @keyframes waveDrift {
       0% {
         background-position: 0 0, 0 0, 0 0, 0 0;
@@ -2698,6 +2809,10 @@ body {
       <path class="shape-path shape-path-wave" d="M1 46 C1 16 12 4 36 4 L964 4 C988 4 999 16 999 46 L999 822 C999 912 958 966 916 966 C863 966 831 908 715 908 C625 908 568 955 500 955 C432 955 375 908 285 908 C169 908 137 966 84 966 C42 966 1 912 1 822 Z" />
       <path class="shape-path shape-path-curve" d="M36 4 C212 30 357 44 500 44 C643 44 788 30 964 4 C988 4 999 18 999 52 L999 948 C999 982 984 996 956 996 C781 970 639 956 500 956 C361 956 219 970 44 996 C16 996 1 982 1 948 L1 52 C1 18 12 4 36 4 Z" />
     </svg>
+    <div class="media-progress-border" id="media-progress-border" aria-hidden="true">
+      <div class="media-progress-border-track"></div>
+      <div class="media-progress-border-fill" id="media-progress-border-fill"></div>
+    </div>
     <!-- Titlebar with navigation and close button -->
     <div class="card-titlebar">
       <div style="display:flex; align-items:center; gap:2px; -webkit-app-region: no-drag; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 4px 6px; backdrop-filter: blur(8px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 8px rgba(0,0,0,0.2);">
@@ -2769,6 +2884,7 @@ body {
         </label>
         <button class="media-control-btn" id="media-visualizer-style-btn" type="button" title="Change visualizer style">Viz</button>
         <button class="media-control-btn" id="media-side-flames-btn" type="button" title="Toggle side flames">Flames</button>
+        <button class="media-control-btn" id="media-progress-btn" type="button" title="Toggle media progress widget">Progress</button>
         <button class="media-control-btn" id="media-visual-lock-btn" type="button" title="Enter visual lock">Lock</button>
         <button class="media-control-btn" id="media-mute-btn" type="button">Mute</button>
       </div>
@@ -2921,6 +3037,8 @@ body {
     const cardContent = document.getElementById('card-content');
     const cardLaunchFill = document.getElementById('card-launch-fill');
     const loadingWave = document.getElementById('loading-wave');
+    const mediaProgressBorder = document.getElementById('media-progress-border');
+    const mediaProgressBorderFill = document.getElementById('media-progress-border-fill');
 
     // Loading animation is passed in the card query and mirrored onto the html data attribute.
     const loadingAnimation = String(
@@ -2938,6 +3056,7 @@ body {
     const mediaVolumeSlider = document.getElementById('media-volume-slider');
     const mediaVisualizerStyleBtn = document.getElementById('media-visualizer-style-btn');
     const mediaSideFlamesBtn = document.getElementById('media-side-flames-btn');
+    const mediaProgressBtn = document.getElementById('media-progress-btn');
     const mediaVisualLockBtn = document.getElementById('media-visual-lock-btn');
     const mediaMuteBtn = document.getElementById('media-mute-btn');
     const mediaRemainingTime = document.getElementById('media-remaining-time');
@@ -2945,8 +3064,10 @@ body {
     const mediaSeekForwardBtn = document.getElementById('media-seek-forward-btn');
     let visualizerEnabled = true;
     let sideFlamesEnabled = false;
+    let mediaProgressEnabled = true;
     const VISUALIZER_STYLE_STORAGE_KEY = 'card_visualizer_style';
     const SIDE_FLAMES_STORAGE_KEY = 'card_side_flames_enabled';
+    const MEDIA_PROGRESS_STORAGE_KEY = 'card_media_progress_enabled';
     const MEDIA_VOLUME_STORAGE_KEY = 'card_media_volume';
     const VISUALIZER_STYLES = [
       { key: 'bars', label: 'Bars' },
@@ -2958,6 +3079,10 @@ body {
     const savedSideFlamesPreference = localStorage.getItem(SIDE_FLAMES_STORAGE_KEY);
     if (savedSideFlamesPreference === 'true' || savedSideFlamesPreference === 'false') {
       sideFlamesEnabled = savedSideFlamesPreference === 'true';
+    }
+    const savedMediaProgressPreference = localStorage.getItem(MEDIA_PROGRESS_STORAGE_KEY);
+    if (savedMediaProgressPreference === 'true' || savedMediaProgressPreference === 'false') {
+      mediaProgressEnabled = savedMediaProgressPreference === 'true';
     }
     const savedMediaVolumePreference = Number(localStorage.getItem(MEDIA_VOLUME_STORAGE_KEY));
     let preferredMediaVolume = Number.isFinite(savedMediaVolumePreference)
@@ -2991,6 +3116,9 @@ body {
     let mediaRemainingHasDuration = false;
     let mediaRemainingIsLive = false;
     let mediaRemainingIsPlaying = false;
+    let mediaProgressDurationSeconds = null;
+    let mediaProgressCurrentTime = 0;
+    let mediaProgressVisible = false;
     let lastBubbleMediaSignature = '';
      let mediaPanelOpen = false;
      let visualLockActive = false;
@@ -4178,6 +4306,20 @@ body {
       );
     }
 
+    function updateMediaProgressButton() {
+      if (!mediaProgressBtn) return;
+      mediaProgressBtn.textContent = mediaProgressEnabled ? 'Progress On' : 'Progress Off';
+      mediaProgressBtn.title = mediaProgressEnabled
+        ? 'Turn off media progress widget'
+        : 'Turn on media progress widget';
+      mediaProgressBtn.setAttribute(
+        'aria-label',
+        mediaProgressEnabled
+          ? 'Turn off media progress widget'
+          : 'Turn on media progress widget'
+      );
+    }
+
      function publishBubbleMediaState(payload) {
        const bubblePayload = {
          cardId,
@@ -4199,7 +4341,8 @@ body {
          visualizerStyle: activeVisualizerStyleKey,
          themeKey: normalizedTheme
        };
-      const nextSignature = JSON.stringify(bubblePayload);
+     const nextSignature = JSON.stringify(bubblePayload);
+      syncMediaProgressFromState(bubblePayload);
       if (nextSignature !== lastBubbleMediaSignature) {
         lastBubbleMediaSignature = nextSignature;
         try {
@@ -4238,6 +4381,14 @@ body {
       const remainingSeconds = (state && Number.isFinite(state.remainingSeconds))
         ? Math.max(0, state.remainingSeconds)
         : null;
+      const durationSeconds = (state && Number.isFinite(state.durationSeconds))
+        ? Math.max(0, Number(state.durationSeconds))
+        : null;
+      const currentTime = (state && Number.isFinite(state.currentTime))
+        ? Math.max(0, Number(state.currentTime))
+        : ((durationSeconds !== null && remainingSeconds !== null)
+          ? Math.max(0, durationSeconds - remainingSeconds)
+          : 0);
 
       mediaHoverControl.classList.toggle('active', shouldShow);
       mediaHoverControl.classList.toggle('video-mode', shouldShow && isVideo);
@@ -4260,6 +4411,9 @@ body {
       }
       if (mediaVisualLockBtn) {
         mediaVisualLockBtn.disabled = !shouldShow;
+      }
+      if (mediaProgressBtn) {
+        mediaProgressBtn.disabled = !shouldShow;
       }
       if (mediaSideFlamesBtn) {
         mediaSideFlamesBtn.disabled = !shouldShow || (normalizedShape !== 'wave' && normalizedShape !== 'curve');
@@ -4284,6 +4438,14 @@ body {
        mediaRemainingIsPlaying = shouldShow && isPlaying;
        mediaRemainingSeconds = mediaRemainingHasDuration ? remainingSeconds : null;
        updateMediaRemainingDisplay();
+       syncMediaProgressFromState({
+         hasMedia: !!(state && state.hasMedia),
+         hasDuration,
+         isPlaying,
+         remainingSeconds,
+         durationSeconds,
+         currentTime
+       });
        if (mediaRemainingHasDuration && mediaRemainingIsPlaying) {
          startMediaRemainingTicker();
        } else {
@@ -4318,12 +4480,60 @@ body {
       mediaRemainingTime.textContent = '--:--';
     }
 
+    function syncMediaProgressFromState(state) {
+      const hasMedia = !!(state && state.hasMedia);
+      const hasDuration = !!(state && state.hasDuration);
+      const remainingSeconds = (state && Number.isFinite(state.remainingSeconds))
+        ? Math.max(0, Number(state.remainingSeconds))
+        : null;
+      const durationSeconds = (state && Number.isFinite(state.durationSeconds))
+        ? Math.max(0, Number(state.durationSeconds))
+        : null;
+      const currentTime = (state && Number.isFinite(state.currentTime))
+        ? Math.max(0, Number(state.currentTime))
+        : ((durationSeconds !== null && remainingSeconds !== null)
+          ? Math.max(0, durationSeconds - remainingSeconds)
+          : 0);
+
+      mediaProgressVisible = hasMedia && hasDuration && durationSeconds !== null;
+      mediaProgressDurationSeconds = mediaProgressVisible ? durationSeconds : null;
+      mediaProgressCurrentTime = mediaProgressVisible
+        ? Math.min(durationSeconds, currentTime)
+        : 0;
+      updateMediaProgressBorder();
+    }
+
+    function updateMediaProgressBorder() {
+      if (!mediaProgressBorder || !mediaProgressBorderFill) return;
+      mediaProgressBorder.classList.toggle('active', mediaProgressVisible);
+      if (!mediaProgressVisible) {
+        mediaProgressBorderFill.style.setProperty('--media-progress-scale', '0');
+        mediaProgressBorderFill.style.opacity = '0';
+        return;
+      }
+      const duration = Number(mediaProgressDurationSeconds);
+      const currentTime = Number(mediaProgressCurrentTime);
+      const fraction = Number.isFinite(duration) && duration > 0
+        ? Math.max(0, Math.min(1, currentTime / duration))
+        : 0;
+      const visibleFraction = Math.max(fraction, 0.006);
+      mediaProgressBorderFill.style.setProperty('--media-progress-scale', String(visibleFraction));
+      mediaProgressBorderFill.style.opacity = '1';
+    }
+
     function startMediaRemainingTicker() {
       if (mediaRemainingTickTimer) return;
       mediaRemainingTickTimer = setInterval(() => {
         if (!mediaRemainingHasDuration || !mediaRemainingIsPlaying || !Number.isFinite(mediaRemainingSeconds)) return;
         mediaRemainingSeconds = Math.max(0, mediaRemainingSeconds - 1);
+        if (Number.isFinite(mediaProgressCurrentTime) && Number.isFinite(mediaProgressDurationSeconds)) {
+          mediaProgressCurrentTime = Math.min(
+            Number(mediaProgressDurationSeconds),
+            Math.max(0, Number(mediaProgressCurrentTime) + 1)
+          );
+        }
         updateMediaRemainingDisplay();
+        updateMediaProgressBorder();
       }, 1000);
     }
 
@@ -4805,6 +5015,7 @@ body {
     }
 
     updateSideFlamesButton();
+    updateMediaProgressButton();
 
     if (mediaSideFlamesBtn) {
       mediaSideFlamesBtn.addEventListener('click', async (event) => {
@@ -4826,6 +5037,28 @@ body {
         }
         localStorage.setItem(SIDE_FLAMES_STORAGE_KEY, String(sideFlamesEnabled));
         updateSideFlamesButton();
+      });
+    }
+
+    if (mediaProgressBtn) {
+      mediaProgressBtn.addEventListener('click', async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const nextEnabled = !mediaProgressEnabled;
+        mediaProgressEnabled = nextEnabled;
+        updateMediaProgressButton();
+        try {
+          if (window.cardAPI && typeof window.cardAPI.setMediaProgressEnabled === 'function') {
+            const result = await window.cardAPI.setMediaProgressEnabled(cardId, nextEnabled);
+            if (result && typeof result.enabled === 'boolean') {
+              mediaProgressEnabled = !!result.enabled;
+            }
+          }
+        } catch (e) {
+          mediaProgressEnabled = !nextEnabled;
+        }
+        localStorage.setItem(MEDIA_PROGRESS_STORAGE_KEY, String(mediaProgressEnabled));
+        updateMediaProgressButton();
       });
     }
 
@@ -4947,6 +5180,10 @@ body {
         sideFlamesEnabled = value === true;
         localStorage.setItem(SIDE_FLAMES_STORAGE_KEY, String(sideFlamesEnabled));
         updateSideFlamesButton();
+      } else if (action === 'progress-widget-state') {
+        mediaProgressEnabled = value === true;
+        localStorage.setItem(MEDIA_PROGRESS_STORAGE_KEY, String(mediaProgressEnabled));
+        updateMediaProgressButton();
       } else if (action === 'visual-lock') {
         setVisualLockActive(true);
       } else if (action === 'visual-unlock') {
@@ -5644,6 +5881,18 @@ body {
         updateSideFlamesButton();
       }).catch(() => {
         updateSideFlamesButton();
+      });
+    }
+
+    if (window.cardAPI && typeof window.cardAPI.setMediaProgressEnabled === 'function') {
+      window.cardAPI.setMediaProgressEnabled(cardId, mediaProgressEnabled).then((result) => {
+        if (result && typeof result.enabled === 'boolean') {
+          mediaProgressEnabled = !!result.enabled;
+        }
+        localStorage.setItem(MEDIA_PROGRESS_STORAGE_KEY, String(mediaProgressEnabled));
+        updateMediaProgressButton();
+      }).catch(() => {
+        updateMediaProgressButton();
       });
     }
 

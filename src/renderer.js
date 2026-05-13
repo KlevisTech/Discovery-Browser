@@ -16,6 +16,7 @@ class DiscoveryBrowser {
     this.visitedTabs = new Map(); // url -> tabData
     this.maxTabs = 8;
     this.maxFavoriteBookmarks = 8;
+    this.tabRenderTimeout = null; // Timeout for delayed tab rendering
 
     // History management
     this.history = []; // Array of {url, title, timestamp, favicon}
@@ -1668,7 +1669,16 @@ class DiscoveryBrowser {
     }
 
     this.saveTabs();
-    this.renderTabs();
+    
+    // Clear any existing timeout to prevent multiple renders
+    if (this.tabRenderTimeout) {
+      clearTimeout(this.tabRenderTimeout);
+    }
+    
+    // Delay renderTabs by 6 seconds to reduce UI movement during card loading
+    this.tabRenderTimeout = setTimeout(() => {
+      this.renderTabs();
+    }, 6000);
   }
 
   // Remove a tab

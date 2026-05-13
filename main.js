@@ -765,12 +765,14 @@ const promotedChallengeWindows = new Map(); // normalizedUrl -> BrowserWindow
 const cardBubbles = new Map(); // cardId -> bubble BrowserWindow
 const visualizerWidgets = new Map(); // cardId -> visualizer BrowserWindow
 const sideFlameWidgets = new Map(); // cardId -> side flames BrowserWindow
+const mediaProgressWidgets = new Map(); // cardId -> media progress BrowserWindow
 const bubbleNotifications = new Map(); // cardId -> notification count
 const bubbleNotificationSources = new Map(); // cardId -> 'api' | 'title'
 const bubbleMediaStates = new Map(); // cardId -> { isPlaying, isVideo, isLive }
 const visualizerWidgetStates = new Map(); // cardId -> { isPlaying, isVideo, isLive, visualizerStyle, themeKey }
 const visualizerWidgetLockStates = new Map(); // cardId -> boolean
 const sideFlamesEnabledStates = new Map(); // cardId -> boolean
+const mediaProgressEnabledStates = new Map(); // cardId -> boolean
 const visualizerRestoreBoosts = new Map(); // cardId -> timestamp until widget may remain attached during restore handoff
 const visualizerRestoreSuppressions = new Map(); // cardId -> timestamp until widget must remain hidden during restore animation
 let activeVisualizerCardId = null;
@@ -801,6 +803,9 @@ const VISUALIZER_WIDGET_SHELL_HEIGHT = 26;
 const VISUALIZER_WIDGET_TOP_INSET = 6;
 const SIDE_FLAMES_WIDGET_HEIGHT = 132;
 const SIDE_FLAMES_CARD_OVERLAP = 116;
+const MEDIA_PROGRESS_WIDGET_WIDTH = 176;
+const MEDIA_PROGRESS_WIDGET_HEIGHT = 16;
+const MEDIA_PROGRESS_WIDGET_BOTTOM_INSET = 10;
 const VISUALIZER_WIDGET_CLOSE_LEAD_MS = 42;
 const VISUALIZER_WIDGET_MINIMIZE_LEAD_MS = 42;
 const VISUALIZER_WIDGET_RESTORE_DELAY_MS = 590;
@@ -1017,6 +1022,7 @@ function updateBubbleMediaState(cardId, mediaState = {}) {
   }
   syncVisualizerWidget(cardId);
   syncSideFlamesWidget(cardId);
+  syncMediaProgressWidget(cardId);
 }
 
 function closeVisualizerWidget(cardId) {
@@ -1165,6 +1171,164 @@ function sendSideFlamesWidgetState(cardId) {
   } catch (e) { }
 }
 
+function closeMediaProgressWidget(cardId) {
+  const widget = mediaProgressWidgets.get(cardId);
+  if (!widget) return;
+  try {
+    if (!widget.isDestroyed()) widget.close();
+  } catch (e) { }
+  mediaProgressWidgets.delete(cardId);
+}
+
+function hideMediaProgressWidget(cardId) {
+  const widget = mediaProgressWidgets.get(cardId);
+  if (!widget || widget.isDestroyed()) return;
+  try {
+    if (widget.isVisible()) widget.hide();
+  } catch (e) { }
+}
+
+function getMediaProgressWidgetBounds(cardWindow) {
+  if (!cardWindow || cardWindow.isDestroyed()) {
+    return {
+      x: 0,
+      y: 0,
+      width: MEDIA_PROGRESS_WIDGET_WIDTH,
+      height: MEDIA_PROGRESS_WIDGET_HEIGHT,
+    };
+  }
+  const bounds = cardWindow.getBounds();
+  const shapeKey = normalizeCardShapeKey(cardWindow.__cardShape);
+  const width = Math.max(96, Math.min(MEDIA_PROGRESS_WIDGET_WIDTH, Math.round(bounds.width * 0.24)));
+  const height = shapeKey === 'wave' ? 18 : (shapeKey === 'curve' ? 17 : MEDIA_PROGRESS_WIDGET_HEIGHT);
+  const bottomInset = shapeKey === 'wave'
+    ? 28
+    : (shapeKey === 'curve' ? 20 : MEDIA_PROGRESS_WIDGET_BOTTOM_INSET);
+  return {
+    x: Math.round(bounds.x + ((bounds.width - width) / 2)),
+    y: Math.round(bounds.y + bounds.height - bottomInset - height),
+    width,
+    height,
+  };
+}
+
+function sendMediaProgressWidgetState(cardId) {
+  const widget = mediaProgressWidgets.get(cardId);
+  const state = visualizerWidgetStates.get(cardId);
+  const cardWindow = cardWindows.get(Number(cardId));
+  if (!widget || widget.isDestroyed() || !state || !cardWindow || cardWindow.isDestroyed()) return;
+  try {
+    if (widget.webContents && !widget.webContents.isDestroyed()) {
+      widget.webContents.send('media-progress-widget-state', {
+        ...state,
+        progressEnabled: mediaProgressEnabledStates.get(Number(cardId)) !== false,
+        cardShape: normalizeCardShapeKey(cardWindow.__cardShape),
+      });
+    }
+  } catch (e) { }
+}
+
+function shouldShowMediaProgressWidget(cardId, cardWindow) {
+  if (mediaProgressEnabledStates.get(Number(cardId)) === false) return false;
+  if (!cardWindow || cardWindow.isDestroyed()) return false;
+  if (cardBubbles.has(cardId)) return false;
+  const state = visualizerWidgetStates.get(cardId);
+  if (!state || !state.hasMedia || !state.hasDuration) return false;
+  if (!Number.isFinite(Number(state.durationSeconds)) || Number(state.durationSeconds) <= 0) return false;
+  try {
+    if (cardWindow.isMinimized()) return false;
+    if (!cardWindow.isVisible()) return false;
+  } catch (e) {
+    return false;
+  }
+  return true;
+}
+
+function ensureMediaProgressWidget(cardId, cardWindow) {
+  const existing = mediaProgressWidgets.get(cardId);
+  if (existing && !existing.isDestroyed()) return existing;
+  if (!cardWindow || cardWindow.isDestroyed()) return null;
+  const widgetBounds = getMediaProgressWidgetBounds(cardWindow);
+  const widget = new BrowserWindow({
+    width: widgetBounds.width,
+    height: widgetBounds.height,
+    x: widgetBounds.x,
+    y: widgetBounds.y,
+    parent: cardWindow,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    focusable: false,
+    show: false,
+    hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload-media-progress-widget.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false,
+    },
+  });
+  try {
+    widget.setIgnoreMouseEvents(true, { forward: false });
+  } catch (e) { }
+  const widgetPath = path.join(__dirname, 'src', 'media-progress-widget.html');
+  const widgetState = visualizerWidgetStates.get(cardId) || {};
+  widget.loadFile(widgetPath, {
+    query: {
+      cardId: String(cardId),
+      theme: normalizeCardThemeKey(widgetState.themeKey || cardWindow.__cardTheme || currentCardTheme),
+    }
+  }).catch((err) => {
+    console.error('Error loading media progress widget:', err);
+  });
+  widget.webContents.on('did-finish-load', () => {
+    sendMediaProgressWidgetState(cardId);
+  });
+  widget.on('closed', () => {
+    mediaProgressWidgets.delete(cardId);
+  });
+  mediaProgressWidgets.set(cardId, widget);
+  return widget;
+}
+
+function syncMediaProgressWidget(cardId) {
+  const cardWindow = cardWindows.get(cardId);
+  if (!cardWindow || cardWindow.isDestroyed()) {
+    closeMediaProgressWidget(cardId);
+    return;
+  }
+  const state = visualizerWidgetStates.get(cardId);
+  if (!state) {
+    closeMediaProgressWidget(cardId);
+    return;
+  }
+  const shouldShow = shouldShowMediaProgressWidget(cardId, cardWindow);
+  if (!shouldShow) {
+    const existingWidget = mediaProgressWidgets.get(cardId);
+    if (existingWidget && !existingWidget.isDestroyed()) {
+      try {
+        if (existingWidget.isVisible()) existingWidget.hide();
+      } catch (e) { }
+      closeMediaProgressWidget(cardId);
+    }
+    return;
+  }
+  const widget = ensureMediaProgressWidget(cardId, cardWindow);
+  if (!widget || widget.isDestroyed()) return;
+  try {
+    widget.setBounds(getMediaProgressWidgetBounds(cardWindow), false);
+  } catch (e) { }
+  sendMediaProgressWidgetState(cardId);
+  try {
+    if (!widget.isVisible()) widget.showInactive();
+  } catch (e) { }
+}
+
 function shouldShowSideFlamesWidget(cardId, cardWindow) {
   if (sideFlamesEnabledStates.get(Number(cardId)) !== true) return false;
   if (!cardWindow || cardWindow.isDestroyed()) return false;
@@ -1261,6 +1425,12 @@ function syncAllVisualizerWidgets() {
 function syncAllSideFlamesWidgets() {
   for (const [cardId] of visualizerWidgetStates) {
     syncSideFlamesWidget(cardId);
+  }
+}
+
+function syncAllMediaProgressWidgets() {
+  for (const [cardId] of visualizerWidgetStates) {
+    syncMediaProgressWidget(cardId);
   }
 }
 
@@ -1457,17 +1627,22 @@ function registerVisualizerWidgetLifecycle(cardId, cardWindow, themeKey) {
     syncVisualizerWidget(cardId);
     syncAllSideFlamesWidgets();
     syncSideFlamesWidget(cardId);
+    syncAllMediaProgressWidgets();
+    syncMediaProgressWidget(cardId);
   };
   const deferSync = () => {
     setTimeout(() => syncVisualizerWidget(cardId), 40);
     setTimeout(() => syncSideFlamesWidget(cardId), 40);
+    setTimeout(() => syncMediaProgressWidget(cardId), 40);
   };
   const hideNow = () => {
     clearActiveVisualizerCard(cardId);
     hideVisualizerWidget(cardId);
     hideSideFlamesWidget(cardId);
+    hideMediaProgressWidget(cardId);
     setTimeout(() => syncAllVisualizerWidgets(), 16);
     setTimeout(() => syncAllSideFlamesWidgets(), 16);
+    setTimeout(() => syncAllMediaProgressWidgets(), 16);
   };
 
   cardWindow.on('show', sync);
@@ -1484,8 +1659,10 @@ function registerVisualizerWidgetLifecycle(cardId, cardWindow, themeKey) {
     clearActiveVisualizerCard(cardId);
     hideVisualizerWidget(cardId);
     hideSideFlamesWidget(cardId);
+    hideMediaProgressWidget(cardId);
     closeVisualizerWidget(cardId);
     closeSideFlamesWidget(cardId);
+    closeMediaProgressWidget(cardId);
   });
 }
 
@@ -2656,6 +2833,7 @@ function createCardDirectly(url, options = {}) {
       closeCardBubble(cardId);
       syncVisualizerWidget(cardId);
       syncSideFlamesWidget(cardId);
+      syncMediaProgressWidget(cardId);
     });
 
     cardWindow.on('closed', () => {
@@ -2663,9 +2841,11 @@ function createCardDirectly(url, options = {}) {
       closeCardBubble(cardId);
       closeVisualizerWidget(cardId);
       closeSideFlamesWidget(cardId);
+      closeMediaProgressWidget(cardId);
       bubbleMediaStates.delete(cardId);
       visualizerWidgetStates.delete(cardId);
       sideFlamesEnabledStates.delete(cardId);
+      mediaProgressEnabledStates.delete(cardId);
       cardWindows.delete(cardId);
       if (mainWindow && !mainWindow.isDestroyed()) {
         safeIpcSend(mainWindow.webContents, 'card-closed', cardId);
@@ -3972,15 +4152,18 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       closeCardBubble(cardId);
       syncVisualizerWidget(cardId);
       syncSideFlamesWidget(cardId);
+      syncMediaProgressWidget(cardId);
     });
 
     cardWindow.on('closed', () => {
       closeCardBubble(cardId);
       closeVisualizerWidget(cardId);
       closeSideFlamesWidget(cardId);
+      closeMediaProgressWidget(cardId);
       bubbleMediaStates.delete(cardId);
       visualizerWidgetStates.delete(cardId);
       sideFlamesEnabledStates.delete(cardId);
+      mediaProgressEnabledStates.delete(cardId);
       cardWindows.delete(cardId);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('card-closed', cardId);
@@ -4069,6 +4252,7 @@ ipcMain.handle('close-card', async (event, cardId) => {
 
     closeVisualizerWidget(cardId);
     closeSideFlamesWidget(cardId);
+    closeMediaProgressWidget(cardId);
     await new Promise((resolve) => setTimeout(resolve, VISUALIZER_WIDGET_CLOSE_LEAD_MS));
     cardWindow.close();
     return { success: true };
@@ -4089,6 +4273,7 @@ ipcMain.handle('hide-visualizer-now', async (event, cardId) => {
     clearActiveVisualizerCard(numericCardId);
     hideVisualizerWidget(numericCardId);
     hideSideFlamesWidget(numericCardId);
+    hideMediaProgressWidget(numericCardId);
     return { success: true };
   } catch (error) {
     console.error('Error hiding visualizer immediately:', error);
@@ -5229,6 +5414,18 @@ ipcMain.handle('visualizer-widget-action', async (event, cardId, action, value =
       });
       return { success: true, enabled: nextEnabled };
     }
+    if (normalizedAction === 'progress-widget-toggle') {
+      const nextEnabled = typeof value === 'boolean'
+        ? !!value
+        : !(mediaProgressEnabledStates.get(numericCardId) !== false);
+      mediaProgressEnabledStates.set(numericCardId, nextEnabled);
+      syncMediaProgressWidget(numericCardId);
+      cardWindow.webContents.send('visualizer-widget-command', {
+        action: 'progress-widget-state',
+        value: nextEnabled,
+      });
+      return { success: true, enabled: nextEnabled };
+    }
     cardWindow.webContents.send('visualizer-widget-command', {
       action: String(action || ''),
       value,
@@ -5528,6 +5725,7 @@ function closeAllCardsForForcedUpdate() {
     try {
       closeCardBubble(cardId);
       closeVisualizerWidget(cardId);
+      closeMediaProgressWidget(cardId);
       if (cardWindow && !cardWindow.isDestroyed()) {
         cardWindow.close();
       }
@@ -5708,6 +5906,37 @@ ipcMain.handle('set-side-flames-enabled', async (event, cardId, enabled) => {
     if (cardWindow && !cardWindow.isDestroyed() && cardWindow.webContents && !cardWindow.webContents.isDestroyed()) {
       cardWindow.webContents.send('visualizer-widget-command', {
         action: 'side-flames-state',
+        value: nextEnabled,
+      });
+    }
+    return { success: true, enabled: nextEnabled };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('get-media-progress-enabled', async (event, cardId) => {
+  try {
+    const numericCardId = Number(cardId);
+    return mediaProgressEnabledStates.get(numericCardId) !== false;
+  } catch (e) {
+    return true;
+  }
+});
+
+ipcMain.handle('set-media-progress-enabled', async (event, cardId, enabled) => {
+  try {
+    const numericCardId = Number(cardId);
+    if (!Number.isFinite(numericCardId)) {
+      return { success: false, error: 'Invalid card id' };
+    }
+    const nextEnabled = !!enabled;
+    mediaProgressEnabledStates.set(numericCardId, nextEnabled);
+    syncMediaProgressWidget(numericCardId);
+    const cardWindow = cardWindows.get(numericCardId);
+    if (cardWindow && !cardWindow.isDestroyed() && cardWindow.webContents && !cardWindow.webContents.isDestroyed()) {
+      cardWindow.webContents.send('visualizer-widget-command', {
+        action: 'progress-widget-state',
         value: nextEnabled,
       });
     }

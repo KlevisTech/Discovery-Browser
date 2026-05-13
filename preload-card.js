@@ -65,6 +65,8 @@ contextBridge.exposeInMainWorld('cardAPI', {
   getCardLaunchSizeMode: () => ipcRenderer.invoke('get-card-launch-size-mode'),
   getSideFlamesEnabled: (cardId) => ipcRenderer.invoke('get-side-flames-enabled', cardId),
   setSideFlamesEnabled: (cardId, enabled) => ipcRenderer.invoke('set-side-flames-enabled', cardId, enabled),
+  getMediaProgressEnabled: (cardId) => ipcRenderer.invoke('get-media-progress-enabled', cardId),
+  setMediaProgressEnabled: (cardId, enabled) => ipcRenderer.invoke('set-media-progress-enabled', cardId, enabled),
 
   // Get current window position
   getWindowPosition: () => {

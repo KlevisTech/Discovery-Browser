@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Media Progress Widget</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      pointer-events: none;
+      font-family: "Segoe UI", sans-serif;
+    }
+
+    body {
+      opacity: 0;
+      transition: opacity 140ms ease;
+    }
+
+    body.ready {
+      opacity: 1;
+    }
+
+    body.hidden {
+      opacity: 0;
+    }
+
+    .progress-shell {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.08), rgba(13, 24, 46, 0.22)),
+        rgba(10, 20, 42, 0.12);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.18),
+        0 0 0 1px rgba(126, 204, 255, 0.14),
+        0 8px 20px rgba(3, 10, 24, 0.18);
+      backdrop-filter: blur(6px);
+    }
+
+    .progress-track,
+    .progress-fill {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+    }
+
+    .progress-track {
+      background: linear-gradient(90deg, rgba(90, 170, 255, 0.08), rgba(40, 110, 255, 0.14));
+    }
+
+    .progress-fill {
+      width: 100%;
+      transform-origin: left center;
+      transform: scaleX(var(--progress-scale, 0));
+      background:
+        linear-gradient(180deg, rgba(184, 233, 255, 0.86) 0%, rgba(84, 192, 255, 0.92) 34%, rgba(33, 126, 255, 0.96) 100%);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.22),
+        0 0 14px rgba(54, 162, 255, 0.2);
+      transition: transform 280ms linear;
+    }
+
+    .progress-fill::before,
+    .progress-fill::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .progress-fill::before {
+      background:
+        radial-gradient(circle at 20% 28%, rgba(255,255,255,0.46), transparent 18%),
+        radial-gradient(circle at 58% 20%, rgba(191, 240, 255, 0.28), transparent 22%),
+        radial-gradient(circle at 86% 24%, rgba(255,255,255,0.22), transparent 16%);
+      mix-blend-mode: screen;
+      animation: drift 6.6s linear infinite;
+    }
+
+    .progress-fill::after {
+      top: auto;
+      bottom: 0;
+      height: 70%;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0)),
+        radial-gradient(110% 100% at 50% 0%, rgba(142, 223, 255, 0.6), transparent 68%);
+      animation: wave 2.6s ease-in-out infinite;
+    }
+
+    @keyframes drift {
+      0% { transform: translateX(-7%); }
+      50% { transform: translateX(3%); }
+      100% { transform: translateX(-7%); }
+    }
+
+    @keyframes wave {
+      0%, 100% { transform: translateY(1px) scaleX(1); opacity: 0.7; }
+      50% { transform: translateY(-1px) scaleX(1.03); opacity: 0.95; }
+    }
+  </style>
+</head>
+<body class="hidden">
+  <div class="progress-shell" aria-hidden="true">
+    <div class="progress-track"></div>
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+
+  <script>
+    const progressFill = document.getElementById('progress-fill');
+    let widgetState = {
+      hasMedia: false,
+      hasDuration: false,
+      durationSeconds: null,
+      currentTime: 0,
+      remainingSeconds: null,
+      progressEnabled: true,
+    };
+
+    function applyState(payload) {
+      const next = payload && typeof payload === 'object' ? payload : {};
+      widgetState = { ...widgetState, ...next };
+      const duration = Number(widgetState.durationSeconds);
+      const currentTime = Number(widgetState.currentTime);
+      const remaining = Number(widgetState.remainingSeconds);
+      const derivedCurrent = Number.isFinite(currentTime)
+        ? Math.max(0, currentTime)
+        : (Number.isFinite(duration) && Number.isFinite(remaining) ? Math.max(0, duration - remaining) : 0);
+      const visible = widgetState.progressEnabled !== false
+        && widgetState.hasMedia === true
+        && widgetState.hasDuration === true
+        && Number.isFinite(duration)
+        && duration > 0;
+      const fraction = visible ? Math.max(0.006, Math.min(1, derivedCurrent / duration)) : 0;
+      if (progressFill) {
+        progressFill.style.setProperty('--progress-scale', String(fraction));
+      }
+      document.body.classList.add('ready');
+      document.body.classList.toggle('hidden', !visible);
+    }
+
+    if (window.mediaProgressWidgetAPI && window.mediaProgressWidgetAPI.onStateUpdate) {
+      window.mediaProgressWidgetAPI.onStateUpdate((payload) => {
+        applyState(payload);
+      });
+    }
+  </script>
+</body>
+</html>
