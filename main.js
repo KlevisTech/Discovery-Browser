@@ -2414,7 +2414,7 @@ function createCardDirectly(url, options = {}) {
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
 
     // Use provided loading animation or fall back to current saved animation
-    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill']);
+    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'sand-particles']);
     const effectiveLoadingAnimation = opts.loadingAnimation || currentLoadingAnimation;
     const normalizedLoadingAnimation = allowedLoadingAnimations.has(String(effectiveLoadingAnimation || '').toLowerCase())
       ? String(effectiveLoadingAnimation || '').toLowerCase()
@@ -3137,7 +3137,7 @@ ipcMain.handle('get-card-shape', async () => {
 
 ipcMain.handle('set-loading-animation', async (event, loadingAnimationKey) => {
   try {
-    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill']);
+    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'sand-particles']);
     if (allowedLoadingAnimations.has(String(loadingAnimationKey || '').toLowerCase())) {
       currentLoadingAnimation = String(loadingAnimationKey || '').toLowerCase();
     }
@@ -3340,8 +3340,8 @@ function createMainWindow() {
 
   let windowX = 100;
   let windowY = 60;
-  const CARD_WIDTH = 1050;
-  const CARD_HEIGHT = 603;
+  const CARD_WIDTH = 1100;
+  const CARD_HEIGHT = 620;
 
   try {
     const { screen } = require('electron');
@@ -3807,7 +3807,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       : 'primary';
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
     const cardShape = normalizeCardShapeKey(shapeKey || currentCardShape);
-    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill']);
+    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'sand-particles']);
     const normalizedLoadingAnimation = allowedLoadingAnimations.has(String(currentLoadingAnimation || '').toLowerCase())
       ? String(currentLoadingAnimation || '').toLowerCase()
       : 'static-tv';

@@ -186,6 +186,12 @@ class DiscoveryBrowser {
         description: 'Water rising from bottom with bubbles and wave motion.',
         preview: 'linear-gradient(180deg, rgba(115,166,255,0.6) 0%, rgba(88,216,255,0.7) 30%, rgba(67,97,238,0.8) 60%, rgba(240,124,217,0.6) 100%)',
       },
+      {
+        key: 'sand-particles',
+        name: 'Sand Particles',
+        description: 'Beautiful rising sand fills the card with drifting grains while the site loads.',
+        preview: 'linear-gradient(180deg, rgba(244,231,198,0.16) 0%, rgba(223,195,140,0.44) 34%, rgba(186,146,93,0.76) 72%, rgba(245,228,181,0.98) 100%)',
+      },
     ];
 
     // Layout constants

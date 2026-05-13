@@ -1533,6 +1533,7 @@
       webviewReady: false,
       webviewHasMedia: false,
       streamWebview: null,
+      autoPromotedWebMediaUrl: '',
       isMuted: false,
       lastStatusMessage: '',
       currentPage: 1,
@@ -1618,6 +1619,23 @@
       
 // Default to web (streaming pages, etc.)
        return 'web';
+     }
+
+     function canPromoteToNativeMedia(targetUrl) {
+       const normalized = normalizeUrlInput(targetUrl);
+       if (!normalized) return false;
+       if (/^blob:/i.test(normalized) || /^javascript:/i.test(normalized)) return false;
+       const ext = getPathExtension(normalized);
+       if (directMediaExtensions.has(ext)) return true;
+       const lower = normalized.toLowerCase();
+       return STREAMING_EXTENSIONS.has(ext)
+         || lower.includes('.m3u8')
+         || lower.includes('.mpd')
+         || lower.includes('.mp4')
+         || lower.includes('.webm')
+         || lower.includes('/manifest')
+         || lower.includes('/playlist')
+         || lower.includes('/stream');
      }
 
      function setActiveStage(mode) {
@@ -2014,6 +2032,7 @@
       stopWebviewPolling();
       state.webviewReady = false;
       state.webviewHasMedia = false;
+      state.autoPromotedWebMediaUrl = '';
       const streamWebview = state.streamWebview;
       try {
         if (streamWebview) streamWebview.stop();
@@ -2199,6 +2218,7 @@
               hasMedia: true,
               title,
               paused: !!active.paused,
+              currentSrc: String(active.currentSrc || active.src || ''),
               currentTime: Number(active.currentTime || 0),
               duration: Number(active.duration || 0),
               volume: typeof active.volume === 'number' ? active.volume : 1,
@@ -2210,6 +2230,20 @@
         if (result && result.title) {
           const displayTitle = state.currentSourceTitle || result.title;
           setSummary(displayTitle, state.currentSourceLabel || state.currentSourceUrl);
+        }
+        const detectedMediaUrl = normalizeUrlInput(result && result.currentSrc ? result.currentSrc : '');
+        if (
+          detectedMediaUrl &&
+          detectedMediaUrl !== state.currentSourceUrl &&
+          detectedMediaUrl !== state.autoPromotedWebMediaUrl &&
+          canPromoteToNativeMedia(detectedMediaUrl)
+        ) {
+          state.autoPromotedWebMediaUrl = detectedMediaUrl;
+          const detectedMode = inferSourceMode(detectedMediaUrl);
+          const nextMode = detectedMode === 'audio' ? 'audio' : 'video';
+          openNativeSource(nextMode, detectedMediaUrl, detectedMediaUrl, result.title || state.currentSourceTitle || detectedMediaUrl);
+          setStatus('Direct media stream detected');
+          return;
         }
         if (state.webviewHasMedia) {
           currentTimeEl.textContent = formatTime(result.currentTime);

@@ -9,6 +9,63 @@
 </head>
 
 <body>
+  <!-- Custom Menu Bar -->
+  <nav class="custom-menubar">
+    <div class="menu-item">
+      <button class="menu-btn" data-menu="file">File</button>
+      <div class="menu-dropdown" id="file-menu">
+        <div class="menu-item-option" data-action="new-window">New Window</div>
+        <div class="menu-item-option" data-action="new-tab">New Tab</div>
+        <div class="menu-divider"></div>
+        <div class="menu-item-option" data-action="open-file">Open File...</div>
+        <div class="menu-item-option" data-action="save-page">Save Page As...</div>
+        <div class="menu-divider"></div>
+        <div class="menu-item-option" data-action="print">Print...</div>
+      </div>
+    </div>
+    <div class="menu-item">
+      <button class="menu-btn" data-menu="edit">Edit</button>
+      <div class="menu-dropdown" id="edit-menu">
+        <div class="menu-item-option" data-action="undo">Undo</div>
+        <div class="menu-item-option" data-action="redo">Redo</div>
+        <div class="menu-divider"></div>
+        <div class="menu-item-option" data-action="cut">Cut</div>
+        <div class="menu-item-option" data-action="copy">Copy</div>
+        <div class="menu-item-option" data-action="paste">Paste</div>
+        <div class="menu-item-option" data-action="select-all">Select All</div>
+      </div>
+    </div>
+    <div class="menu-item">
+      <button class="menu-btn" data-menu="view">View</button>
+      <div class="menu-dropdown" id="view-menu">
+        <div class="menu-item-option" data-action="reload">Reload</div>
+        <div class="menu-item-option" data-action="force-reload">Force Reload</div>
+        <div class="menu-item-option" data-action="toggle-devtools">Toggle Developer Tools</div>
+        <div class="menu-divider"></div>
+        <div class="menu-item-option" data-action="actual-size">Actual Size</div>
+        <div class="menu-item-option" data-action="zoom-in">Zoom In</div>
+        <div class="menu-item-option" data-action="zoom-out">Zoom Out</div>
+        <div class="menu-item-option" data-action="toggle-fullscreen">Toggle Fullscreen</div>
+      </div>
+    </div>
+    <div class="menu-item">
+      <button class="menu-btn" data-menu="window">Window</button>
+      <div class="menu-dropdown" id="window-menu">
+        <div class="menu-item-option" data-action="minimize">Minimize</div>
+        <div class="menu-item-option" data-action="maximize">Maximize</div>
+        <div class="menu-item-option" data-action="close">Close</div>
+      </div>
+    </div>
+    <div class="menu-item">
+      <button class="menu-btn" data-menu="help">Help</button>
+      <div class="menu-dropdown" id="help-menu">
+        <div class="menu-item-option" data-action="about">About Discovery Browser</div>
+        <div class="menu-item-option" data-action="support">Support</div>
+        <div class="menu-item-option" data-action="check-updates">Check for Updates</div>
+      </div>
+    </div>
+  </nav>
+
   <!-- Main App Container (Control Panel) -->
   <div class="app-container">
     <!-- Header Bar -->

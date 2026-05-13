@@ -1,4 +1,4 @@
-/*styles.css
+/* styles.css */
 
 /* =================================
    Discovery Browser - Control Panel Styles
@@ -20,11 +20,108 @@ body {
   -moz-osx-font-smoothing: grayscale;
   user-select: none;
   overflow: hidden;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: url('../assets/main.png') no-repeat center center fixed;
+  background-size: cover;
   /* GPU acceleration - force hardware acceleration */
   transform: translateZ(0);
   backface-visibility: hidden;
   perspective: 1000px;
+}
+
+/* Custom Menu Bar Styles */
+.custom-menubar {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  background: rgba(30, 30, 40, 0.95);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0 8px;
+  flex-shrink: 0;
+  transform: translateZ(0);
+  will-change: transform;
+  position: relative;
+  z-index: 9999;
+}
+
+.menu-item {
+  position: relative;
+}
+
+.menu-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s ease, color 0.15s ease;
+  outline: none;
+}
+
+.menu-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.menu-btn.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+.menu-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 200px;
+  background: rgba(30, 30, 40, 0.98);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: none;
+  z-index: 1000;
+  transform: translateZ(0);
+  will-change: transform, opacity;
+}
+
+.menu-dropdown.show {
+  display: block;
+  animation: menuFadeIn 0.15s ease-out;
+}
+
+@keyframes menuFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.menu-item-option {
+  padding: 6px 12px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  white-space: nowrap;
+}
+
+.menu-item-option:hover {
+  background: rgba(102, 126, 234, 0.6);
+  color: white;
+}
+
+.menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 4px 0;
 }
 
 body.startup-opening {
@@ -36,7 +133,8 @@ body.startup-opening {
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: url('../assets/main.png') no-repeat center center fixed;
+  background-size: cover;
   background-attachment: fixed;
   /* GPU acceleration */
   transform: translateZ(0);
@@ -3381,3 +3479,4 @@ body.startup-opening .app-container::before {
     display: none;
   }
 }
+
