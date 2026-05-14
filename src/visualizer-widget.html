@@ -110,8 +110,8 @@
       --widget-bg: linear-gradient(180deg, rgba(18, 31, 59, 0.9), rgba(8, 14, 27, 0.86));
     }
 
-    .widget-shell.theme-frost {
-      --widget-bg: linear-gradient(180deg, rgba(18, 34, 66, 0.88), rgba(10, 20, 40, 0.84));
+    .widget-shell.theme-solstice {
+      --widget-bg: linear-gradient(180deg, rgba(74, 46, 8, 0.92), rgba(42, 24, 4, 0.88));
     }
 
     .visualizer {
@@ -389,10 +389,10 @@
         linear-gradient(180deg, rgba(30, 16, 9, 0.99) 0%, rgba(20, 10, 5, 0.994) 100%);
     }
 
-    .lock-scene.theme-frost {
+    .lock-scene.theme-solstice {
       background:
-        radial-gradient(circle at 50% 18%, rgba(255,255,255,0.2), transparent 24%),
-        linear-gradient(180deg, rgba(218, 228, 238, 0.985) 0%, rgba(194, 205, 217, 0.99) 100%);
+        radial-gradient(circle at 50% 18%, rgba(255,247,204,0.2), transparent 24%),
+        linear-gradient(180deg, rgba(255, 221, 122, 0.985) 0%, rgba(226, 162, 36, 0.99) 100%);
     }
 
     .lock-rings {
@@ -435,10 +435,10 @@
       color: rgba(225, 241, 255, 0.72);
     }
 
-    .lock-scene.theme-frost .lock-kicker,
-    .lock-scene.theme-frost .lock-meta-title,
-    .lock-scene.theme-frost .lock-meta-subtitle {
-      color: rgba(30, 41, 59, 0.8);
+    .lock-scene.theme-solstice .lock-kicker,
+    .lock-scene.theme-solstice .lock-meta-title,
+    .lock-scene.theme-solstice .lock-meta-subtitle {
+      color: rgba(84, 52, 10, 0.84);
     }
 
     .lock-meta {
@@ -705,7 +705,9 @@
   <script>
     const params = new URLSearchParams(window.location.search || '');
     const cardId = Number(params.get('cardId'));
-    const initialTheme = String(params.get('theme') || 'primary').toLowerCase();
+    const initialTheme = String(params.get('theme') || 'primary').toLowerCase() === 'frost'
+      ? 'solstice'
+      : String(params.get('theme') || 'primary').toLowerCase();
     const widgetShell = document.getElementById('widget-shell');
     const visualizer = document.getElementById('visualizer');
     const lockScene = document.getElementById('lock-scene');
@@ -726,7 +728,7 @@
     const cinemaBtn = document.getElementById('cinema-btn');
     const videoFullBtn = document.getElementById('video-full-btn');
     const volumeSlider = document.getElementById('volume-slider');
-    const themeClasses = ['theme-primary', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-frost'];
+    const themeClasses = ['theme-primary', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-solstice'];
     const styleClasses = ['style-bars', 'style-pulse', 'style-ladder', 'style-orbit'];
     let widgetState = {
       isPlaying: false,
@@ -751,9 +753,10 @@
     let mouseEventsIgnored = null;
     const PANEL_CLOSE_ANIMATION_MS = 240;
     function applyTheme(themeKey) {
-      const normalized = String(themeKey || 'primary').toLowerCase() === 'alt'
+      const requested = String(themeKey || 'primary').toLowerCase();
+      const normalized = requested === 'alt'
         ? 'sunset'
-        : String(themeKey || 'primary').toLowerCase();
+        : (requested === 'frost' ? 'solstice' : requested);
       themeClasses.forEach((name) => widgetShell.classList.remove(name));
       widgetShell.classList.add(`theme-${normalized}`);
       if (lockScene) {
@@ -1029,6 +1032,9 @@
     if (mediaProgressBtn) {
       mediaProgressBtn.addEventListener('click', (event) => {
         event.stopPropagation();
+        applyState({
+          mediaProgressEnabled: !(widgetState.mediaProgressEnabled === true)
+        });
         sendAction('media-progress-toggle');
       });
     }

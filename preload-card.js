@@ -54,6 +54,9 @@ contextBridge.exposeInMainWorld('cardAPI', {
   saveBookmarkToFolder: (bookmarkData, folderId) =>
     ipcRenderer.invoke('save-bookmark-to-folder', bookmarkData, folderId),
 
+  createSiteShortcut: (siteData) =>
+    ipcRenderer.invoke('create-site-shortcut', siteData),
+
   // Password manager is disabled until secure OS-backed storage is implemented.
 
   onVisualizerSetting: (callback) => {

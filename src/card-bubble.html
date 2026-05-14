@@ -310,7 +310,8 @@
     const cardId = Number(params.get('cardId'));
     const title = params.get('title') || '';
     const label = params.get('label') || '';
-    const theme = (params.get('theme') || 'primary').toLowerCase();
+    const rawTheme = (params.get('theme') || 'primary').toLowerCase();
+    const theme = rawTheme === 'frost' ? 'solstice' : rawTheme;
     const bubbleShell = document.querySelector('.bubble-shell');
     const restoreBtn = document.getElementById('restore-btn');
     const bubbleLetter = document.getElementById('bubble-letter');
@@ -356,10 +357,10 @@
         shadow: 'rgba(135, 86, 48, 0.46)',
         hoverShadow: 'rgba(135, 86, 48, 0.55)',
       },
-      frost: {
-        bg: 'linear-gradient(140deg, #c8d2dc 0%, #e6ebf0 100%)',
-        shadow: 'rgba(200, 210, 220, 0.42)',
-        hoverShadow: 'rgba(200, 210, 220, 0.52)',
+      solstice: {
+        bg: 'linear-gradient(140deg, #ffd24c 0%, #ffb020 100%)',
+        shadow: 'rgba(255, 188, 54, 0.42)',
+        hoverShadow: 'rgba(255, 188, 54, 0.54)',
       },
       alt: {
         bg: 'linear-gradient(140deg, #ff4f93 0%, #ff5f6d 48%, #ffa26b 100%)',

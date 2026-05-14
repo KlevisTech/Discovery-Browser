@@ -45,7 +45,9 @@
 
   <script>
     const params = new URLSearchParams(window.location.search || '');
-    const initialTheme = String(params.get('theme') || 'primary').toLowerCase();
+    const initialTheme = String(params.get('theme') || 'primary').toLowerCase() === 'frost'
+      ? 'solstice'
+      : String(params.get('theme') || 'primary').toLowerCase();
     const canvas = document.getElementById('flame-canvas');
     const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
     const MAX_DPR = 1.35;
@@ -60,7 +62,7 @@
       amber: { hot: [255, 134, 72], core: [255, 212, 126], warm: [255, 237, 174] },
       midnight: { hot: [152, 168, 255], core: [194, 220, 255], warm: [120, 144, 212] },
       cocoa: { hot: [214, 150, 104], core: [255, 220, 188], warm: [186, 126, 88] },
-      frost: { hot: [194, 226, 255], core: [255, 255, 255], warm: [215, 242, 255] },
+      solstice: { hot: [255, 180, 58], core: [255, 237, 150], warm: [255, 246, 201] },
     };
     let widgetState = {
       isPlaying: false,
@@ -83,9 +85,10 @@
     }));
 
     function normalizeTheme(themeKey) {
-      const normalized = String(themeKey || 'primary').toLowerCase() === 'alt'
+      const requested = String(themeKey || 'primary').toLowerCase();
+      const normalized = requested === 'alt'
         ? 'sunset'
-        : String(themeKey || 'primary').toLowerCase();
+        : (requested === 'frost' ? 'solstice' : requested);
       return palettes[normalized] ? normalized : 'primary';
     }
 

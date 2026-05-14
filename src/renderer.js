@@ -126,10 +126,10 @@ class DiscoveryBrowser {
         preview: 'linear-gradient(135deg, rgba(110,72,44,0.62), rgba(166,123,91,0.56))',
       },
       {
-        key: 'frost',
-        name: 'Frosted Glass',
-        description: 'Foggy frosted glass with cool icy sheen.',
-        preview: 'linear-gradient(135deg, rgba(200,210,220,0.55), rgba(230,235,240,0.5))',
+        key: 'solstice',
+        name: 'Solar Gold',
+        description: 'Luminous yellow glass with warm sunlit depth.',
+        preview: 'linear-gradient(135deg, rgba(255,212,76,0.6), rgba(255,176,32,0.52))',
       },
     ];
     this.cardLaunchSizeModes = [
@@ -168,8 +168,8 @@ class DiscoveryBrowser {
       },
       {
         key: 'curve',
-        name: 'Curve',
-        description: 'Concave neon frame with a cinematic curved top and bottom.',
+        name: 'Concave',
+        description: 'Concave neon frame with sculpted inward curves on the top and bottom.',
         preview: 'linear-gradient(135deg, rgba(40,188,255,0.7), rgba(228,72,255,0.62), rgba(255,150,118,0.66))',
         previewPath: 'M13 8 C56 18 144 18 187 8 C193 8 197 13 197 20 V88 C197 95 192 100 185 100 C139 89 61 89 15 100 C8 100 3 95 3 88 V20 C3 13 7 8 13 8 Z',
       },
@@ -1198,8 +1198,9 @@ class DiscoveryBrowser {
   loadCardTheme() {
     try {
       const saved = localStorage.getItem('cardThemeKey');
-      if (saved && this.cardThemes.some(t => t.key === saved)) {
-        this.cardThemeKey = saved;
+      const normalizedSaved = saved === 'frost' ? 'solstice' : saved;
+      if (normalizedSaved && this.cardThemes.some(t => t.key === normalizedSaved)) {
+        this.cardThemeKey = normalizedSaved;
       }
       // Sync theme to main process for external URL cards
       if (window.electronAPI && window.electronAPI.setCardTheme) {
@@ -1471,7 +1472,7 @@ class DiscoveryBrowser {
     const normalizedMode = mode === 'wide' ? 'wide' : (mode === 'fullscreen' ? 'fullscreen' : 'normal');
     const normalizedShape = shapeKey === 'wave' || shapeKey === 'curve' ? shapeKey : 'default';
     if (normalizedMode === 'wide') {
-      if (normalizedShape === 'curve') return { width: 1100, height: 700 };
+      if (normalizedShape === 'curve') return { width: 1100, height: 620 };
       return normalizedShape === 'wave'
         ? { width: 1100, height: 660 }
         : { width: 1100, height: 600 };

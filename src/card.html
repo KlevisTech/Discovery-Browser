@@ -13,17 +13,24 @@
         const rawTheme = String(params.get('theme') || 'primary').toLowerCase();
         const rawShape = String(params.get('shape') || 'default').toLowerCase();
         const rawLoadingAnimation = String(params.get('loadingAnimation') || 'static-tv').toLowerCase();
-        const normalizedTheme = rawTheme === 'alt' ? 'sunset' : rawTheme;
-        const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'frost']);
+        const rawLaunchExperience = String(params.get('launchExperience') || '').toLowerCase();
+        const normalizedTheme = rawTheme === 'alt'
+          ? 'sunset'
+          : (rawTheme === 'frost' ? 'solstice' : rawTheme);
+        const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'solstice']);
         const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'sand-particles']);
         const normalizedShape = rawShape === 'wave' || rawShape === 'curve' ? rawShape : 'default';
         const normalizedLoadingAnimation = allowedLoadingAnimations.has(rawLoadingAnimation) ? rawLoadingAnimation : 'static-tv';
+        const normalizedLaunchExperience = rawLaunchExperience === 'site-app' ? 'site-app' : '';
         const themeClass = allowedThemes.has(normalizedTheme) ? `theme-${normalizedTheme}` : 'theme-primary';
         document.documentElement.classList.add(themeClass);
         document.documentElement.setAttribute('data-card-theme', themeClass.replace('theme-', ''));
         document.documentElement.classList.add(`card-shape-${normalizedShape}`);
         document.documentElement.setAttribute('data-card-shape', normalizedShape);
         document.documentElement.setAttribute('data-loading-animation', normalizedLoadingAnimation);
+        if (normalizedLaunchExperience) {
+          document.documentElement.setAttribute('data-launch-experience', normalizedLaunchExperience);
+        }
       } catch (e) { }
     })();
   </script>
@@ -191,6 +198,20 @@ body {
       }
     }
 
+    @keyframes siteAppOverlayExit {
+      0% {
+        opacity: 1;
+        transform: scale(1);
+        filter: blur(0);
+      }
+
+      100% {
+        opacity: 0;
+        transform: scale(1.03);
+        filter: blur(10px);
+      }
+    }
+
     .card-window {
       width: 100vw;
       height: 100vh;
@@ -339,17 +360,17 @@ body {
       border-color: rgba(200, 160, 120, 0.6);
     }
 
-    .theme-frost .card-window,
-    .card-window.theme-frost {
-      --launch-signal-core: rgba(255, 255, 255, 0.28);
-      --launch-signal-glow: rgba(218, 232, 244, 0.16);
-      --launch-signal-shadow: rgba(96, 112, 126, 0.16);
-      --sand-light: rgba(255, 255, 255, 0.98);
-      --sand-mid: rgba(230, 238, 242, 0.9);
-      --sand-dark: rgba(188, 203, 214, 0.82);
-      --sand-glow: rgba(225, 236, 243, 0.28);
-      background: linear-gradient(135deg, #c8d2dc 0%, #e6ebf0 55%, #d7e0e8 100%);
-      border-color: rgba(240, 247, 255, 0.78);
+    .theme-solstice .card-window,
+    .card-window.theme-solstice {
+      --launch-signal-core: rgba(255, 245, 184, 0.3);
+      --launch-signal-glow: rgba(255, 208, 84, 0.18);
+      --launch-signal-shadow: rgba(98, 64, 6, 0.18);
+      --sand-light: rgba(255, 249, 215, 0.98);
+      --sand-mid: rgba(255, 214, 120, 0.9);
+      --sand-dark: rgba(202, 145, 39, 0.82);
+      --sand-glow: rgba(255, 223, 136, 0.3);
+      background: linear-gradient(135deg, #ffd24c 0%, #ffb020 52%, #ffe27a 100%);
+      border-color: rgba(255, 240, 180, 0.78);
     }
 
     .card-shape-outline {
@@ -423,8 +444,8 @@ body {
       stroke: rgba(244, 223, 206, 0.68);
     }
 
-    .theme-frost .card-shape-outline path {
-      stroke: rgba(255, 255, 255, 0.94);
+    .theme-solstice .card-shape-outline path {
+      stroke: rgba(255, 247, 214, 0.94);
     }
 
     .media-progress-border {
@@ -577,6 +598,15 @@ body {
       pointer-events: none;
     }
 
+    .card-window.site-app-launch.is-opening-tv {
+      animation: zoomInExpand 420ms cubic-bezier(0.2, 0.88, 0.24, 1) both;
+      box-shadow:
+        0 25px 50px rgba(0, 0, 0, 0.3),
+        0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+        0 50px 100px rgba(102, 126, 234, 0.34),
+        0 0 48px rgba(255,255,255,0.18);
+    }
+
     .card-window.is-opening-tv::before,
     .card-window.is-opening-tv::after {
       opacity: 0;
@@ -672,9 +702,9 @@ body {
       border-bottom: 2px solid rgba(255, 220, 190, 0.22);
     }
 
-    .theme-frost .card-titlebar {
-      background: linear-gradient(135deg, rgba(235, 242, 248, 0.82), rgba(205, 218, 229, 0.72));
-      border-bottom: 2px solid rgba(255, 255, 255, 0.42);
+    .theme-solstice .card-titlebar {
+      background: linear-gradient(135deg, rgba(255, 213, 76, 0.78), rgba(255, 180, 34, 0.74));
+      border-bottom: 2px solid rgba(255, 246, 204, 0.38);
     }
 
     .card-titlebar:active {
@@ -801,11 +831,28 @@ body {
        background: rgba(30, 90, 160, 0.8);
      }
 
-     .card-button.readmode-btn:hover {
-       background: rgba(50, 130, 200, 0.85);
-       transform: scale(1.12);
-       box-shadow: 0 2px 8px rgba(50, 130, 200, 0.5);
-     }
+    .card-button.readmode-btn:hover {
+      background: rgba(50, 130, 200, 0.85);
+      transform: scale(1.12);
+      box-shadow: 0 2px 8px rgba(50, 130, 200, 0.5);
+    }
+
+    .card-button.site-app-btn {
+      background: linear-gradient(135deg, rgba(52, 190, 130, 0.86), rgba(26, 142, 102, 0.9));
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: white;
+    }
+
+    .card-button.site-app-btn:hover {
+      background: linear-gradient(135deg, rgba(82, 214, 155, 0.95), rgba(30, 160, 115, 0.95));
+      box-shadow: 0 2px 10px rgba(52, 190, 130, 0.45);
+    }
+
+    .card-button.site-app-btn svg {
+      width: 14px;
+      height: 14px;
+      pointer-events: none;
+    }
 
     .card-button:hover {
       background: rgba(255, 67, 67, 0.7);
@@ -1022,6 +1069,18 @@ body {
       display: block;
     }
 
+    .card-launch-fill.site-app-mode {
+      background:
+        radial-gradient(circle at 50% 46%, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.05) 26%, transparent 58%),
+        radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.12) 0%, transparent 34%),
+        linear-gradient(135deg, rgba(9, 13, 28, 0.2), rgba(10, 16, 36, 0.42) 48%, rgba(255, 255, 255, 0.03)),
+        inherit;
+    }
+
+    .card-launch-fill.site-app-exit {
+      animation: siteAppOverlayExit 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
     .card-launch-fill::before,
     .card-launch-fill::after {
       content: '';
@@ -1090,6 +1149,7 @@ body {
       filter: saturate(1.12) contrast(1.04);
       animation: signalPixels 900ms steps(10) infinite;
     }
+
 
     @keyframes signalScanlines {
       0% {
@@ -1925,13 +1985,13 @@ body {
       filter: drop-shadow(0 2px 6px rgba(135, 86, 48, 0.52));
     }
 
-    .theme-frost .loading-wave {
+    .theme-solstice .loading-wave {
       background:
-        radial-gradient(circle at 12% 50%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.0) 55%) 0 0 / 120px 100%,
-        radial-gradient(circle at 45% 50%, rgba(220, 232, 242, 0.88) 0%, rgba(220, 232, 242, 0.0) 55%) 0 0 / 140px 100%,
-        radial-gradient(circle at 72% 50%, rgba(196, 214, 228, 0.88) 0%, rgba(196, 214, 228, 0.0) 55%) 0 0 / 160px 100%,
-        linear-gradient(90deg, rgba(200, 210, 220, 0.0), rgba(244, 248, 252, 0.82), rgba(200, 210, 220, 0.0)) 0 0 / 220px 100%;
-      filter: drop-shadow(0 2px 6px rgba(200, 210, 220, 0.46));
+        radial-gradient(circle at 12% 50%, rgba(255, 250, 214, 0.92) 0%, rgba(255, 250, 214, 0.0) 55%) 0 0 / 120px 100%,
+        radial-gradient(circle at 45% 50%, rgba(255, 224, 126, 0.88) 0%, rgba(255, 224, 126, 0.0) 55%) 0 0 / 140px 100%,
+        radial-gradient(circle at 72% 50%, rgba(255, 193, 71, 0.88) 0%, rgba(255, 193, 71, 0.0) 55%) 0 0 / 160px 100%,
+        linear-gradient(90deg, rgba(255, 206, 92, 0.0), rgba(255, 245, 198, 0.84), rgba(255, 206, 92, 0.0)) 0 0 / 220px 100%;
+      filter: drop-shadow(0 2px 6px rgba(255, 190, 62, 0.42));
     }
 
     .loading-wave.active {
@@ -1996,10 +2056,10 @@ body {
         linear-gradient(180deg, rgba(31, 16, 9, 0.988) 0%, rgba(20, 10, 6, 0.988) 100%);
     }
 
-    .theme-frost .visual-lock-overlay {
+    .theme-solstice .visual-lock-overlay {
       background:
-        radial-gradient(circle at 50% 18%, rgba(255,255,255,0.22), transparent 24%),
-        linear-gradient(180deg, rgba(212, 223, 232, 0.98) 0%, rgba(190, 203, 215, 0.98) 100%);
+        radial-gradient(circle at 50% 18%, rgba(255,247,195,0.22), transparent 24%),
+        linear-gradient(180deg, rgba(255, 222, 118, 0.98) 0%, rgba(223, 157, 34, 0.98) 100%);
     }
 
     .visual-lock-overlay::before,
@@ -2088,9 +2148,9 @@ body {
       color: rgba(225, 241, 255, 0.7);
     }
 
-    .theme-frost .visual-lock-kicker,
-    .theme-frost .visual-lock-copy {
-      color: rgba(30, 41, 59, 0.8);
+    .theme-solstice .visual-lock-kicker,
+    .theme-solstice .visual-lock-copy {
+      color: rgba(84, 52, 10, 0.84);
     }
 
     .visual-lock-copy {
@@ -2231,8 +2291,8 @@ body {
       background: linear-gradient(180deg, rgba(30, 16, 9, 0.992) 0%, rgba(20, 10, 5, 0.996) 100%);
     }
 
-    .theme-frost .card-window.visual-lock-shell {
-      background: linear-gradient(180deg, rgba(218, 228, 238, 0.985) 0%, rgba(194, 205, 217, 0.99) 100%);
+    .theme-solstice .card-window.visual-lock-shell {
+      background: linear-gradient(180deg, rgba(255, 226, 132, 0.985) 0%, rgba(224, 156, 36, 0.99) 100%);
     }
 
     .card-content.visual-lock-returning {
@@ -2854,6 +2914,11 @@ body {
           <button class="zoom-btn" id="zoom-out-btn" title="Zoom Out">−</button>
           <button class="zoom-btn" id="zoom-in-btn" title="Zoom In">+</button>
         </div>
+        <button class="card-button site-app-btn" id="site-app-btn" title="Add Site App To Desktop" aria-label="Add site app to desktop">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 3v10.2m0 0-3.6-3.6m3.6 3.6 3.6-3.6M5 15.5v2.1c0 .77.63 1.4 1.4 1.4h11.2c.77 0 1.4-.63 1.4-1.4v-2.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
         <div class="zoom-percent-badge" id="zoom-percent">100%</div>
         <input type="text" class="url-input" id="url-input" placeholder="Enter URL or search..."
           style="margin-right:8px;">
@@ -2983,6 +3048,8 @@ body {
     const normalizedTheme = theme === 'alt' ? 'sunset' : theme;
     const shape = (params.get('shape') || 'default').toLowerCase();
     const normalizedShape = shape === 'wave' || shape === 'curve' ? shape : 'default';
+    const launchExperience = (params.get('launchExperience') || '').toLowerCase();
+    const isSiteAppLaunch = launchExperience === 'site-app';
 
     let initialUrl = null;
     if (encodedUrl) {
@@ -2997,13 +3064,16 @@ body {
     const cardWindowEl = document.querySelector('.card-window');
     const isBubbleMode = params.get('bubble') === '1';
     if (cardWindowEl) {
-      const allThemeClasses = ['theme-alt', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-frost'];
+      const allThemeClasses = ['theme-alt', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-solstice'];
       allThemeClasses.forEach((cls) => cardWindowEl.classList.remove(cls));
       cardWindowEl.classList.remove('shape-default', 'shape-wave', 'shape-curve');
       if (normalizedTheme !== 'primary') {
         cardWindowEl.classList.add(`theme-${normalizedTheme}`);
       }
       cardWindowEl.classList.add(`shape-${normalizedShape}`);
+      if (isSiteAppLaunch) {
+        cardWindowEl.classList.add('site-app-launch');
+      }
       // Set opening animation based on mode (skip for bubble mode - show instantly)
       if (!isBubbleMode) {
         cardWindowEl.classList.add('is-opening-tv');
@@ -3023,6 +3093,7 @@ body {
     const splitBtn = document.getElementById('split-btn');
     const zoomOutBtn = document.getElementById('zoom-out-btn');
     const zoomInBtn = document.getElementById('zoom-in-btn');
+    const siteAppBtn = document.getElementById('site-app-btn');
     const zoomPercent = document.getElementById('zoom-percent');
     const urlInput = document.getElementById('url-input');
     const titleElement = document.querySelector('.title-text');
@@ -3166,6 +3237,7 @@ body {
     // Track current page info for bookmarking
     let currentPageTitle = 'New Tab';
     let currentPageUrl = initialUrl || '';
+    let launchFillHideTimer = null;
 
     // Track current size state
     let isWideView = false;
@@ -3255,13 +3327,36 @@ body {
 
     function setLaunchFillVisible(isActive) {
       if (!cardLaunchFill) return;
-      cardLaunchFill.classList.toggle('active', !!isActive);
+      if (launchFillHideTimer) {
+        clearTimeout(launchFillHideTimer);
+        launchFillHideTimer = null;
+      }
+      if (isActive) {
+        cardLaunchFill.classList.remove('site-app-exit');
+        cardLaunchFill.classList.add('active');
+        if (isSiteAppLaunch) {
+          cardLaunchFill.classList.add('site-app-mode');
+        }
+        return;
+      }
+      if (isSiteAppLaunch && cardLaunchFill.classList.contains('site-app-mode')) {
+        cardLaunchFill.classList.add('site-app-exit');
+        launchFillHideTimer = setTimeout(() => {
+          cardLaunchFill.classList.remove('active', 'site-app-mode', 'site-app-exit');
+          launchFillHideTimer = null;
+        }, 420);
+        return;
+      }
+      cardLaunchFill.classList.remove('active', 'site-app-mode', 'site-app-exit');
     }
 
     function setCardContentVisible(isVisible) {
       if (!cardContent) return;
       cardContent.classList.toggle('is-awaiting-first-content', !isVisible);
       cardContent.classList.toggle('is-content-visible', !!isVisible);
+    }
+    if (isSiteAppLaunch && cardLaunchFill) {
+      cardLaunchFill.classList.add('site-app-mode');
     }
 
     function applyVisualLockStyle() {
@@ -6143,7 +6238,9 @@ if (isClosingCard || isMinimizingCard) return;
     const NORMAL_WIDTH = 900;
     const NORMAL_HEIGHT = 500;
     const WIDE_WIDTH = 1100;
-    const WIDE_HEIGHT = 600;
+    const WIDE_HEIGHT = normalizedShape === 'curve'
+      ? 620
+      : 600;
 
     // Wide view button (1000px width)
     wideBtn.addEventListener('click', async () => {
@@ -6475,6 +6572,43 @@ if (cardWindowEl) {
       });
     }
 
+    if (siteAppBtn) {
+      siteAppBtn.addEventListener('click', async () => {
+        try {
+          if (!currentPageUrl || !/^https?:\/\//i.test(currentPageUrl)) {
+            showSiteAppToast('Open a website first before adding it to the desktop.', true);
+            return;
+          }
+          if (!window.cardAPI || typeof window.cardAPI.createSiteShortcut !== 'function') {
+            showSiteAppToast('Desktop site apps are unavailable in this window.', true);
+            return;
+          }
+
+          siteAppBtn.disabled = true;
+          siteAppBtn.style.opacity = '0.72';
+
+          const result = await window.cardAPI.createSiteShortcut({
+            url: currentPageUrl,
+            title: currentPageTitle
+          });
+
+          if (!result || !result.success) {
+            showSiteAppToast((result && result.error) ? result.error : 'Could not add this site to the desktop.', true);
+            return;
+          }
+
+          const label = result.name || currentPageTitle || 'Site app';
+          showSiteAppToast(`Added "${label}.lnk" to your desktop`);
+        } catch (err) {
+          console.error('Error creating desktop site app:', err);
+          showSiteAppToast('Could not add this site to the desktop.', true);
+        } finally {
+          siteAppBtn.disabled = false;
+          siteAppBtn.style.opacity = '';
+        }
+      });
+    }
+
     // Bookmark button handler
     bookmarkBtn.addEventListener('click', async () => {
       try {
@@ -6584,6 +6718,17 @@ if (cardWindowEl) {
       toast.textContent = '✓ Bookmark saved';
       document.body.appendChild(toast);
       setTimeout(() => toast.remove(), 2000);
+    }
+
+    function showSiteAppToast(message, isError = false) {
+      const toast = document.createElement('div');
+      const gradient = isError
+        ? 'linear-gradient(135deg, #a83a56 0%, #7f243e 100%)'
+        : 'linear-gradient(135deg, #22b573 0%, #147d57 100%)';
+      toast.style.cssText = `position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: ${gradient}; color: white; padding: 9px 18px; border-radius: 16px; font-size: 12px; z-index: 9999; box-shadow: 0 4px 16px rgba(0,0,0,0.4); white-space: nowrap; max-width: 340px; overflow: hidden; text-overflow: ellipsis;`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), isError ? 2800 : 2200);
     }
 
     function normalizeUrl(raw) {

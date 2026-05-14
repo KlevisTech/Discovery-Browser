@@ -744,8 +744,80 @@ function getUrlFromArgs(argv) {
   return argv.find(arg => arg.startsWith('http://') || arg.startsWith('https://'));
 }
 
+function getLaunchExperienceFromArgs(argv) {
+  try {
+    if (Array.isArray(argv) && argv.some((arg) => String(arg).trim() === '--site-app-launch')) {
+      return 'site-app';
+    }
+  } catch (e) { }
+  return null;
+}
+
+function quoteWindowsArg(value) {
+  const str = String(value || '');
+  if (!str) return '""';
+  if (!/[\s"]/u.test(str)) return str;
+  return `"${str.replace(/"/g, '\\"')}"`;
+}
+
+function sanitizeShortcutLabel(label) {
+  return String(label || '')
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+}
+
+function deriveSiteShortcutName(siteUrl, siteTitle) {
+  try {
+    const parsed = new URL(String(siteUrl || ''));
+    const host = sanitizeShortcutLabel(parsed.hostname.replace(/^www\./i, ''));
+    if (host) return `${host} Site App`;
+  } catch (e) {
+    // ignore
+  }
+
+  const cleanTitle = sanitizeShortcutLabel(siteTitle);
+  if (cleanTitle) return `${cleanTitle} Site App`;
+  return 'Site App';
+}
+
+function resolveDesktopShortcutDir() {
+  const candidates = [];
+  try {
+    if (process.env.OneDrive) {
+      candidates.push(path.join(process.env.OneDrive, 'Desktop'));
+    }
+  } catch (e) { }
+  try {
+    candidates.push(app.getPath('desktop'));
+  } catch (e) { }
+  try {
+    candidates.push(path.join(app.getPath('home'), 'Desktop'));
+  } catch (e) { }
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch (e) { }
+  }
+  return candidates.find(Boolean) || '';
+}
+
+function buildShortcutLaunchArgs(siteUrl) {
+  const args = [];
+  if (!app.isPackaged && process.defaultApp && process.argv[1]) {
+    args.push(path.resolve(process.argv[1]));
+  }
+  args.push('--site-app-launch');
+  args.push(String(siteUrl || '').trim());
+  return args.map(quoteWindowsArg).join(' ');
+}
+
 let pendingStartupUrl = getUrlFromArgs(process.argv) || null;
 let deferInitialMainShow = !!pendingStartupUrl;
+let pendingStartupLaunchExperience = getLaunchExperienceFromArgs(process.argv) || (pendingStartupUrl ? 'site-app' : null);
 
 // Register as default protocol client for http and https
 if (require('electron').app.isPackaged) {
@@ -811,7 +883,7 @@ const VISUALIZER_WIDGET_MINIMIZE_LEAD_MS = 42;
 const VISUALIZER_WIDGET_RESTORE_DELAY_MS = 590;
 const VISUALIZER_WIDGET_RESTORE_BOOST_MS = 220;
 const VISUALIZER_STYLE_KEYS = new Set(['bars', 'pulse', 'ladder', 'orbit']);
-const CARD_THEME_KEYS = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'frost']);
+const CARD_THEME_KEYS = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'solstice']);
 const CARD_LAUNCH_SIZE_MODES = new Set([
   CARD_LAUNCH_MODE_NORMAL,
   CARD_LAUNCH_MODE_WIDE,
@@ -819,7 +891,8 @@ const CARD_LAUNCH_SIZE_MODES = new Set([
 ]);
 
 function normalizeCardThemeKey(themeKey) {
-  const candidate = String(themeKey || '').trim().toLowerCase();
+  const rawCandidate = String(themeKey || '').trim().toLowerCase();
+  const candidate = rawCandidate === 'frost' ? 'solstice' : rawCandidate;
   if (!CARD_THEME_KEYS.has(candidate)) return 'primary';
   return candidate === 'alt' ? 'sunset' : candidate;
 }
@@ -844,7 +917,7 @@ function getLaunchWindowSizeByMode(mode, shapeKey = 'default') {
   const normalized = normalizeCardLaunchSizeMode(mode);
   const normalizedShape = normalizeCardShapeKey(shapeKey);
   if (normalized === CARD_LAUNCH_MODE_WIDE) {
-    if (normalizedShape === 'curve') return { width: 1100, height: 700 };
+    if (normalizedShape === 'curve') return { width: 1100, height: 620 };
     return normalizedShape === 'wave'
       ? { width: 1100, height: 660 }
       : { width: 1100, height: 600 };
@@ -2572,6 +2645,9 @@ function createCardDirectly(url, options = {}) {
     const requestedLaunchMode = normalizeCardLaunchSizeMode(opts.launchSizeMode || siteLayout || currentCardLaunchSizeMode);
     const launchMode = minimizeAfterShow ? CARD_LAUNCH_MODE_NORMAL : requestedLaunchMode;
     const launchSize = getLaunchWindowSizeByMode(launchMode, cardShape);
+    const launchExperience = String(opts.launchExperience || '').trim().toLowerCase() === 'site-app'
+      ? 'site-app'
+      : '';
 
     const targetUrl = normalizeTypedNavigationTarget(url);
     if (!targetUrl) {
@@ -2584,10 +2660,13 @@ function createCardDirectly(url, options = {}) {
     }
 
     // Use provided theme or fall back to current saved theme
-    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'frost']);
+    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'solstice']);
     const effectiveTheme = opts.themeKey || currentCardTheme;
-    const normalizedTheme = allowedThemes.has(String(effectiveTheme || '').toLowerCase())
-      ? String(effectiveTheme || '').toLowerCase()
+    const requestedTheme = String(effectiveTheme || '').toLowerCase() === 'frost'
+      ? 'solstice'
+      : String(effectiveTheme || '').toLowerCase();
+    const normalizedTheme = allowedThemes.has(requestedTheme)
+      ? requestedTheme
       : 'primary';
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
 
@@ -2711,7 +2790,8 @@ function createCardDirectly(url, options = {}) {
         theme: cardTheme,
         shape: cardShape,
         bubble: isBubbleMode ? '1' : '0',
-        loadingAnimation: normalizedLoadingAnimation
+        loadingAnimation: normalizedLoadingAnimation,
+        launchExperience
       }
     }).catch((err) => {
       console.error('Error loading card HTML:', err);
@@ -3254,6 +3334,55 @@ ipcMain.handle('copy-to-clipboard', async (event, text) => {
   }
 });
 
+ipcMain.handle('create-site-shortcut', async (event, siteData = {}) => {
+  try {
+    if (process.platform !== 'win32') {
+      return { success: false, error: 'Desktop site apps are currently available on Windows only.' };
+    }
+
+    const targetUrl = String(siteData.url || '').trim();
+    if (!isHttpUrl(targetUrl)) {
+      return { success: false, error: 'Only http and https pages can be added to the desktop.' };
+    }
+
+    const shortcutName = deriveSiteShortcutName(targetUrl, siteData.title);
+    const desktopPath = resolveDesktopShortcutDir();
+    if (!desktopPath) {
+      return { success: false, error: 'Could not resolve a desktop folder for this Windows account.' };
+    }
+    const shortcutPath = path.join(desktopPath, `${shortcutName}.lnk`);
+    const shortcutOperation = fs.existsSync(shortcutPath) ? 'update' : 'create';
+    const launchArgs = buildShortcutLaunchArgs(targetUrl);
+    const iconPath = fs.existsSync(APP_ICON_PATH) ? APP_ICON_PATH : process.execPath;
+    const description = `Open ${shortcutName} in Discovery Browser`;
+    const workDir = app.isPackaged
+      ? path.dirname(process.execPath)
+      : path.dirname(path.resolve(process.argv[1] || __filename));
+
+    const shortcutWritten = shell.writeShortcutLink(shortcutPath, shortcutOperation, {
+      target: process.execPath,
+      args: launchArgs,
+      cwd: workDir,
+      description,
+      icon: iconPath,
+      iconIndex: 0
+    });
+
+    if (!shortcutWritten) {
+      return { success: false, error: 'Windows did not create the shortcut.' };
+    }
+
+    return {
+      success: true,
+      shortcutPath,
+      name: shortcutName,
+      url: targetUrl
+    };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
 ipcMain.handle('set-visualizer-enabled', async (event, enabled) => {
   try {
     visualizerEnabled = !!enabled;
@@ -3284,9 +3413,12 @@ ipcMain.handle('get-visualizer-enabled', async () => {
 // Card theme management - store user's preferred theme for external URL cards
 ipcMain.handle('set-card-theme', async (event, themeKey) => {
   try {
-    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'frost']);
-    if (allowedThemes.has(String(themeKey || '').toLowerCase())) {
-      currentCardTheme = String(themeKey || '').toLowerCase();
+    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'solstice']);
+    const requestedTheme = String(themeKey || '').toLowerCase() === 'frost'
+      ? 'solstice'
+      : String(themeKey || '').toLowerCase();
+    if (allowedThemes.has(requestedTheme)) {
+      currentCardTheme = requestedTheme;
       if (currentCardTheme === 'alt') currentCardTheme = 'sunset';
     }
     return { success: true, theme: currentCardTheme };
@@ -3494,16 +3626,20 @@ if (!gotTheLock) {
   app.on('second-instance', (event, commandLine, workingDirectory) => {
     // Someone tried to run a second instance.
     const url = getUrlFromArgs(commandLine);
+    const launchExperience = getLaunchExperienceFromArgs(commandLine) || (url ? 'site-app' : null);
     if (!mainWindow || mainWindow.isDestroyed()) {
       pendingStartupUrl = url || null;
       deferInitialMainShow = !!pendingStartupUrl;
+      pendingStartupLaunchExperience = launchExperience;
       createMainWindow();
       return;
     }
 
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (url) {
-        launchExternalCardUrlOnce(url);
+        launchExternalCardUrlOnce(url, {
+          launchExperience: launchExperience || undefined
+        });
         return;
       }
 
@@ -3603,8 +3739,11 @@ function createMainWindow() {
 
   mainWindow.webContents.on('did-finish-load', () => {
     if (pendingStartupUrl) {
-      launchExternalCardUrlOnce(pendingStartupUrl);
+      launchExternalCardUrlOnce(pendingStartupUrl, {
+        launchExperience: pendingStartupLaunchExperience || undefined
+      });
       pendingStartupUrl = null;
+      pendingStartupLaunchExperience = null;
     }
   });
 
@@ -3982,9 +4121,12 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
         error: 'A required update must be installed before continuing.'
       };
     }
-    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'frost']);
-    const normalizedTheme = allowedThemes.has(String(themeKey || '').toLowerCase())
-      ? String(themeKey || '').toLowerCase()
+    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'solstice']);
+    const requestedTheme = String(themeKey || '').toLowerCase() === 'frost'
+      ? 'solstice'
+      : String(themeKey || '').toLowerCase();
+    const normalizedTheme = allowedThemes.has(requestedTheme)
+      ? requestedTheme
       : 'primary';
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
     const cardShape = normalizeCardShapeKey(shapeKey || currentCardShape);
