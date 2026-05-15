@@ -33,19 +33,59 @@ body {
   display: flex;
   align-items: center;
   height: 24px;
-  background: rgba(30, 30, 40, 0.95);
-  backdrop-filter: blur(20px);
+  background: transparent;
+  backdrop-filter: none;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 0 8px;
+  padding: 0;
+  padding-left: 8px;
   flex-shrink: 0;
   transform: translateZ(0);
   will-change: transform;
   position: relative;
   z-index: 9999;
+  -webkit-app-region: drag;
+}
+
+/* Window Controls */
+.window-controls {
+  display: flex;
+  margin-left: auto;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.control-btn {
+  width: 46px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  -webkit-app-region: no-drag;
+  outline: none;
+}
+
+.control-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+.control-btn.close:hover {
+  background: #e81123;
+  color: white;
+}
+
+.control-btn svg {
+  pointer-events: none;
 }
 
 .menu-item {
   position: relative;
+  -webkit-app-region: no-drag;
 }
 
 .menu-btn {
@@ -59,6 +99,7 @@ body {
   border-radius: 4px;
   transition: background 0.15s ease, color 0.15s ease;
   outline: none;
+  -webkit-app-region: no-drag;
 }
 
 .menu-btn:hover {

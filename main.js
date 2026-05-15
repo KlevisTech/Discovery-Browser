@@ -1,4 +1,4 @@
-﻿
+
 // main.js
 const electron = require('electron');
 const app = electron.app;
@@ -3679,8 +3679,10 @@ function createMainWindow() {
     icon: APP_ICON_PATH,
     minWidth: 860,
     minHeight: 560,
+    frame: false, // Frameless window
+    transparent: true, // Allow transparency for wallpaper effects
     show: false, // Don't show until ready - prevents white flash
-    backgroundColor: '#1a1a2e', // Match your theme
+    backgroundColor: '#00000000', // Transparent background
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -3695,7 +3697,80 @@ function createMainWindow() {
       offscreen: false,
     },
   });
+
+  // Remove native menu
+  mainWindow.setMenu(null);
+
+  // Window control IPC handlers
+  ipcMain.handle('window-minimize', () => {
+    if (mainWindow) mainWindow.minimize();
+  });
+
+  ipcMain.handle('window-maximize', () => {
+    if (mainWindow) {
+      if (mainWindow.isMaximized()) {
+        mainWindow.unmaximize();
+      } else {
+        mainWindow.maximize();
+      }
+    }
+  });
+
+  ipcMain.handle('window-close', () => {
+    if (mainWindow) mainWindow.close();
+  });
+
+  ipcMain.handle('window-reload', () => {
+    if (mainWindow) mainWindow.webContents.reload();
+  });
+
+  ipcMain.handle('window-force-reload', () => {
+    if (mainWindow) mainWindow.webContents.reloadIgnoringCache();
+  });
+
+  ipcMain.handle('window-toggle-devtools', () => {
+    if (mainWindow) mainWindow.webContents.toggleDevTools();
+  });
+
+  ipcMain.handle('window-zoom-in', () => {
+    if (mainWindow) {
+      const currentZoom = mainWindow.webContents.getZoomLevel();
+      mainWindow.webContents.setZoomLevel(currentZoom + 0.5);
+    }
+  });
+
+  ipcMain.handle('window-zoom-out', () => {
+    if (mainWindow) {
+      const currentZoom = mainWindow.webContents.getZoomLevel();
+      mainWindow.webContents.setZoomLevel(currentZoom - 0.5);
+    }
+  });
+
+  ipcMain.handle('window-zoom-reset', () => {
+    if (mainWindow) mainWindow.webContents.setZoomLevel(0);
+  });
+
+  ipcMain.handle('window-toggle-fullscreen', () => {
+    if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen());
+  });
+
+  ipcMain.handle('window-print', () => {
+    if (mainWindow) mainWindow.webContents.print();
+  });
+
   attachWindowHangRecovery(mainWindow, 'main-window');
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+
+  mainWindow.on('maximize', () => {
+    safeIpcSend(mainWindow && mainWindow.webContents, 'window-state-changed', 'maximized');
+  });
+
+  mainWindow.on('unmaximize', () => {
+    safeIpcSend(mainWindow && mainWindow.webContents, 'window-state-changed', 'restored');
+  });
 
   console.log('[App] BrowserWindow created');
 

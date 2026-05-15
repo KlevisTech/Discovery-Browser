@@ -188,6 +188,21 @@ const electronAPI = {
 
   // Clipboard
   copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
+
+  // Window Controls
+  minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
+  maximizeWindow: () => ipcRenderer.invoke('window-maximize'),
+  closeWindow: () => ipcRenderer.invoke('window-close'),
+  reloadWindow: () => ipcRenderer.invoke('window-reload'),
+  forceReloadWindow: () => ipcRenderer.invoke('window-force-reload'),
+  toggleDevTools: () => ipcRenderer.invoke('window-toggle-devtools'),
+  zoomIn: () => ipcRenderer.invoke('window-zoom-in'),
+  zoomOut: () => ipcRenderer.invoke('window-zoom-out'),
+  zoomReset: () => ipcRenderer.invoke('window-zoom-reset'),
+  toggleFullscreen: () => ipcRenderer.invoke('window-toggle-fullscreen'),
+  printPage: () => ipcRenderer.invoke('window-print'),
+  // Callbacks
+  onWindowStateChanged: (callback) => ipcRenderer.on('window-state-changed', (event, state) => callback(state)),
 };
 // Expose to renderer process
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

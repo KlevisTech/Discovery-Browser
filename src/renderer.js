@@ -1,4 +1,4 @@
-﻿//renderer.js
+//renderer.js
 
 /**
  * Discovery Browser - Renderer Process
@@ -227,6 +227,7 @@ class DiscoveryBrowser {
   }
 
   async init() {
+    this.initCustomMenu();
     // Setup event listeners
     const searchInput = document.getElementById('search-input');
     const googleSearchInput = document.getElementById('google-search-input');
@@ -4228,6 +4229,148 @@ class DiscoveryBrowser {
     }
 
     return card;
+  }
+
+
+  initCustomMenu() {
+    // Menu dropdown toggling
+    const menuBtns = document.querySelectorAll('.menu-btn');
+    const menuDropdowns = document.querySelectorAll('.menu-dropdown');
+
+    menuBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const menuId = `${btn.dataset.menu}-menu`;
+        const dropdown = document.getElementById(menuId);
+
+        // Close all other dropdowns
+        menuDropdowns.forEach(d => {
+          if (d.id !== menuId) d.classList.remove('show');
+        });
+        menuBtns.forEach(b => {
+          if (b !== btn) b.classList.remove('active');
+        });
+
+        // Toggle current dropdown
+        dropdown.classList.toggle('show');
+        btn.classList.toggle('active');
+      });
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', () => {
+      menuDropdowns.forEach(d => d.classList.remove('show'));
+      menuBtns.forEach(b => b.classList.remove('active'));
+    });
+
+    // Handle menu option and window control clicks
+    const actionElements = document.querySelectorAll('.menu-item-option, .control-btn');
+    actionElements.forEach(el => {
+      el.addEventListener('click', (e) => {
+        const action = el.dataset.action;
+        if (action) {
+          this.handleMenuAction(action);
+        }
+      });
+    });
+
+    // Handle window state changes (maximize/restore)
+    if (window.electronAPI && window.electronAPI.onWindowStateChanged) {
+      window.electronAPI.onWindowStateChanged((state) => {
+        const maximizeBtn = document.querySelector('.control-btn.maximize');
+        if (!maximizeBtn) return;
+
+        if (state === 'maximized') {
+          maximizeBtn.title = 'Restore';
+          maximizeBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12"><path fill="none" stroke="currentColor" stroke-width="1" d="M3.5 3.5v5h5v-5h-5zM5 3.5V2h5v5H8.5"></path></svg>`;
+        } else {
+          maximizeBtn.title = 'Maximize';
+          maximizeBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12"><rect fill="none" stroke="currentColor" stroke-width="1" width="9" height="9" x="1.5" y="1.5"></rect></svg>`;
+        }
+      });
+    }
+  }
+
+  handleMenuAction(action) {
+    if (!window.electronAPI) return;
+
+    switch (action) {
+      // File
+      case 'new-window':
+        this.createCard();
+        break;
+      case 'open-file':
+        this.uploadBtn?.click();
+        break;
+      case 'print':
+        window.electronAPI.printPage();
+        break;
+      case 'exit':
+        window.electronAPI.closeWindow();
+        break;
+
+      // Edit
+      case 'undo':
+        document.execCommand('undo');
+        break;
+      case 'redo':
+        document.execCommand('redo');
+        break;
+      case 'cut':
+        document.execCommand('cut');
+        break;
+      case 'copy':
+        document.execCommand('copy');
+        break;
+      case 'paste':
+        document.execCommand('paste');
+        break;
+
+      // View
+      case 'reload':
+        window.electronAPI.reloadWindow();
+        break;
+      case 'force-reload':
+        window.electronAPI.forceReloadWindow();
+        break;
+      case 'toggle-devtools':
+        window.electronAPI.toggleDevTools();
+        break;
+      case 'toggle-fullscreen':
+        window.electronAPI.toggleFullscreen();
+        break;
+      case 'zoom-in':
+        window.electronAPI.zoomIn();
+        break;
+      case 'zoom-out':
+        window.electronAPI.zoomOut();
+        break;
+      case 'actual-size':
+        window.electronAPI.zoomReset();
+        break;
+
+      // Window
+      case 'minimize':
+        window.electronAPI.minimizeWindow();
+        break;
+      case 'maximize':
+        window.electronAPI.maximizeWindow();
+        break;
+      case 'close':
+        window.electronAPI.closeWindow();
+        break;
+
+      // Help
+      case 'view-help':
+        this.supportBtn?.click();
+        break;
+      case 'check-updates':
+        this.notificationsBtn?.click();
+        break;
+      case 'about':
+        alert('Discovery Browser v' + (this.updateStatus?.currentVersion || '2.0.1') + '\nA beautiful, unique card-style web browser.');
+        break;
+    }
   }
 
   formatNewsTime(dateString) {
