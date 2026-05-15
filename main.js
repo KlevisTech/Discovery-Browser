@@ -2671,7 +2671,7 @@ function createCardDirectly(url, options = {}) {
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
 
     // Use provided loading animation or fall back to current saved animation
-    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'sand-particles']);
+    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill']);
     const effectiveLoadingAnimation = opts.loadingAnimation || currentLoadingAnimation;
     const normalizedLoadingAnimation = allowedLoadingAnimations.has(String(effectiveLoadingAnimation || '').toLowerCase())
       ? String(effectiveLoadingAnimation || '').toLowerCase()
@@ -3450,7 +3450,7 @@ ipcMain.handle('get-card-shape', async () => {
 
 ipcMain.handle('set-loading-animation', async (event, loadingAnimationKey) => {
   try {
-    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'sand-particles']);
+    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill']);
     if (allowedLoadingAnimations.has(String(loadingAnimationKey || '').toLowerCase())) {
       currentLoadingAnimation = String(loadingAnimationKey || '').toLowerCase();
     }
@@ -4205,7 +4205,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       : 'primary';
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
     const cardShape = normalizeCardShapeKey(shapeKey || currentCardShape);
-    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'sand-particles']);
+    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill']);
     const normalizedLoadingAnimation = allowedLoadingAnimations.has(String(currentLoadingAnimation || '').toLowerCase())
       ? String(currentLoadingAnimation || '').toLowerCase()
       : 'static-tv';
