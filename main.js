@@ -884,6 +884,7 @@ const VISUALIZER_WIDGET_RESTORE_DELAY_MS = 590;
 const VISUALIZER_WIDGET_RESTORE_BOOST_MS = 220;
 const VISUALIZER_STYLE_KEYS = new Set(['bars', 'pulse', 'ladder', 'orbit']);
 const CARD_THEME_KEYS = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'solstice']);
+const CARD_THEME_CYCLE = ['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'solstice'];
 const CARD_LAUNCH_SIZE_MODES = new Set([
   CARD_LAUNCH_MODE_NORMAL,
   CARD_LAUNCH_MODE_WIDE,
@@ -895,6 +896,62 @@ function normalizeCardThemeKey(themeKey) {
   const candidate = rawCandidate === 'frost' ? 'solstice' : rawCandidate;
   if (!CARD_THEME_KEYS.has(candidate)) return 'primary';
   return candidate === 'alt' ? 'sunset' : candidate;
+}
+
+function getNextCardThemeKey(themeKey) {
+  const current = normalizeCardThemeKey(themeKey);
+  const currentIndex = CARD_THEME_CYCLE.indexOf(current);
+  if (currentIndex === -1) return CARD_THEME_CYCLE[0];
+  return CARD_THEME_CYCLE[(currentIndex + 1) % CARD_THEME_CYCLE.length];
+}
+
+function broadcastCardThemeChanged(themeKey) {
+  const normalizedTheme = normalizeCardThemeKey(themeKey);
+  try {
+    safeIpcSend(mainWindow && mainWindow.webContents, 'card-theme-changed', normalizedTheme);
+  } catch (e) { }
+}
+
+const CARD_PREFERENCES_FILENAME = 'card-preferences.json';
+
+function getCardPreferencesFilePath() {
+  try {
+    return path.join(app.getPath('userData'), CARD_PREFERENCES_FILENAME);
+  } catch (e) {
+    return '';
+  }
+}
+
+function loadCardPreferencesFromDisk() {
+  const filePath = getCardPreferencesFilePath();
+  if (!filePath || !fs.existsSync(filePath)) return;
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const parsed = raw ? JSON.parse(raw) : {};
+    currentCardTheme = normalizeCardThemeKey(parsed && parsed.themeKey);
+  } catch (e) {
+    console.warn('Failed to load persisted card preferences:', getStorageErrorMessage(e, 'card preferences'));
+    if (isJsonParseError(e)) {
+      backupInvalidJsonFile(filePath);
+      writeCardPreferencesToDisk();
+    }
+  }
+}
+
+function writeCardPreferencesToDisk() {
+  const filePath = getCardPreferencesFilePath();
+  if (!filePath) return;
+  try {
+    const payload = {
+      version: 1,
+      updatedAt: Date.now(),
+      themeKey: normalizeCardThemeKey(currentCardTheme),
+    };
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('Failed to persist card preferences:', e.message || e);
+  }
 }
 
 function normalizeVisualizerStyleKey(styleKey) {
@@ -957,7 +1014,6 @@ function getCardPseudoFullscreenBounds(cardWindow, mode = 'cinema') {
   const availableHeight = Math.max(360, workArea.height - topGap - bottomGap);
   const targetHeight = normalizedMode === 'full' ? availableHeight : CARD_CINEMA_HEIGHT;
   const cinemaHeight = Math.min(availableHeight, targetHeight);
-
   const x = Math.round(workArea.x);
   const y = Math.round(workArea.y + topGap);
   const width = Math.max(640, Math.round(workArea.width));
@@ -966,7 +1022,7 @@ function getCardPseudoFullscreenBounds(cardWindow, mode = 'cinema') {
   return { x, y, width, height };
 }
 
-function applyCardPseudoFullscreen(cardWindow, mode = 'cinema') {
+function applyCardPseudoFullscreen(cardWindow, mode = 'full') {
   if (!cardWindow || cardWindow.isDestroyed()) return;
   try {
     if (typeof cardWindow.setFullScreen === 'function') {
@@ -1147,6 +1203,7 @@ function getVisualizerWidgetBounds(cardWindow) {
   }
   const bounds = cardWindow.getBounds();
   const cardId = Number(cardWindow.__cardId);
+  const shapeKey = normalizeCardShapeKey(cardWindow.__cardShape);
   const isLocked = visualizerWidgetLockStates.get(cardId) === true;
   if (isLocked) {
     return {
@@ -1158,9 +1215,12 @@ function getVisualizerWidgetBounds(cardWindow) {
   }
   const centeredTitlebarOffset = VISUALIZER_WIDGET_TOP_INSET
     + Math.round((CARD_TITLEBAR_HEIGHT - VISUALIZER_WIDGET_SHELL_HEIGHT) / 2);
+  const topOffset = shapeKey === 'wave'
+    ? 0
+    : centeredTitlebarOffset;
   return {
     x: Math.round(bounds.x + ((bounds.width - VISUALIZER_WIDGET_WIDTH) / 2)),
-    y: Math.round(bounds.y + centeredTitlebarOffset),
+    y: Math.round(bounds.y + topOffset),
     width: VISUALIZER_WIDGET_WIDTH,
     height: VISUALIZER_WIDGET_HEIGHT,
   };
@@ -2671,7 +2731,7 @@ function createCardDirectly(url, options = {}) {
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
 
     // Use provided loading animation or fall back to current saved animation
-    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill']);
+    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'ink-drop']);
     const effectiveLoadingAnimation = opts.loadingAnimation || currentLoadingAnimation;
     const normalizedLoadingAnimation = allowedLoadingAnimations.has(String(effectiveLoadingAnimation || '').toLowerCase())
       ? String(effectiveLoadingAnimation || '').toLowerCase()
@@ -3420,6 +3480,8 @@ ipcMain.handle('set-card-theme', async (event, themeKey) => {
     if (allowedThemes.has(requestedTheme)) {
       currentCardTheme = requestedTheme;
       if (currentCardTheme === 'alt') currentCardTheme = 'sunset';
+      writeCardPreferencesToDisk();
+      broadcastCardThemeChanged(currentCardTheme);
     }
     return { success: true, theme: currentCardTheme };
   } catch (e) {
@@ -3450,7 +3512,7 @@ ipcMain.handle('get-card-shape', async () => {
 
 ipcMain.handle('set-loading-animation', async (event, loadingAnimationKey) => {
   try {
-    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill']);
+    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'ink-drop']);
     if (allowedLoadingAnimations.has(String(loadingAnimationKey || '').toLowerCase())) {
       currentLoadingAnimation = String(loadingAnimationKey || '').toLowerCase();
     }
@@ -3589,6 +3651,7 @@ process.on('uncaughtException', (error) => {
 app.on('ready', () => {
   console.log('[App] Ready event fired, starting app...');
   try {
+    loadCardPreferencesFromDisk();
     createMainWindow();
   } catch (error) {
     console.error('[App] Error in createMainWindow:', error);
@@ -3596,6 +3659,7 @@ app.on('ready', () => {
 });
 
 app.on('before-quit', () => {
+  writeCardPreferencesToDisk();
   flushPermissionDecisionPersist();
   saveFavoritesToDisk();
 });
@@ -3680,9 +3744,10 @@ function createMainWindow() {
     minWidth: 860,
     minHeight: 560,
     frame: false, // Frameless window
-    transparent: true, // Allow transparency for wallpaper effects
+    transparent: false, // Restore animations and standard taskbar behavior
+    thickFrame: true, // Allow native window animations and resizing
     show: false, // Don't show until ready - prevents white flash
-    backgroundColor: '#00000000', // Transparent background
+    backgroundColor: '#000000', // Solid background for TV-open effect
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -4205,7 +4270,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       : 'primary';
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
     const cardShape = normalizeCardShapeKey(shapeKey || currentCardShape);
-    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill']);
+    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'ink-drop']);
     const normalizedLoadingAnimation = allowedLoadingAnimations.has(String(currentLoadingAnimation || '').toLowerCase())
       ? String(currentLoadingAnimation || '').toLowerCase()
       : 'static-tv';
@@ -4574,7 +4639,7 @@ ipcMain.handle('resize-card', async (event, cardId, x, y, width, height) => {
 });
 
 // Toggle fullscreen
-ipcMain.handle('toggle-fullscreen', async (event, cardId, shouldBeFullscreen, mode = 'cinema') => {
+ipcMain.handle('toggle-fullscreen', async (event, cardId, shouldBeFullscreen, mode = 'full') => {
   try {
     const cardWindow = cardWindows.get(cardId);
     if (!cardWindow || cardWindow.isDestroyed()) {
@@ -5644,6 +5709,25 @@ ipcMain.handle('visualizer-widget-action', async (event, cardId, action, value =
       });
       return { success: true, enabled: nextEnabled };
     }
+    if (normalizedAction === 'theme-cycle') {
+      const nextTheme = getNextCardThemeKey(cardWindow.__cardTheme || currentCardTheme);
+      currentCardTheme = nextTheme;
+      writeCardPreferencesToDisk();
+      broadcastCardThemeChanged(nextTheme);
+      cardWindow.__cardTheme = nextTheme;
+      const existingState = visualizerWidgetStates.get(numericCardId) || {};
+      visualizerWidgetStates.set(numericCardId, {
+        ...existingState,
+        themeKey: nextTheme,
+      });
+      sendVisualizerWidgetState(numericCardId);
+      syncSideFlamesWidget(numericCardId);
+      cardWindow.webContents.send('visualizer-widget-command', {
+        action: 'theme-apply',
+        value: nextTheme,
+      });
+      return { success: true, theme: nextTheme };
+    }
     cardWindow.webContents.send('visualizer-widget-command', {
       action: String(action || ''),
       value,
@@ -5769,6 +5853,7 @@ const FAVORITES_FILENAME = 'favorites.json';
 let favoritesCache = [];
 let favoritesPersistTimer = null;
 let favoritesLoaded = false;
+let favoritesRecoveredFromInvalidFile = false;
 
 function getFavoritesFilePath() {
   try {
@@ -5778,18 +5863,69 @@ function getFavoritesFilePath() {
   }
 }
 
+function normalizeFavoriteEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+
+  const rawUrl = typeof entry.url === 'string' ? entry.url.trim() : '';
+  if (!rawUrl) return null;
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(rawUrl);
+  } catch (e) {
+    return null;
+  }
+
+  if (!/^https?:$/i.test(parsedUrl.protocol)) {
+    return null;
+  }
+
+  const normalizedUrl = parsedUrl.toString();
+  const rawTitle = typeof entry.title === 'string' ? entry.title.trim() : '';
+  const timestamp = Number.isFinite(Number(entry.timestamp))
+    ? Number(entry.timestamp)
+    : Date.now();
+
+  return {
+    url: normalizedUrl,
+    title: rawTitle || normalizedUrl,
+    timestamp,
+  };
+}
+
+function sanitizeFavoritesList(favorites) {
+  if (!Array.isArray(favorites)) return [];
+
+  const sanitized = [];
+  const seenUrls = new Set();
+
+  favorites.forEach((favorite) => {
+    const normalized = normalizeFavoriteEntry(favorite);
+    if (!normalized || seenUrls.has(normalized.url)) return;
+    seenUrls.add(normalized.url);
+    sanitized.push(normalized);
+  });
+
+  return sanitized;
+}
+
 function loadFavoritesFromDisk() {
   if (favoritesLoaded) return;
   favoritesLoaded = true;
+  favoritesRecoveredFromInvalidFile = false;
   const filePath = getFavoritesFilePath();
   if (!filePath || !fs.existsSync(filePath)) return;
   try {
     const raw = fs.readFileSync(filePath, 'utf8');
     const parsed = JSON.parse(raw);
-    favoritesCache = Array.isArray(parsed && parsed.favorites) ? parsed.favorites : [];
+    const storedFavorites = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed && parsed.favorites) ? parsed.favorites : [];
+    favoritesCache = sanitizeFavoritesList(storedFavorites);
   } catch (e) {
     console.warn('Failed to load favorites:', getStorageErrorMessage(e, 'favorite sites'));
     if (isJsonParseError(e)) {
+      favoritesRecoveredFromInvalidFile = true;
       backupInvalidJsonFile(filePath);
       saveFavoritesToDisk();
     }
@@ -5800,13 +5936,17 @@ function saveFavoritesToDisk() {
   const filePath = getFavoritesFilePath();
   if (!filePath) return;
   try {
+    favoritesCache = sanitizeFavoritesList(favoritesCache);
     const payload = {
       version: 1,
       updatedAt: Date.now(),
       favorites: favoritesCache,
     };
+    const tempFilePath = `${filePath}.tmp`;
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
+    fs.writeFileSync(tempFilePath, JSON.stringify(payload, null, 2), 'utf8');
+    fs.renameSync(tempFilePath, filePath);
+    favoritesRecoveredFromInvalidFile = false;
   } catch (e) {
     console.warn('Failed to save favorites:', e.message || e);
   }
@@ -5823,7 +5963,11 @@ function scheduleFavoritesPersist() {
 ipcMain.handle('get-favorites', async () => {
   try {
     loadFavoritesFromDisk();
-    return { success: true, favorites: favoritesCache };
+    return {
+      success: true,
+      favorites: favoritesCache,
+      recoveredFromInvalidFile: favoritesRecoveredFromInvalidFile,
+    };
   } catch (e) {
     return { success: false, favorites: [] };
   }
@@ -5831,7 +5975,7 @@ ipcMain.handle('get-favorites', async () => {
 
 ipcMain.handle('save-favorites', async (event, favorites) => {
   try {
-    favoritesCache = Array.isArray(favorites) ? favorites : [];
+    favoritesCache = sanitizeFavoritesList(favorites);
     // Save immediately to disk
     saveFavoritesToDisk();
     return { success: true };

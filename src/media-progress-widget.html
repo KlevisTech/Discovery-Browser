@@ -65,12 +65,14 @@
         linear-gradient(180deg, rgba(184, 233, 255, 0.86) 0%, rgba(84, 192, 255, 0.92) 34%, rgba(33, 126, 255, 0.96) 100%);
       box-shadow:
         inset 0 1px 0 rgba(255,255,255,0.22),
-        0 0 14px rgba(54, 162, 255, 0.2);
+        0 0 14px rgba(54, 162, 255, 0.2),
+        0 0 24px rgba(120, 215, 255, 0.14);
       transition: transform 280ms linear;
     }
 
     .progress-fill::before,
-    .progress-fill::after {
+    .progress-fill::after,
+    .progress-glint {
       content: '';
       position: absolute;
       inset: 0;
@@ -96,6 +98,23 @@
       animation: wave 2.6s ease-in-out infinite;
     }
 
+    .progress-glint {
+      inset: -12% auto -12% -26%;
+      width: 34%;
+      border-radius: 999px;
+      background:
+        linear-gradient(90deg,
+          rgba(255,255,255,0) 0%,
+          rgba(255,255,255,0.1) 24%,
+          rgba(255,255,255,0.7) 50%,
+          rgba(191, 238, 255, 0.42) 66%,
+          rgba(255,255,255,0) 100%);
+      filter: blur(0.4px);
+      mix-blend-mode: screen;
+      opacity: 0.82;
+      animation: shimmerSweep 6.8s linear infinite;
+    }
+
     @keyframes drift {
       0% { transform: translateX(-7%); }
       50% { transform: translateX(3%); }
@@ -106,12 +125,31 @@
       0%, 100% { transform: translateY(1px) scaleX(1); opacity: 0.7; }
       50% { transform: translateY(-1px) scaleX(1.03); opacity: 0.95; }
     }
+
+    @keyframes shimmerSweep {
+      0% {
+        transform: translateX(-165%) skewX(-18deg);
+        opacity: 0;
+      }
+      14% {
+        opacity: 0.78;
+      }
+      52% {
+        opacity: 0.92;
+      }
+      100% {
+        transform: translateX(405%) skewX(-18deg);
+        opacity: 0;
+      }
+    }
   </style>
 </head>
 <body class="hidden">
   <div class="progress-shell" aria-hidden="true">
     <div class="progress-track"></div>
-    <div class="progress-fill" id="progress-fill"></div>
+    <div class="progress-fill" id="progress-fill">
+      <div class="progress-glint" aria-hidden="true"></div>
+    </div>
   </div>
 
   <script>

@@ -18,7 +18,7 @@
           ? 'sunset'
           : (rawTheme === 'frost' ? 'solstice' : rawTheme);
         const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'solstice']);
-        const allowedLoadingAnimations = new Set(['static-tv', 'water-fill']);
+        const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'ink-drop']);
         const normalizedShape = rawShape === 'wave' || rawShape === 'curve' ? rawShape : 'default';
         const normalizedLoadingAnimation = allowedLoadingAnimations.has(rawLoadingAnimation) ? rawLoadingAnimation : 'static-tv';
         const normalizedLaunchExperience = rawLaunchExperience === 'site-app' ? 'site-app' : '';
@@ -220,6 +220,7 @@ body {
       --launch-signal-core: rgba(255, 255, 255, 0.2);
       --launch-signal-glow: rgba(255, 255, 255, 0.12);
       --launch-signal-shadow: rgba(0, 0, 0, 0.18);
+      --launch-ink-color: #4361ee;
       --card-final-clip: inset(0 0 0 0 round 24px);
       background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
       border: 6px solid rgba(255, 255, 255, 0.35);
@@ -260,6 +261,11 @@ body {
       padding: 0 2px;
     }
 
+    .card-window.shape-wave .media-hover-control,
+    html[data-card-shape="wave"] .card-window .media-hover-control {
+      top: 12px !important;
+    }
+
     .card-window.shape-curve .card-titlebar,
     html[data-card-shape="curve"] .card-window .card-titlebar {
       height: 78px;
@@ -287,6 +293,7 @@ body {
       --launch-signal-core: rgba(255, 170, 205, 0.24);
       --launch-signal-glow: rgba(255, 100, 154, 0.16);
       --launch-signal-shadow: rgba(70, 10, 30, 0.24);
+      --launch-ink-color: #ff5096;
       --sand-light: rgba(255, 239, 220, 0.96);
       --sand-mid: rgba(237, 182, 176, 0.88);
       --sand-dark: rgba(196, 112, 127, 0.8);
@@ -300,6 +307,7 @@ body {
       --launch-signal-core: rgba(190, 240, 255, 0.24);
       --launch-signal-glow: rgba(64, 190, 255, 0.16);
       --launch-signal-shadow: rgba(8, 30, 70, 0.24);
+      --launch-ink-color: #00c6ff;
       --sand-light: rgba(235, 250, 247, 0.96);
       --sand-mid: rgba(164, 220, 214, 0.86);
       --sand-dark: rgba(92, 149, 188, 0.8);
@@ -313,6 +321,7 @@ body {
       --launch-signal-core: rgba(190, 255, 226, 0.24);
       --launch-signal-glow: rgba(70, 235, 170, 0.16);
       --launch-signal-shadow: rgba(8, 45, 34, 0.24);
+      --launch-ink-color: #119988;
       --sand-light: rgba(241, 250, 227, 0.96);
       --sand-mid: rgba(183, 214, 156, 0.88);
       --sand-dark: rgba(108, 160, 103, 0.8);
@@ -326,6 +335,7 @@ body {
       --launch-signal-core: rgba(255, 226, 178, 0.24);
       --launch-signal-glow: rgba(255, 149, 84, 0.16);
       --launch-signal-shadow: rgba(72, 28, 8, 0.24);
+      --launch-ink-color: #ff9933;
       --sand-light: rgba(255, 244, 208, 0.98);
       --sand-mid: rgba(232, 194, 118, 0.9);
       --sand-dark: rgba(176, 126, 66, 0.82);
@@ -339,6 +349,7 @@ body {
       --launch-signal-core: rgba(180, 192, 220, 0.18);
       --launch-signal-glow: rgba(120, 136, 184, 0.14);
       --launch-signal-shadow: rgba(0, 0, 0, 0.34);
+      --launch-ink-color: #1a1a2e;
       --sand-light: rgba(228, 231, 240, 0.95);
       --sand-mid: rgba(160, 166, 184, 0.84);
       --sand-dark: rgba(90, 99, 124, 0.8);
@@ -352,6 +363,7 @@ body {
       --launch-signal-core: rgba(255, 221, 196, 0.22);
       --launch-signal-glow: rgba(205, 150, 108, 0.15);
       --launch-signal-shadow: rgba(42, 20, 8, 0.24);
+      --launch-ink-color: #6e442c;
       --sand-light: rgba(249, 234, 214, 0.97);
       --sand-mid: rgba(205, 167, 126, 0.86);
       --sand-dark: rgba(134, 97, 68, 0.8);
@@ -365,6 +377,7 @@ body {
       --launch-signal-core: rgba(255, 245, 184, 0.3);
       --launch-signal-glow: rgba(255, 208, 84, 0.18);
       --launch-signal-shadow: rgba(98, 64, 6, 0.18);
+      --launch-ink-color: #ffd24c;
       --sand-light: rgba(255, 249, 215, 0.98);
       --sand-mid: rgba(255, 214, 120, 0.9);
       --sand-dark: rgba(202, 145, 39, 0.82);
@@ -669,6 +682,7 @@ body {
       flex-shrink: 0;
       position: relative;
       z-index: 10;
+      transition: transform 180ms ease, opacity 180ms ease;
     }
 
     .theme-sunset .card-titlebar,
@@ -888,6 +902,10 @@ body {
      }
 
     /* Download ring styling inside card */
+    .download-ring {
+      overflow: visible;
+    }
+
     .download-ring__bg {
       fill: none;
       stroke: rgba(255, 255, 255, 0.25);
@@ -918,6 +936,29 @@ body {
 
     .download-ring.completed .download-ring__icon {
       color: rgba(100, 255, 100, 1);
+    }
+
+    .download-ring__size {
+      position: absolute;
+      top: calc(100% + 2px);
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: max-content;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: rgba(10, 18, 30, 0.82);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 8px;
+      font-weight: 600;
+      line-height: 1.2;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      pointer-events: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .download-ring.completed .download-ring__size {
+      color: rgba(182, 255, 182, 0.96);
     }
 
     @keyframes downloadRingSpin {
@@ -1011,6 +1052,30 @@ body {
       position: relative;
       isolation: isolate;
       animation: contentFadeIn 0.46s ease 0.14s backwards;
+    }
+
+    .card-window.cinema-chrome-active .card-titlebar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 110;
+    }
+
+    .card-window.cinema-chrome-active .media-hover-control {
+      transition: transform 180ms ease, opacity 180ms ease;
+    }
+
+    .card-window.cinema-chrome-active .card-titlebar {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-100%);
+    }
+
+    .card-window.cinema-chrome-active .media-hover-control {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-50%) translateY(calc(-100% - 12px)) translateZ(0) !important;
     }
 
     .card-content::-webkit-scrollbar,
@@ -1403,6 +1468,81 @@ body {
       100% {
         transform: translateY(-200px) scale(0.5);
         opacity: 0;
+      }
+    }
+
+    /* Ink Drop Loading Animation */
+    .card-launch-fill.ink-drop {
+      background: #111;
+    }
+
+    .card-launch-fill.ink-drop::before {
+      opacity: 0;
+      animation: none;
+    }
+
+    .card-launch-fill.ink-drop::after {
+      opacity: 0;
+      animation: none;
+      background: none;
+    }
+
+    .card-launch-fill.ink-drop .ink-drop-container {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      display: flex;
+      justify-content: center;
+    }
+
+    .card-launch-fill.ink-drop .ink-drop-droplet {
+      position: absolute;
+      top: -40px;
+      width: 18px;
+      height: 24px;
+      background: var(--launch-ink-color, #000);
+      border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+      filter: blur(0.5px);
+      animation: inkDropletFall 0.8s cubic-bezier(0.5, 0, 0.7, 0.2) forwards;
+    }
+
+    .card-launch-fill.ink-drop .ink-drop-fill {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 0;
+      background: var(--launch-ink-color, #000);
+      animation: inkFillRise 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      animation-delay: 0.75s;
+    }
+
+    @keyframes inkDropletFall {
+      0% {
+        transform: translateY(0) scaleY(1.3);
+        opacity: 1;
+      }
+      70% {
+        transform: translateY(660px) scaleY(1.1);
+        opacity: 1;
+      }
+      85% {
+        transform: translateY(700px) scaleY(0.6) scaleX(1.4);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(720px) scaleY(0.2) scaleX(2.5);
+        opacity: 0;
+      }
+    }
+
+    @keyframes inkFillRise {
+      0% {
+        height: 0;
+      }
+      100% {
+        height: 100%;
       }
     }
 
@@ -2648,7 +2788,7 @@ body {
         <span style="width:1px; height:16px; background:rgba(255,255,255,0.2); margin:0 3px; border-radius:1px; flex-shrink:0;"></span>
         <!-- Wide view button tooltip reflects actual wide width -->
         <button class="card-button size-btn" id="wide-btn" title="Wide View (1000px)">⇔</button>
-        <button class="card-button size-btn" id="fullscreen-btn" title="Cinema Mode">⛶</button>
+        <button class="card-button size-btn" id="fullscreen-btn" title="Fullscreen Mode">⛶</button>
         <span style="width:1px; height:16px; background:rgba(255,255,255,0.2); margin:0 3px; border-radius:1px; flex-shrink:0;"></span>
         <button class="card-button minimize-btn" id="minimize-btn" title="Minimize">−</button>
         <span style="width:1px; height:16px; background:rgba(255,255,255,0.2); margin:0 3px; border-radius:1px; flex-shrink:0;"></span>
@@ -2672,6 +2812,7 @@ body {
             <path class="download-ring__fg" d="M18 2.5 a 15.5 15.5 0 0 1 0 31 a 15.5 15.5 0 0 1 0 -31" />
           </svg>
           <span class="download-ring__icon" style="position:relative; z-index:1; font-size:13px;">⬇</span>
+          <span class="download-ring__size">0 B</span>
 </button>
       </div>
       <span class="title-text">New Tab</span>
@@ -2735,6 +2876,10 @@ body {
             <div class="bubble"></div>
           </div>
         </div>
+        <div class="ink-drop-container">
+          <div class="ink-drop-droplet"></div>
+          <div class="ink-drop-fill"></div>
+        </div>
       </div>
       <div class="split-container" id="split-container">
         <div class="split-pane split-pane-left">
@@ -2793,6 +2938,8 @@ body {
     const normalizedShape = shape === 'wave' || shape === 'curve' ? shape : 'default';
     const launchExperience = (params.get('launchExperience') || '').toLowerCase();
     const isSiteAppLaunch = launchExperience === 'site-app';
+    const allThemeClasses = ['theme-primary', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-solstice'];
+    let currentThemeKey = normalizedTheme;
 
     let initialUrl = null;
     if (encodedUrl) {
@@ -2806,13 +2953,27 @@ body {
     // Apply theme
     const cardWindowEl = document.querySelector('.card-window');
     const isBubbleMode = params.get('bubble') === '1';
-    if (cardWindowEl) {
-      const allThemeClasses = ['theme-alt', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-solstice'];
+    function normalizeRuntimeThemeKey(themeKey) {
+      const requested = String(themeKey || 'primary').toLowerCase();
+      return requested === 'alt' ? 'sunset' : (requested === 'frost' ? 'solstice' : requested);
+    }
+
+    function applyCardTheme(themeKey) {
+      const nextTheme = normalizeRuntimeThemeKey(themeKey);
+      currentThemeKey = nextTheme;
+      allThemeClasses.forEach((cls) => document.documentElement.classList.remove(cls));
+      document.documentElement.classList.add(`theme-${nextTheme}`);
+      document.documentElement.setAttribute('data-card-theme', nextTheme);
+      if (!cardWindowEl) return;
       allThemeClasses.forEach((cls) => cardWindowEl.classList.remove(cls));
-      cardWindowEl.classList.remove('shape-default', 'shape-wave', 'shape-curve');
-      if (normalizedTheme !== 'primary') {
-        cardWindowEl.classList.add(`theme-${normalizedTheme}`);
+      if (nextTheme !== 'primary') {
+        cardWindowEl.classList.add(`theme-${nextTheme}`);
       }
+    }
+
+    if (cardWindowEl) {
+      cardWindowEl.classList.remove('shape-default', 'shape-wave', 'shape-curve');
+      applyCardTheme(currentThemeKey);
       cardWindowEl.classList.add(`shape-${normalizedShape}`);
       if (isSiteAppLaunch) {
         cardWindowEl.classList.add('site-app-launch');
@@ -2860,6 +3021,7 @@ body {
     ).toLowerCase();
     if (cardLaunchFill) {
       cardLaunchFill.classList.toggle('water-fill', loadingAnimation === 'water-fill');
+      cardLaunchFill.classList.toggle('ink-drop', loadingAnimation === 'ink-drop');
     }
     const mediaHoverControl = document.getElementById('media-hover-control');
     const audioVisualizer = document.getElementById('audio-visualizer');
@@ -2937,9 +3099,9 @@ body {
      let visualLockActive = false;
      let cinemaModeActive = false;
      let cinemaModeTarget = null;
-     let cinemaToggleInFlight = false;
-     let pendingDisplayMode = null;
-     let activeDisplayMode = null;
+    let cinemaToggleInFlight = false;
+    let pendingDisplayMode = null;
+    let activeDisplayMode = null;
      const MEDIA_START_GRACE_MS = 3500;
     const mediaPlayingState = new Map();
     const recentMediaStartAt = new WeakMap();
@@ -2975,6 +3137,7 @@ body {
     }
     const cardDownloadRingBtn = document.getElementById('card-download-ring');
     const cardDownloadRingFg = cardDownloadRingBtn ? cardDownloadRingBtn.querySelector('.download-ring__fg') : null;
+    const cardDownloadRingSize = cardDownloadRingBtn ? cardDownloadRingBtn.querySelector('.download-ring__size') : null;
 
     // Track current page info for bookmarking
     let currentPageTitle = 'New Tab';
@@ -3090,6 +3253,19 @@ body {
         return;
       }
       cardLaunchFill.classList.remove('active', 'site-app-mode', 'site-app-exit');
+    }
+
+    function supportsCinemaChromeAutoHide() {
+      return normalizedShape === 'wave' || normalizedShape === 'curve';
+    }
+
+    function isCinemaChromeAutoHideActive() {
+      return supportsCinemaChromeAutoHide() && isFullscreen && activeDisplayMode === 'cinema';
+    }
+
+    function syncCinemaChromeState() {
+      if (!cardWindowEl) return;
+      cardWindowEl.classList.toggle('cinema-chrome-active', isCinemaChromeAutoHideActive());
     }
 
     function setCardContentVisible(isVisible) {
@@ -3649,6 +3825,81 @@ body {
       `;
     }
 
+    function getCinemaModeValidationScript() {
+      return `
+        (() => {
+          const state = window.__discoveryCinemaMode;
+          const video = state && state.video ? state.video : document.querySelector('video');
+          if (!video) {
+            return { supported: false, blackScreen: true, reason: 'no-video' };
+          }
+
+          const rect = typeof video.getBoundingClientRect === 'function'
+            ? video.getBoundingClientRect()
+            : { width: 0, height: 0 };
+          const fillsViewport = rect.width >= window.innerWidth * 0.6 && rect.height >= window.innerHeight * 0.6;
+          const hasIntrinsicSize = Number(video.videoWidth || 0) > 1 && Number(video.videoHeight || 0) > 1;
+          const readyState = Number(video.readyState || 0);
+
+          if (!fillsViewport) {
+            return { supported: false, blackScreen: true, reason: 'not-filling-viewport' };
+          }
+          if (!hasIntrinsicSize || readyState < 2) {
+            return { supported: false, blackScreen: true, reason: 'no-renderable-frame' };
+          }
+
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 8;
+            canvas.height = 8;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (!ctx) {
+              return { supported: true, blackScreen: false, reason: 'no-canvas-context' };
+            }
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let totalLuma = 0;
+            let maxLuma = 0;
+            let nonDarkPixels = 0;
+            for (let i = 0; i < data.length; i += 4) {
+              const alpha = data[i + 3] / 255;
+              const luma = ((data[i] * 0.2126) + (data[i + 1] * 0.7152) + (data[i + 2] * 0.0722)) * alpha;
+              totalLuma += luma;
+              if (luma > maxLuma) maxLuma = luma;
+              if (luma > 18) nonDarkPixels += 1;
+            }
+            const pixelCount = Math.max(1, data.length / 4);
+            const averageLuma = totalLuma / pixelCount;
+            const blackScreen = averageLuma < 10 && maxLuma < 22 && nonDarkPixels <= 2;
+            return {
+              supported: !blackScreen,
+              blackScreen,
+              reason: blackScreen ? 'sampled-black-frame' : 'frame-visible',
+              averageLuma,
+              maxLuma,
+              nonDarkPixels,
+            };
+          } catch (error) {
+            const message = String(error && error.message || '').toLowerCase();
+            return {
+              supported: false,
+              blackScreen: true,
+              reason: message.includes('tainted') || message.includes('cross-origin')
+                ? 'cross-origin-frame'
+                : 'frame-check-failed'
+            };
+          }
+        })();
+      `;
+    }
+
+    async function detectCinemaBlackScreen(targetWebview) {
+      if (!targetWebview) return false;
+      await new Promise((resolve) => setTimeout(resolve, 850));
+      const validation = await runMediaScript(targetWebview, getCinemaModeValidationScript(), { bypassPending: true });
+      return !!(validation && validation.blackScreen === true);
+    }
+
     async function setCinemaVideoMode(enabled) {
       const targets = enabled
         ? getMediaCommandTargets()
@@ -3670,7 +3921,12 @@ body {
         cinemaModeTarget = null;
         cinemaModeActive = false;
       }
-      return applied;
+      if (!enabled || !applied || !cinemaModeTarget) return applied;
+      const blackScreenDetected = await detectCinemaBlackScreen(cinemaModeTarget);
+      if (blackScreenDetected) {
+        cinemaModeActive = false;
+      }
+      return !blackScreenDetected;
     }
 
     // Detect if both videos are currently playing and optimize buffering
@@ -4176,7 +4432,7 @@ body {
          mediaArtist: payload?.mediaArtist ? String(payload.mediaArtist) : '',
          mediaAlbum: payload?.mediaAlbum ? String(payload.mediaAlbum) : '',
          visualizerStyle: activeVisualizerStyleKey,
-         themeKey: normalizedTheme
+         themeKey: currentThemeKey
        };
      const nextSignature = JSON.stringify(bubblePayload);
       syncMediaProgressFromState(bubblePayload);
@@ -4977,6 +5233,68 @@ body {
       }
     }
 
+    function showCinemaFailureOverlay(message) {
+      const existing = document.getElementById('cinema-failure-overlay');
+      if (existing) existing.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'cinema-failure-overlay';
+      overlay.style.cssText = `
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: min(460px, calc(100vw - 40px));
+        padding: 18px 20px;
+        border-radius: 18px;
+        border: 2px solid rgba(255, 224, 122, 0.9);
+        background:
+          radial-gradient(circle at top, rgba(255, 248, 187, 0.24), transparent 42%),
+          linear-gradient(145deg, rgba(126, 68, 8, 0.98), rgba(80, 34, 0, 0.98));
+        color: rgba(255, 250, 236, 0.99);
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.72), 0 0 24px rgba(255, 214, 92, 0.34);
+        backdrop-filter: blur(12px);
+        z-index: 2147483647;
+        font-size: 12px;
+        line-height: 1.5;
+        -webkit-app-region: no-drag;
+      `;
+      overlay.innerHTML = `
+        <div style="display:flex; align-items:flex-start; gap:12px; justify-content:space-between;">
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:11px; letter-spacing:0.18em; text-transform:uppercase; color:rgba(255, 242, 181, 0.98); margin-bottom:6px;">Video Compatibility</div>
+            <div style="font-size:15px; font-weight:700; margin-bottom:6px; color:white;">This site did not render correctly in expanded mode</div>
+            <div>${message}</div>
+          </div>
+          <button type="button" aria-label="Close compatibility notice" style="
+            flex-shrink:0;
+            padding:4px 8px;
+            border:none;
+            background:rgba(255,255,255,0.18);
+            color:white;
+            border-radius:8px;
+            cursor:pointer;
+            font-size:13px;
+            line-height:1;
+            min-width:28px;
+          ">✕</button>
+        </div>
+      `;
+      const closeBtn = overlay.querySelector('button');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', () => overlay.remove());
+      }
+      (document.documentElement || document.body).appendChild(overlay);
+      setTimeout(() => {
+        if (overlay && overlay.isConnected) overlay.remove();
+      }, 5200);
+    }
+
+    function showExpandedModeUnsupportedNotice(mode) {
+      const normalizedMode = String(mode || '').toLowerCase() === 'full' ? 'full' : 'cinema';
+      const modeLabel = normalizedMode === 'full' ? 'Full' : 'Cinema';
+      showCinemaFailureOverlay(`${modeLabel} mode is not supported on this site right now. Some players do not allow Discovery Browser to pull the video into this view, so you may see a black or unchanged screen. Try the site's own fullscreen button instead.`);
+    }
+
     window.addEventListener('visualizer-widget-command', (event) => {
       const detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
       const action = String(detail.action || '').toLowerCase();
@@ -5007,6 +5325,10 @@ body {
       }
       if (action === 'video-full-toggle') {
         toggleFullMode();
+        return;
+      }
+      if (action === 'theme-apply') {
+        applyCardTheme(value);
         return;
       }
       if (action === 'style-next') {
@@ -5053,6 +5375,9 @@ body {
         cardDownloadRingBtn.setAttribute('aria-hidden', 'true');
         cardDownloadRingBtn.classList.remove('indeterminate');
         cardDownloadRingBtn.classList.remove('completed');
+        if (cardDownloadRingSize) {
+          cardDownloadRingSize.textContent = '';
+        }
         return;
       }
 
@@ -5073,7 +5398,11 @@ body {
         if (iconEl) {
           iconEl.textContent = '✓';
         }
-        cardDownloadRingBtn.title = `${completed.length} download${completed.length > 1 ? 's' : ''} completed - Click to open`;
+        const completedBytes = completed.reduce((sum, d) => sum + (d.totalBytes || d.receivedBytes || 0), 0);
+        if (cardDownloadRingSize) {
+          cardDownloadRingSize.textContent = formatDownloadBytes(completedBytes);
+        }
+        cardDownloadRingBtn.title = `${completed.length} download${completed.length > 1 ? 's' : ''} completed (${formatDownloadBytes(completedBytes)}) - Click to open`;
         return;
       }
 
@@ -5099,7 +5428,10 @@ body {
 
       if (!hasTotal || totalSum <= 0) {
         cardDownloadRingBtn.classList.add('indeterminate');
-        cardDownloadRingBtn.title = 'Downloading...';
+        if (cardDownloadRingSize) {
+          cardDownloadRingSize.textContent = formatDownloadBytes(receivedSum);
+        }
+        cardDownloadRingBtn.title = `Downloading... ${formatDownloadBytes(receivedSum)}`;
         return;
       }
 
@@ -5110,7 +5442,24 @@ body {
       if (cardDownloadRingFg) {
         cardDownloadRingFg.style.strokeDashoffset = String(offset);
       }
-      cardDownloadRingBtn.title = `Downloading... ${Math.round(progress * 100)}%`;
+      if (cardDownloadRingSize) {
+        cardDownloadRingSize.textContent = `${formatDownloadBytes(receivedSum)} / ${formatDownloadBytes(totalSum)}`;
+      }
+      cardDownloadRingBtn.title = `Downloading... ${Math.round(progress * 100)}% (${formatDownloadBytes(receivedSum)} / ${formatDownloadBytes(totalSum)})`;
+    }
+
+    function formatDownloadBytes(bytes) {
+      const value = Number(bytes);
+      if (!Number.isFinite(value) || value <= 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      let size = value;
+      let unitIndex = 0;
+      while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex += 1;
+      }
+      const decimals = size >= 100 || unitIndex === 0 ? 0 : size >= 10 ? 1 : 2;
+      return `${size.toFixed(decimals)} ${units[unitIndex]}`;
     }
 
     function showDownloadToast(filename) {
@@ -6031,7 +6380,7 @@ if (isClosingCard || isMinimizingCard) return;
     fullscreenBtn.addEventListener('click', async () => {
       if (cinemaToggleInFlight) return;
       cinemaToggleInFlight = true;
-      const requestedDisplayMode = pendingDisplayMode === 'full' ? 'full' : 'cinema';
+      const requestedDisplayMode = pendingDisplayMode === 'cinema' ? 'cinema' : 'full';
       pendingDisplayMode = null;
       try {
         if (!isFullscreen) {
@@ -6046,16 +6395,37 @@ if (isClosingCard || isMinimizingCard) return;
           wasWideBeforeFullscreen = isWideView;
 
           await window.cardAPI.toggleFullscreen(cardId, true, requestedDisplayMode);
-          await setCinemaVideoMode(true);
+          
+          let cinemaApplied = true;
+          if (requestedDisplayMode === 'cinema') {
+            cinemaApplied = await setCinemaVideoMode(true);
+          }
+          
           isFullscreen = true;
           activeDisplayMode = requestedDisplayMode;
+          syncCinemaChromeState();
+          if (!cinemaApplied) {
+            showExpandedModeUnsupportedNotice(requestedDisplayMode);
+          }
           fullscreenBtn.style.background = 'rgba(100, 255, 100, 0.8)'; // Green when active
           fullscreenBtn.textContent = '⛶';
           fullscreenBtn.title = requestedDisplayMode === 'full' ? 'Exit Full Mode' : 'Exit Cinema Mode';
           setSplitVisibility();
         } else if (requestedDisplayMode !== activeDisplayMode) {
           await window.cardAPI.toggleFullscreen(cardId, true, requestedDisplayMode);
+          
+          let cinemaApplied = true;
+          if (requestedDisplayMode === 'cinema') {
+            cinemaApplied = await setCinemaVideoMode(true);
+          } else {
+            await setCinemaVideoMode(false);
+          }
+          
           activeDisplayMode = requestedDisplayMode;
+          syncCinemaChromeState();
+          if (requestedDisplayMode === 'cinema' && !cinemaApplied) {
+            showExpandedModeUnsupportedNotice(requestedDisplayMode);
+          }
           fullscreenBtn.title = requestedDisplayMode === 'full' ? 'Exit Full Mode' : 'Exit Cinema Mode';
         } else {
           const restoreBounds = preFullscreenBounds ? { ...preFullscreenBounds } : null;
@@ -6087,13 +6457,14 @@ if (isClosingCard || isMinimizingCard) return;
 
           isFullscreen = false;
           activeDisplayMode = null;
+          syncCinemaChromeState({ reveal: true });
           isWideView = restoreWide;
           preFullscreenBounds = null;
           wasWideBeforeFullscreen = false;
           wideBtn.style.background = isWideView ? 'rgba(100, 255, 100, 0.8)' : 'rgba(100, 200, 255, 0.7)';
           wideBtn.title = isWideView ? `Normal View (${NORMAL_WIDTH}px)` : `Wide View (${WIDE_WIDTH}px)`;
           fullscreenBtn.style.background = 'rgba(100, 200, 255, 0.7)';
-          fullscreenBtn.title = 'Cinema Mode';
+          fullscreenBtn.title = 'Fullscreen Mode';
           setSplitVisibility();
         }
       } catch (err) {
@@ -6138,7 +6509,7 @@ if (isClosingCard || isMinimizingCard) return;
             return;
           }
           // Call the readmode API with current page URL and title
-          await window.cardAPI.openReadmode(currentPageUrl, currentPageTitle, theme);
+          await window.cardAPI.openReadmode(currentPageUrl, currentPageTitle, currentThemeKey);
         } catch (err) {
           console.error('Error opening readmode:', err);
           showSecurityLoadNotice('Failed to open read mode.');
@@ -6252,7 +6623,7 @@ if (cardWindowEl) {
         })();
         const titleForBubble = currentPageTitle || (titleElement ? titleElement.textContent : '') || '';
       await waitForCardAnimationEnd(cardWindowEl, 'springPopOut', 380);
-        await window.cardAPI.minimizeCard(cardId, currentUrlForBubble, titleForBubble, theme);
+        await window.cardAPI.minimizeCard(cardId, currentUrlForBubble, titleForBubble, currentThemeKey);
       } catch (err) {
         console.error('Error minimizing card:', err);
         if (cardWindowEl) cardWindowEl.classList.remove('is-minimizing');
@@ -6511,6 +6882,8 @@ if (cardWindowEl) {
       window.cardAPI.getCardLaunchSizeMode().then((launchMode) => {
         if (launchMode === 'fullscreen') {
           isFullscreen = true;
+          activeDisplayMode = 'full';
+          syncCinemaChromeState();
           setSplitVisibility();
         }
       }).catch(() => {
@@ -6530,7 +6903,7 @@ if (cardWindowEl) {
           if (window.cardAPI && window.cardAPI.openUrlAsBubble) {
             window.cardAPI.openUrlAsBubble(targetUrl, {
               title: targetUrl,
-              themeKey: theme || 'primary',
+              themeKey: currentThemeKey || 'primary',
             }).then(() => {
               // Clear the input after launching as bubble
               urlInput.value = '';

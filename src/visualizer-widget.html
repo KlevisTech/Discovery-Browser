@@ -183,7 +183,7 @@
       top: calc(100% + 6px);
       left: 50%;
       transform: translateX(-50%);
-      width: 336px;
+      width: 344px;
       padding: 12px;
       border-radius: 16px;
       background: linear-gradient(180deg, rgba(13, 23, 48, 0.96), rgba(8, 13, 28, 0.94));
@@ -239,6 +239,8 @@
     .widget-shell.panel-open .control-panel > *:nth-child(8) { transition-delay: 0.25s; }
     .widget-shell.panel-open .control-panel > *:nth-child(9) { transition-delay: 0.28s; }
     .widget-shell.panel-open .control-panel > *:nth-child(10) { transition-delay: 0.31s; }
+    .widget-shell.panel-open .control-panel > *:nth-child(11) { transition-delay: 0.34s; }
+    .widget-shell.panel-open .control-panel > *:nth-child(12) { transition-delay: 0.37s; }
 
     @media (prefers-reduced-motion: reduce) {
       .widget-shell,
@@ -288,6 +290,18 @@
       background: linear-gradient(135deg, rgba(255, 214, 92, 0.22), rgba(104, 184, 255, 0.16));
     }
 
+    .control-btn.theme {
+      grid-column: span 1;
+      background: linear-gradient(135deg, rgba(173, 124, 255, 0.22), rgba(104, 184, 255, 0.18));
+      box-shadow: 0 8px 18px rgba(7, 14, 31, 0.2);
+      font-size: 11px;
+      letter-spacing: 0.02em;
+    }
+
+    .control-btn.double {
+      grid-column: span 2;
+    }
+
     .control-btn.flames[disabled] {
       opacity: 0.56;
       cursor: default;
@@ -303,7 +317,7 @@
     }
 
     .remaining-display {
-      grid-column: span 2;
+      grid-column: span 1;
       min-height: 36px;
       border-radius: 10px;
       background: rgba(255, 255, 255, 0.08);
@@ -663,11 +677,12 @@
       <button class="control-btn wide" id="play-toggle-btn" type="button">Pause</button>
       <div class="remaining-display" id="remaining-display">--:--</div>
       <button class="control-btn wide" id="mute-btn" type="button">Mute</button>
+      <button class="control-btn theme" id="theme-cycle-btn" type="button">Theme</button>
       <button class="control-btn wide" id="seek-back-btn" type="button">Rewind 10s</button>
       <button class="control-btn wide" id="seek-forward-btn" type="button">Forward 10s</button>
-      <button class="control-btn lock" id="visual-lock-btn" type="button">Lock View</button>
       <button class="control-btn flames" id="side-flames-btn" type="button">Flames Off</button>
       <button class="control-btn flames" id="media-progress-btn" type="button">Progress On</button>
+      <button class="control-btn lock double" id="visual-lock-btn" type="button">Lock View</button>
       <button class="control-btn cinema" id="cinema-btn" type="button">Cinema</button>
       <button class="control-btn video-full" id="video-full-btn" type="button">Full</button>
       <input class="volume-slider" id="volume-slider" type="range" min="0" max="100" value="100" />
@@ -720,6 +735,7 @@
     const playToggleBtn = document.getElementById('play-toggle-btn');
     const remainingDisplay = document.getElementById('remaining-display');
     const muteBtn = document.getElementById('mute-btn');
+    const themeCycleBtn = document.getElementById('theme-cycle-btn');
     const seekBackBtn = document.getElementById('seek-back-btn');
     const seekForwardBtn = document.getElementById('seek-forward-btn');
     const visualLockBtn = document.getElementById('visual-lock-btn');
@@ -730,6 +746,7 @@
     const volumeSlider = document.getElementById('volume-slider');
     const themeClasses = ['theme-primary', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-solstice'];
     const styleClasses = ['style-bars', 'style-pulse', 'style-ladder', 'style-orbit'];
+    const themeCycle = ['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'solstice'];
     let widgetState = {
       isPlaying: false,
       hasDuration: false,
@@ -747,6 +764,7 @@
       cardShape: 'default',
       sideFlamesEnabled: false,
       mediaProgressEnabled: true,
+      themeKey: initialTheme,
     };
     let remainingTickTimer = null;
     let panelResizeTimer = null;
@@ -787,6 +805,27 @@
         lockScene.classList.add(`shape-${normalized}`);
       }
       document.body.setAttribute('data-card-shape', normalized);
+    }
+
+    function formatThemeLabel(themeKey) {
+      const normalized = String(themeKey || 'primary').toLowerCase();
+      switch (normalized) {
+        case 'sunset': return 'Sunset';
+        case 'ocean': return 'Ocean';
+        case 'emerald': return 'Emerald';
+        case 'amber': return 'Amber';
+        case 'midnight': return 'Midnight';
+        case 'cocoa': return 'Cocoa';
+        case 'solstice': return 'Solstice';
+        default: return 'Primary';
+      }
+    }
+
+    function getNextThemeKey(themeKey) {
+      const normalized = String(themeKey || 'primary').toLowerCase();
+      const currentIndex = themeCycle.indexOf(normalized);
+      if (currentIndex === -1) return themeCycle[0];
+      return themeCycle[(currentIndex + 1) % themeCycle.length];
     }
 
     function formatRemaining(totalSeconds) {
@@ -893,6 +932,13 @@
       if (visualLockBtn) {
         visualLockBtn.textContent = widgetState.visualLock ? 'Lock On' : 'Lock View';
       }
+      if (themeCycleBtn) {
+        const activeThemeLabel = formatThemeLabel(widgetState.themeKey || initialTheme);
+        const nextThemeLabel = formatThemeLabel(getNextThemeKey(widgetState.themeKey || initialTheme));
+        themeCycleBtn.textContent = activeThemeLabel;
+        themeCycleBtn.title = `Switch theme to ${nextThemeLabel}`;
+        themeCycleBtn.setAttribute('aria-label', `Switch theme to ${nextThemeLabel}`);
+      }
       if (sideFlamesBtn) {
         const shapeKey = String(widgetState.cardShape || 'default').toLowerCase();
         const flamesAvailable = shapeKey === 'wave' || shapeKey === 'curve';
@@ -997,6 +1043,15 @@
       muteBtn.addEventListener('click', (event) => {
         event.stopPropagation();
         sendAction('mute');
+      });
+    }
+
+    if (themeCycleBtn) {
+      themeCycleBtn.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        const nextTheme = getNextThemeKey(widgetState.themeKey || initialTheme);
+        applyState({ themeKey: nextTheme });
+        await sendAction('theme-cycle', nextTheme);
       });
     }
 

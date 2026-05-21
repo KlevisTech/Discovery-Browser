@@ -398,6 +398,22 @@ body.startup-opening .app-container::before {
   stroke-linecap: round;
   stroke-dasharray: 97.4;
   stroke-dashoffset: 97.4;
+  transition: stroke-dashoffset 0.3s ease;
+}
+
+.download-ring__size {
+  position: absolute;
+  bottom: 0px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 7px;
+  font-weight: 700;
+  color: white;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
   /* 0% */
   transition: stroke-dashoffset 0.15s ease;
   transform: rotate(-90deg);

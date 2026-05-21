@@ -187,6 +187,12 @@ class DiscoveryBrowser {
         description: 'Water rising from bottom with bubbles and wave motion.',
         preview: 'linear-gradient(180deg, rgba(115,166,255,0.6) 0%, rgba(88,216,255,0.7) 30%, rgba(67,97,238,0.8) 60%, rgba(240,124,217,0.6) 100%)',
       },
+      {
+        key: 'ink-drop',
+        name: 'Ink Drop',
+        description: 'A single drop falls and triggers a rising tide of ink.',
+        preview: 'linear-gradient(180deg, #1a1a1a 0%, #000000 100%)',
+      },
     ];
 
     // Layout constants
@@ -335,7 +341,7 @@ class DiscoveryBrowser {
     }
 
     this.loadSearchEngine();
-    this.loadCardTheme();
+    await this.loadCardTheme();
     this.loadLoadingAnimation();
     this.loadCardLaunchSizeMode();
     await this.loadCardShape();
@@ -544,6 +550,9 @@ class DiscoveryBrowser {
       window.electronAPI.onDownloadStarted((payload) => this.onDownloadStarted(payload));
       window.electronAPI.onDownloadProgress((payload) => this.onDownloadProgress(payload));
       window.electronAPI.onDownloadDone((payload) => this.onDownloadDone(payload));
+    }
+    if (window.electronAPI && window.electronAPI.onCardThemeChanged) {
+      window.electronAPI.onCardThemeChanged((themeKey) => this.syncCardThemeFromMain(themeKey));
     }
 
     // Listen to web notifications
@@ -1190,14 +1199,20 @@ class DiscoveryBrowser {
     this.applySearchEngineToUI();
   }
 
-  loadCardTheme() {
+  async loadCardTheme() {
     try {
-      const saved = localStorage.getItem('cardThemeKey');
+      let resolvedTheme = null;
+      if (window.electronAPI && window.electronAPI.getCardTheme) {
+        resolvedTheme = await window.electronAPI.getCardTheme();
+      }
+      const saved = resolvedTheme || localStorage.getItem('cardThemeKey');
       const normalizedSaved = saved === 'frost' ? 'solstice' : saved;
       if (normalizedSaved && this.cardThemes.some(t => t.key === normalizedSaved)) {
         this.cardThemeKey = normalizedSaved;
       }
-      // Sync theme to main process for external URL cards
+      try {
+        localStorage.setItem('cardThemeKey', this.cardThemeKey);
+      } catch (e) { }
       if (window.electronAPI && window.electronAPI.setCardTheme) {
         window.electronAPI.setCardTheme(this.cardThemeKey);
       }
@@ -1229,6 +1244,15 @@ class DiscoveryBrowser {
     } catch (e) { }
     this.renderThemeOptions();
     this.showThemeToast(key);
+  }
+
+  syncCardThemeFromMain(key) {
+    if (!this.cardThemes.some(t => t.key === key)) return;
+    this.cardThemeKey = key;
+    try {
+      localStorage.setItem('cardThemeKey', key);
+    } catch (e) { }
+    this.renderThemeOptions();
   }
 
   setLoadingAnimation(key) {
@@ -2771,21 +2795,74 @@ class DiscoveryBrowser {
     // Legacy support - folders are saved instead
   }
 
+  sanitizeFavoriteBookmarks(favorites) {
+    if (!Array.isArray(favorites)) return [];
+
+    const seenUrls = new Set();
+    const sanitized = [];
+
+    favorites.forEach((favorite) => {
+      if (!favorite || typeof favorite !== 'object') return;
+
+      const rawUrl = typeof favorite.url === 'string' ? favorite.url.trim() : '';
+      if (!rawUrl) return;
+
+      let normalizedUrl;
+      try {
+        const parsedUrl = new URL(this.normalizeUrl(rawUrl));
+        if (!/^https?:$/i.test(parsedUrl.protocol)) return;
+        normalizedUrl = parsedUrl.toString();
+      } catch (e) {
+        return;
+      }
+
+      if (seenUrls.has(normalizedUrl)) return;
+      seenUrls.add(normalizedUrl);
+
+      const rawTitle = typeof favorite.title === 'string' ? favorite.title.trim() : '';
+      const timestamp = Number.isFinite(Number(favorite.timestamp))
+        ? Number(favorite.timestamp)
+        : Date.now();
+
+      sanitized.push({
+        url: normalizedUrl,
+        title: rawTitle || normalizedUrl,
+        timestamp
+      });
+    });
+
+    return sanitized.slice(0, this.maxFavoriteBookmarks);
+  }
+
   async loadFavoriteBookmarks() {
     try {
+      let loadedFromLocalStorage = false;
+
       // Try IPC first (persistent disk storage via main process)
       if (window.electronAPI && window.electronAPI.getFavorites) {
         const result = await window.electronAPI.getFavorites();
         if (result && result.success && Array.isArray(result.favorites)) {
-          this.favoriteBookmarks = result.favorites.slice(0, this.maxFavoriteBookmarks);
+          this.favoriteBookmarks = this.sanitizeFavoriteBookmarks(result.favorites);
+          if (result.recoveredFromInvalidFile) {
+            const saved = localStorage.getItem('favoriteBookmarks');
+            const parsed = saved ? JSON.parse(saved) : [];
+            const localFavorites = this.sanitizeFavoriteBookmarks(parsed);
+            if (localFavorites.length > 0) {
+              this.favoriteBookmarks = localFavorites;
+              loadedFromLocalStorage = true;
+            }
+          }
           this.syncFavoriteBookmarksWithFolders();
+          if (loadedFromLocalStorage) {
+            this.saveFavoriteBookmarks();
+          }
           return;
         }
       }
       // Fallback to localStorage
       const saved = localStorage.getItem('favoriteBookmarks');
       const parsed = saved ? JSON.parse(saved) : [];
-      this.favoriteBookmarks = Array.isArray(parsed) ? parsed.slice(0, this.maxFavoriteBookmarks) : [];
+      this.favoriteBookmarks = this.sanitizeFavoriteBookmarks(parsed);
       this.syncFavoriteBookmarksWithFolders();
     } catch (e) {
       console.warn('Failed to load favorite bookmarks:', e);
@@ -2795,7 +2872,7 @@ class DiscoveryBrowser {
 
   saveFavoriteBookmarks() {
     try {
-      this.favoriteBookmarks = this.favoriteBookmarks.slice(0, this.maxFavoriteBookmarks);
+      this.favoriteBookmarks = this.sanitizeFavoriteBookmarks(this.favoriteBookmarks);
       // Save to disk via main process (survives app restarts)
       if (window.electronAPI && window.electronAPI.saveFavorites) {
         window.electronAPI.saveFavorites(this.favoriteBookmarks).catch((e) => {
