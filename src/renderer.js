@@ -85,7 +85,7 @@ class DiscoveryBrowser {
     this.cardThemes = [
       {
         key: 'primary',
-        name: 'Nebula Blue',
+        name: 'Nebula',
         description: 'Original cool blue and violet glow.',
         preview: 'linear-gradient(135deg, rgba(102,126,234,0.58), rgba(240,147,251,0.58))',
       },
@@ -109,7 +109,7 @@ class DiscoveryBrowser {
       },
       {
         key: 'amber',
-        name: 'Golden Flame',
+        name: 'Amber Glow',
         description: 'Amber-orange glow for warm contrast.',
         preview: 'linear-gradient(135deg, rgba(255,153,102,0.56), rgba(255,94,98,0.52))',
       },
@@ -175,6 +175,12 @@ class DiscoveryBrowser {
       },
     ];
     this.loadingAnimations = [
+      {
+        key: 'none',
+        name: 'None',
+        description: 'Skip the fullscreen launch animation and keep only the top loading strip.',
+        preview: 'linear-gradient(180deg, rgba(16,20,32,0.92) 0%, rgba(10,12,20,0.98) 100%)',
+      },
       {
         key: 'static-tv',
         name: 'Static TV',
@@ -922,39 +928,55 @@ class DiscoveryBrowser {
     };
 
     console.warn('[Settings] Tab buttons - History:', !!tabHistory, 'Bookmarks:', !!tabBookmarks, 'Downloads:', !!tabDownloads, 'Search:', !!tabSearch, 'WindowSize:', !!tabWindowSize, 'WindowShape:', !!tabWindowShape);
-    if (tabHistory && tabBookmarks && tabDownloads && tabSearch && tabWindowSize && tabWindowShape && tabThemes && tabDeleteData) {
+    if (tabHistory) {
       tabHistory.addEventListener('click', () => {
         toggleSettingsTab('history');
       });
+    }
 
+    if (tabBookmarks) {
       tabBookmarks.addEventListener('click', () => {
         toggleSettingsTab('bookmarks');
       });
+    }
 
+    if (tabDownloads) {
       tabDownloads.addEventListener('click', () => {
         toggleSettingsTab('downloads');
       });
+    }
 
+    if (tabSearch) {
       tabSearch.addEventListener('click', () => {
         toggleSettingsTab('search');
       });
+    }
 
+    if (tabWindowSize) {
       tabWindowSize.addEventListener('click', () => {
         toggleSettingsTab('window-size');
       });
+    }
 
+    if (tabWindowShape) {
       tabWindowShape.addEventListener('click', () => {
         toggleSettingsTab('window-shape');
       });
+    }
 
+    if (tabThemes) {
       tabThemes.addEventListener('click', () => {
         toggleSettingsTab('themes');
       });
+    }
 
+    if (tabLoadingAnimation) {
       tabLoadingAnimation.addEventListener('click', () => {
         toggleSettingsTab('loading-animation');
       });
+    }
 
+    if (tabDeleteData) {
       tabDeleteData.addEventListener('click', () => {
         toggleSettingsTab('delete-data');
       });
@@ -4207,8 +4229,6 @@ class DiscoveryBrowser {
     const validArticles = articles.filter(a => a.title && a.title !== '[Removed]');
     const offset = this.newsPage * 4;
     const featuredArticles = validArticles.slice(offset, offset + 4);
-    const scrollArticles = validArticles.slice(offset + 4, offset + 20);
-
     // Update pagination button states
     const maxPage = Math.max(0, Math.floor((validArticles.length - 1) / 4));
     if (this.newsPrevBtn) this.newsPrevBtn.disabled = this.newsPage <= 0;
@@ -4223,25 +4243,13 @@ class DiscoveryBrowser {
     });
 
     this.newsContainer.appendChild(featuredRow);
-
-    // Horizontal scroll strip (remaining cards)
-    if (scrollArticles.length > 0) {
-      const scrollRow = document.createElement('div');
-      scrollRow.className = 'news-scroll-row';
-
-      scrollArticles.forEach(article => {
-        scrollRow.appendChild(this._createNewsCard(article, 'scroll'));
-      });
-
-      this.newsContainer.appendChild(scrollRow);
-    }
   }
 
   _createNewsCard(article, variant) {
     const card = document.createElement('div');
     card.className = `news-card news-card--${variant}`;
 
-    if (article.imageUrl) {
+    if (variant === 'featured' && article.imageUrl) {
       const imgWrapper = document.createElement('div');
       imgWrapper.className = 'news-card-img-wrapper';
       const img = document.createElement('img');

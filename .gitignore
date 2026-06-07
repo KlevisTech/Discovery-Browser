@@ -29,3 +29,4 @@ Thumbs.db
 
 # Electron
 electron-builder.config.js
+.aider*

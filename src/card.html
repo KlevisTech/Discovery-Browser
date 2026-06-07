@@ -18,7 +18,7 @@
           ? 'sunset'
           : (rawTheme === 'frost' ? 'solstice' : rawTheme);
         const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'solstice']);
-        const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'ink-drop']);
+        const allowedLoadingAnimations = new Set(['none', 'static-tv', 'water-fill', 'ink-drop']);
         const normalizedShape = rawShape === 'wave' || rawShape === 'curve' ? rawShape : 'default';
         const normalizedLoadingAnimation = allowedLoadingAnimations.has(rawLoadingAnimation) ? rawLoadingAnimation : 'static-tv';
         const normalizedLaunchExperience = rawLaunchExperience === 'site-app' ? 'site-app' : '';
@@ -1132,6 +1132,10 @@ body {
 
     .card-launch-fill.active {
       display: block;
+    }
+
+    html[data-loading-animation="none"] .card-launch-fill {
+      display: none !important;
     }
 
     .card-launch-fill.site-app-mode {
@@ -3019,7 +3023,9 @@ body {
     const loadingAnimation = String(
       document.documentElement.getAttribute('data-loading-animation') || 'static-tv'
     ).toLowerCase();
+    const usesLaunchFill = loadingAnimation !== 'none';
     if (cardLaunchFill) {
+      cardLaunchFill.classList.toggle('none', loadingAnimation === 'none');
       cardLaunchFill.classList.toggle('water-fill', loadingAnimation === 'water-fill');
       cardLaunchFill.classList.toggle('ink-drop', loadingAnimation === 'ink-drop');
     }
@@ -3054,6 +3060,9 @@ body {
     const savedSideFlamesPreference = localStorage.getItem(SIDE_FLAMES_STORAGE_KEY);
     if (savedSideFlamesPreference === 'true' || savedSideFlamesPreference === 'false') {
       sideFlamesEnabled = savedSideFlamesPreference === 'true';
+    } else {
+      // Default new installs and unset profiles to off, but preserve future user changes.
+      localStorage.setItem(SIDE_FLAMES_STORAGE_KEY, 'false');
     }
     const savedMediaProgressPreference = localStorage.getItem(MEDIA_PROGRESS_STORAGE_KEY);
     if (savedMediaProgressPreference === 'true' || savedMediaProgressPreference === 'false') {
@@ -3232,6 +3241,10 @@ body {
 
     function setLaunchFillVisible(isActive) {
       if (!cardLaunchFill) return;
+      if (!usesLaunchFill) {
+        cardLaunchFill.classList.remove('active', 'site-app-mode', 'site-app-exit');
+        return;
+      }
       if (launchFillHideTimer) {
         clearTimeout(launchFillHideTimer);
         launchFillHideTimer = null;
