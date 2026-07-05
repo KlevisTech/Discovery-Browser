@@ -22,6 +22,75 @@ if (!isChallengeUrl) {
 }
 
 console.log('Webview preload script loaded - preserving browser popup behavior for challenge flows');
+// Disable WebAuthn/passkey prompts in site webviews. In unsigned Electron builds,
+// Windows surfaces these as USB security-key dialogs from electron.exe, which traps
+// normal password sign-in flows on sites such as Instagram/Meta.
+(function disableWebAuthnPrompts() {
+  const script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.textContent = `
+    (() => {
+      try {
+        const rejectWebAuthn = () => Promise.reject(new DOMException('Passkey sign-in is disabled in this browser window. Use password or another sign-in method.', 'NotAllowedError'));
+        const wrapCredentialMethod = (methodName) => {
+          try {
+            if (!window.CredentialsContainer || !CredentialsContainer.prototype) return;
+            const nativeMethod = CredentialsContainer.prototype[methodName];
+            if (typeof nativeMethod !== 'function' || nativeMethod.__discoveryWebAuthnWrapped) return;
+            const wrapped = function(options) {
+              try {
+                if (options && options.publicKey) return rejectWebAuthn();
+              } catch (e) {}
+              return nativeMethod.apply(this, arguments);
+            };
+            wrapped.__discoveryWebAuthnWrapped = true;
+            Object.defineProperty(CredentialsContainer.prototype, methodName, {
+              configurable: true,
+              writable: true,
+              value: wrapped,
+            });
+          } catch (e) {}
+        };
+
+        wrapCredentialMethod('get');
+        wrapCredentialMethod('create');
+
+        if (window.PublicKeyCredential) {
+          try {
+            Object.defineProperty(PublicKeyCredential, 'isConditionalMediationAvailable', {
+              configurable: true,
+              writable: true,
+              value: () => Promise.resolve(false),
+            });
+          } catch (e) {}
+          try {
+            Object.defineProperty(PublicKeyCredential, 'isUserVerifyingPlatformAuthenticatorAvailable', {
+              configurable: true,
+              writable: true,
+              value: () => Promise.resolve(false),
+            });
+          } catch (e) {}
+        }
+      } catch (e) {}
+    })();
+  `;
+
+  const inject = () => {
+    try {
+      const target = document.documentElement || document.head;
+      if (!target) return false;
+      target.prepend(script);
+      script.remove();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  if (!inject()) {
+    document.addEventListener('DOMContentLoaded', inject, { once: true });
+  }
+})();
 
 // Intercept Web Notification API and forward to the host
 let ipcRenderer = null;

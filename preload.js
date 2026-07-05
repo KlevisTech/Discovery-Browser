@@ -206,6 +206,6 @@ const electronAPI = {
   printPage: () => ipcRenderer.invoke('window-print'),
   // Callbacks
   onWindowStateChanged: (callback) => ipcRenderer.on('window-state-changed', (event, state) => callback(state)),
+  onAdRedirectBlocked: (callback) => ipcRenderer.on('ad-redirect-blocked', (event, host, referrer, url) => callback(host, referrer, url)),
 };
-// Expose to renderer process
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

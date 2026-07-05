@@ -90,6 +90,10 @@
       --widget-bg: linear-gradient(180deg, rgba(18, 33, 66, 0.9), rgba(8, 15, 31, 0.86));
     }
 
+    .widget-shell.theme-crimson {
+      --widget-bg: linear-gradient(180deg, rgba(70, 8, 20, 0.92), rgba(32, 5, 12, 0.88));
+    }
+
     .widget-shell.theme-ocean {
       --widget-bg: linear-gradient(180deg, rgba(14, 33, 67, 0.9), rgba(7, 16, 34, 0.86));
     }
@@ -371,6 +375,12 @@
       background:
         radial-gradient(circle at 50% 18%, rgba(255, 178, 216, 0.16), transparent 24%),
         linear-gradient(180deg, rgba(30, 5, 18, 0.988) 0%, rgba(18, 4, 11, 0.992) 100%);
+    }
+
+    .lock-scene.theme-crimson {
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255, 128, 148, 0.18), transparent 24%),
+        linear-gradient(180deg, rgba(42, 4, 12, 0.988) 0%, rgba(22, 4, 8, 0.992) 100%);
     }
 
     .lock-scene.theme-ocean {
@@ -744,9 +754,9 @@
     const cinemaBtn = document.getElementById('cinema-btn');
     const videoFullBtn = document.getElementById('video-full-btn');
     const volumeSlider = document.getElementById('volume-slider');
-    const themeClasses = ['theme-primary', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-solstice'];
+    const themeClasses = ['theme-primary', 'theme-sunset', 'theme-crimson', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-solstice'];
     const styleClasses = ['style-bars', 'style-pulse', 'style-ladder', 'style-orbit'];
-    const themeCycle = ['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'solstice'];
+    const themeCycle = ['primary', 'sunset', 'crimson', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'solstice'];
     let widgetState = {
       isPlaying: false,
       hasDuration: false,
@@ -811,6 +821,7 @@
       const normalized = String(themeKey || 'primary').toLowerCase();
       switch (normalized) {
         case 'sunset': return 'Rose Ember';
+        case 'crimson': return 'Crimson';
         case 'ocean': return 'Tide Cyan';
         case 'emerald': return 'Emerald Mint';
         case 'amber': return 'Amber Glow';

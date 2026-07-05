@@ -1534,6 +1534,7 @@
       webviewHasMedia: false,
       streamWebview: null,
       autoPromotedWebMediaUrl: '',
+      lastDetectedStreamUrl: '',
       isMuted: false,
       lastStatusMessage: '',
       currentPage: 1,
@@ -1636,6 +1637,89 @@
          || lower.includes('/manifest')
          || lower.includes('/playlist')
          || lower.includes('/stream');
+     }
+
+     function isYouTubeLikeUrl(targetUrl) {
+       try {
+         const host = new URL(String(targetUrl || '')).hostname.toLowerCase();
+         return host === 'youtube.com'
+           || host.endsWith('.youtube.com')
+           || host === 'youtu.be'
+           || host === 'googlevideo.com'
+           || host.endsWith('.googlevideo.com')
+           || host === 'ytimg.com'
+           || host.endsWith('.ytimg.com');
+       } catch (e) {
+         return false;
+       }
+     }
+     function getEmbeddableMediaPageUrl(targetUrl) {
+       try {
+         const parsed = new URL(String(targetUrl || ''));
+         const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+         if (host === 'youtu.be') {
+           const id = parsed.pathname.split('/').filter(Boolean)[0];
+           return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1&playsinline=1&rel=0` : '';
+         }
+         if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
+           let id = parsed.searchParams.get('v') || '';
+           const parts = parsed.pathname.split('/').filter(Boolean);
+           if (!id && (parts[0] === 'shorts' || parts[0] === 'embed')) id = parts[1] || '';
+           return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1&playsinline=1&rel=0` : '';
+         }
+         if (host === 'vimeo.com' || host.endsWith('.vimeo.com')) {
+           const id = parsed.pathname.split('/').filter((part) => /^\d+$/.test(part)).pop() || '';
+           return id ? `https://player.vimeo.com/video/${encodeURIComponent(id)}?autoplay=1` : '';
+         }
+         if (host === 'dailymotion.com' || host.endsWith('.dailymotion.com') || host === 'dai.ly') {
+           const parts = parsed.pathname.split('/').filter(Boolean);
+           const id = host === 'dai.ly' ? parts[0] : (parts[0] === 'video' ? parts[1] : '');
+           return id ? `https://www.dailymotion.com/embed/video/${encodeURIComponent(id)}?autoplay=1` : '';
+         }
+       } catch (e) { }
+       return '';
+     }
+     async function focusWebviewOnBestMedia() {
+       if (state.mode !== 'web' || !state.webviewReady || !state.streamWebview) return false;
+       try {
+         return await state.streamWebview.executeJavaScript(`
+           (() => {
+             const mediaNodes = Array.from(document.querySelectorAll('video, audio'));
+             const bestVideo = mediaNodes
+               .filter((node) => node && node.tagName === 'VIDEO')
+               .sort((a, b) => ((b.videoWidth || b.clientWidth || 0) * (b.videoHeight || b.clientHeight || 0)) - ((a.videoWidth || a.clientWidth || 0) * (a.videoHeight || a.clientHeight || 0)))[0] || null;
+             const bestAudio = mediaNodes.find((node) => node && node.tagName === 'AUDIO') || null;
+             const bestFrame = Array.from(document.querySelectorAll('iframe'))
+               .find((frame) => /youtube|youtu\.be|vimeo|dailymotion|wistia|twitch|player|video/i.test(String(frame.src || frame.title || frame.className || frame.id || ''))) || null;
+             const target = bestVideo || bestFrame || bestAudio;
+             if (!target) return false;
+
+             let style = document.getElementById('discovery-media-player-focus-style');
+             if (!style) {
+               style = document.createElement('style');
+               style.id = 'discovery-media-player-focus-style';
+               document.documentElement.appendChild(style);
+             }
+             style.textContent = [
+               'html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; height: 100% !important; overflow: hidden !important; background: #000 !important; }',
+               'video, iframe { position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; min-width: 100vw !important; min-height: 100vh !important; transform: none !important; opacity: 1 !important; visibility: visible !important; display: block !important; z-index: 2147483647 !important; background: #000 !important; }',
+               'video { object-fit: contain !important; }',
+               'audio { position: fixed !important; left: 50% !important; top: 50% !important; transform: translate(-50%, -50%) !important; z-index: 2147483647 !important; visibility: visible !important; }'
+             ].join('\n');
+
+             try {
+               if (target.tagName === 'VIDEO') {
+                 target.setAttribute('controls', 'controls');
+                 target.setAttribute('playsinline', '');
+                 if (target.paused) target.play().catch(() => {});
+               }
+             } catch (e) {}
+             return true;
+           })();
+         `, true);
+       } catch (e) {
+         return false;
+       }
      }
 
      function setActiveStage(mode) {
@@ -2214,11 +2298,14 @@
             if (!active) {
               return { hasMedia: false, title };
             }
+            const sourceNode = active.querySelector ? active.querySelector('source[src]') : null;
+            const poster = active.poster || '';
             return {
               hasMedia: true,
               title,
               paused: !!active.paused,
-              currentSrc: String(active.currentSrc || active.src || ''),
+              currentSrc: String(active.currentSrc || active.src || (sourceNode && sourceNode.src) || ''),
+              poster: String(poster || ''),
               currentTime: Number(active.currentTime || 0),
               duration: Number(active.duration || 0),
               volume: typeof active.volume === 'number' ? active.volume : 1,
@@ -2246,6 +2333,7 @@
           return;
         }
         if (state.webviewHasMedia) {
+          focusWebviewOnBestMedia();
           currentTimeEl.textContent = formatTime(result.currentTime);
           durationTimeEl.textContent = formatTime(result.duration);
           if (Number.isFinite(result.duration) && result.duration > 0) {
@@ -2306,12 +2394,15 @@ window.setTimeout(() => { pollWebviewMediaState(); }, 120);
        state.currentSourceUrl = sourceUrl;
        state.currentSourceLabel = label || sourceUrl;
        state.currentSourceTitle = toDisplayTitle(title, label || 'Streaming page');
+       state.lastDetectedStreamUrl = '';
+       state.autoPromotedWebMediaUrl = '';
        setActiveStage('web');
        setSummary(state.currentSourceTitle, label || sourceUrl);
        setStatus('Loading streaming page');
        const streamWebview = ensureStreamWebview();
+       const playbackUrl = getEmbeddableMediaPageUrl(sourceUrl) || sourceUrl;
        try {
-         streamWebview.src = sourceUrl;
+         streamWebview.src = playbackUrl;
        } catch (e) {
          setStatus('Could not load that link');
        }
@@ -2454,11 +2545,13 @@ updateProgressFromNative(player);
         state.webviewPollTimer = window.setInterval(() => {
           pollWebviewMediaState();
         }, 1200);
+        focusWebviewOnBestMedia();
         pollWebviewMediaState();
       });
 
       streamWebview.addEventListener('did-finish-load', () => {
         setStatus('Streaming page loaded');
+        focusWebviewOnBestMedia();
         pollWebviewMediaState();
       });
 
@@ -2818,34 +2911,30 @@ updateProgressFromNative(player);
     // Listen for detected streaming URLs from main process
     if (mediaAPI && typeof mediaAPI.onStreamDetected === 'function') {
       mediaAPI.onStreamDetected((streamUrl) => {
-        console.log('[MediaPlayer] Stream detected, loading:', streamUrl);
+        console.log('[MediaPlayer] Stream detected:', streamUrl);
         try {
-          // Determine media type from URL extension or content
-          const ext = getPathExtension(streamUrl);
+          const normalizedStreamUrl = normalizeUrlInput(streamUrl);
+          if (!normalizedStreamUrl || state.mode !== 'web') return;
+          if (isYouTubeLikeUrl(normalizedStreamUrl)) return;
+          if (normalizedStreamUrl === state.lastDetectedStreamUrl || normalizedStreamUrl === state.autoPromotedWebMediaUrl) return;
+          state.lastDetectedStreamUrl = normalizedStreamUrl;
+          state.autoPromotedWebMediaUrl = normalizedStreamUrl;
+
+          const ext = getPathExtension(normalizedStreamUrl);
           const isAudio = AUDIO_EXTENSIONS.has(ext);
-          const isVideo = VIDEO_EXTENSIONS.has(ext) || !isAudio;
           const mode = isAudio ? 'audio' : 'video';
-          
-          // Extract filename from URL for display
-          let title = streamUrl;
+          let title = normalizedStreamUrl;
           try {
-            const url = new URL(streamUrl);
+            const url = new URL(normalizedStreamUrl);
             const pathname = url.pathname || '';
             const parts = pathname.split('/');
             title = parts[parts.length - 1] || 'Streaming media';
           } catch (e) {
             title = 'Streaming media';
           }
-          
-          // Load the stream in the media player
-          openNativeSource(mode, streamUrl, streamUrl, title);
-          
-          // Toggle fullscreen to fill the screen
-          setTimeout(() => {
-            if (fullscreenBtn && typeof fullscreenBtn.click === 'function') {
-              fullscreenBtn.click();
-            }
-          }, 100);
+
+          openNativeSource(mode, normalizedStreamUrl, normalizedStreamUrl, title);
+          setStatus('Direct media stream detected');
         } catch (e) {
           console.error('[MediaPlayer] Error handling stream detection:', e);
           setStatus('Error loading stream');

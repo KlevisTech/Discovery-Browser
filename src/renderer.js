@@ -96,6 +96,12 @@ class DiscoveryBrowser {
         preview: 'linear-gradient(135deg, rgba(255,80,150,0.56), rgba(255,70,70,0.56))',
       },
       {
+        key: 'crimson',
+        name: 'Crimson',
+        description: 'Deep red glass with a bold ruby glow.',
+        preview: 'linear-gradient(135deg, rgba(190,18,60,0.66), rgba(127,29,29,0.62))',
+      },
+      {
         key: 'ocean',
         name: 'Tide Cyan',
         description: 'Aqua and royal blue glass effect.',
@@ -198,6 +204,12 @@ class DiscoveryBrowser {
         name: 'Ink Drop',
         description: 'A single drop falls and triggers a rising tide of ink.',
         preview: 'linear-gradient(180deg, #1a1a1a 0%, #000000 100%)',
+      },
+      {
+        key: 'color-fill',
+        name: 'Color Fill',
+        description: 'A falling droplet of card color triggers a vibrant rising tide of random hues.',
+        preview: 'linear-gradient(180deg, #ff5096 0%, #4361ee 50%, #00c6ff 100%)',
       },
     ];
 
@@ -563,8 +575,14 @@ class DiscoveryBrowser {
 
     // Listen to web notifications
     if (window.electronAPI && window.electronAPI.onNotificationReceived) {
-      // Notifications tray is now update-focused; ignore site notifications here.
       window.electronAPI.onNotificationReceived(() => { });
+    }
+
+
+    if (window.electronAPI && window.electronAPI.onAdRedirectBlocked) {
+      window.electronAPI.onAdRedirectBlocked(() => {
+        // Ad redirects are blocked silently; no user-facing toast is needed.
+      });
     }
 
     // New folder button

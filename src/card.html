@@ -17,8 +17,8 @@
         const normalizedTheme = rawTheme === 'alt'
           ? 'sunset'
           : (rawTheme === 'frost' ? 'solstice' : rawTheme);
-        const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'solstice']);
-        const allowedLoadingAnimations = new Set(['none', 'static-tv', 'water-fill', 'ink-drop']);
+        const allowedThemes = new Set(['primary', 'sunset', 'crimson', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'solstice']);
+        const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'ink-drop', 'color-fill']);
         const normalizedShape = rawShape === 'wave' || rawShape === 'curve' ? rawShape : 'default';
         const normalizedLoadingAnimation = allowedLoadingAnimations.has(rawLoadingAnimation) ? rawLoadingAnimation : 'static-tv';
         const normalizedLaunchExperience = rawLaunchExperience === 'site-app' ? 'site-app' : '';
@@ -73,118 +73,71 @@ body {
 
     @keyframes zoomInExpand {
       0% {
-        transform: scale(0.7) translateZ(0);
+        transform: translate3d(0, 26px, 0) scale(0.18);
         opacity: 0;
       }
-      55% {
-        transform: scale(1.06) translateZ(0);
+
+      34% {
+        transform: translate3d(0, 0, 0) scale(0.72);
         opacity: 1;
       }
+
+      72% {
+        transform: translate3d(0, 0, 0) scale(1.025);
+        opacity: 1;
+      }
+
       100% {
-        transform: scale(1) translateZ(0);
+        transform: translate3d(0, 0, 0) scale(1);
         opacity: 1;
       }
     }
 
     @keyframes tvOpenExpand {
       0% {
-        transform: scaleY(0.015) scaleX(0.42) translateZ(0);
-        clip-path: inset(49.3% 6% 49.3% 6% round 999px);
+        transform: translate3d(0, 24px, 0) scale(0.16);
         opacity: 0;
-        filter: brightness(1.82);
-      }
-      24% {
-        transform: scaleY(0.08) scaleX(1.02) translateZ(0);
-        clip-path: inset(46.4% 0 46.4% 0 round 999px);
-        opacity: 1;
-        filter: brightness(1.3);
-      }
-      52% {
-        transform: scaleY(0.56) scaleX(1.01) translateZ(0);
-        clip-path: inset(19% 0 19% 0 round 28px);
-        opacity: 1;
-        filter: brightness(1.12);
-      }
-      76% {
-        transform: scaleY(0.84) scaleX(0.99) translateZ(0);
-        clip-path: inset(8% 0 8% 0 round 24px);
-        opacity: 1;
-        filter: brightness(1.04);
-      }
-      100% {
-        transform: scaleY(1) scaleX(1) translateZ(0);
-        clip-path: var(--card-final-clip);
-        opacity: 1;
-        filter: brightness(1);
-      }
-    }
-
-    @keyframes tvCloseCollapse {
-      0% {
-        transform: scaleY(1) scaleX(1) translateZ(0);
-        clip-path: var(--card-final-clip);
-        opacity: 1;
-        filter: brightness(1);
       }
 
-      24% {
-        transform: scaleY(0.84) scaleX(0.99) translateZ(0);
-        clip-path: inset(8% 0 8% 0 round 24px);
+      32% {
+        transform: translate3d(0, 0, 0) scale(0.68);
         opacity: 1;
-        filter: brightness(1.04);
       }
 
-      52% {
-        transform: scaleY(0.56) scaleX(1.01) translateZ(0);
-        clip-path: inset(19% 0 19% 0 round 28px);
+      74% {
+        transform: translate3d(0, 0, 0) scale(1.018);
         opacity: 1;
-        filter: brightness(1.12);
-      }
-
-      76% {
-        transform: scaleY(0.08) scaleX(1.02) translateZ(0);
-        clip-path: inset(46.4% 0 46.4% 0 round 999px);
-        opacity: 1;
-        filter: brightness(1.3);
       }
 
       100% {
-        transform: scaleY(0.015) scaleX(0.42) translateZ(0);
-        clip-path: inset(49.3% 6% 49.3% 6% round 999px);
-        opacity: 0;
-        filter: brightness(1.82);
+        transform: translate3d(0, 0, 0) scale(1);
+        opacity: 1;
       }
     }
 
-    @keyframes tvCloseFlash {
+    @keyframes windowShrinkClose {
       0% {
-        opacity: 0;
-        transform: translateY(-50%) scaleX(0.15) translateZ(0);
+        transform: translate3d(0, 0, 0) scale(1);
+        opacity: 1;
+        filter: blur(0);
       }
 
-      52% {
-        opacity: 0.88;
-        transform: translateY(-50%) scaleX(1) translateZ(0);
-      }
-
-      76% {
+      42% {
+        transform: translate3d(0, 0, 0) scale(0.86);
         opacity: 0.96;
-        transform: translateY(-50%) scaleX(1.04) translateZ(0);
+        filter: blur(0);
       }
 
-      84% {
-        opacity: 0.28;
-        transform: translateY(-50%) scaleX(0.94) translateZ(0);
-      }
-
-      91% {
-        opacity: 1;
-        transform: translateY(-50%) scaleX(1.01) translateZ(0);
+      78% {
+        transform: translate3d(0, 10px, 0) scale(0.34);
+        opacity: 0.58;
+        filter: blur(0.6px);
       }
 
       100% {
+        transform: translate3d(0, 22px, 0) scale(0.08);
         opacity: 0;
-        transform: translateY(-50%) scaleX(0.42) translateZ(0);
+        filter: blur(2px);
       }
     }
 
@@ -233,7 +186,7 @@ body {
       overflow: hidden;
       position: relative;
       transform-origin: 50% 50%;
-      will-change: transform, opacity, clip-path, filter;
+      will-change: transform, opacity;
       transform: translateZ(0);
       backface-visibility: hidden;
     }
@@ -300,6 +253,20 @@ body {
       --sand-glow: rgba(240, 144, 168, 0.28);
       background: linear-gradient(135deg, #ff5096 0%, #ff4646 50%, #ff8a65 100%);
       border-color: rgba(255, 200, 220, 0.6);
+    }
+
+    .theme-crimson .card-window,
+    .card-window.theme-crimson {
+      --launch-signal-core: rgba(255, 140, 150, 0.24);
+      --launch-signal-glow: rgba(220, 38, 38, 0.18);
+      --launch-signal-shadow: rgba(70, 5, 12, 0.28);
+      --launch-ink-color: #dc2626;
+      --sand-light: rgba(255, 232, 232, 0.96);
+      --sand-mid: rgba(220, 134, 142, 0.88);
+      --sand-dark: rgba(150, 36, 48, 0.82);
+      --sand-glow: rgba(225, 64, 78, 0.3);
+      background: linear-gradient(135deg, #be123c 0%, #dc2626 48%, #7f1d1d 100%);
+      border-color: rgba(255, 190, 198, 0.66);
     }
 
     .theme-ocean .card-window,
@@ -435,6 +402,10 @@ body {
     .theme-sunset .card-shape-outline path,
     .theme-alt .card-shape-outline path {
       stroke: rgba(255, 225, 234, 0.72);
+    }
+
+    .theme-crimson .card-shape-outline path {
+      stroke: rgba(255, 218, 222, 0.76);
     }
 
     .theme-ocean .card-shape-outline path {
@@ -606,13 +577,15 @@ body {
       pointer-events: none;
     }
 
-.card-window.is-opening-tv {
-      animation: zoomInExpand 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    .card-window.is-opening-tv {
+      animation: zoomInExpand 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
       pointer-events: none;
+      transform-origin: center;
+      will-change: transform, opacity;
     }
 
     .card-window.site-app-launch.is-opening-tv {
-      animation: zoomInExpand 420ms cubic-bezier(0.2, 0.88, 0.24, 1) both;
+      animation: zoomInExpand 580ms cubic-bezier(0.16, 1, 0.3, 1) both;
       box-shadow:
         0 25px 50px rgba(0, 0, 0, 0.3),
         0 0 0 1px rgba(255, 255, 255, 0.1) inset,
@@ -626,11 +599,17 @@ body {
       animation: none;
     }
 
+    .card-window.is-opening-tv .card-titlebar,
+    .card-window.is-opening-tv .card-content,
+    .card-window.is-opening-tv .media-hover-control {
+      will-change: opacity, transform;
+    }
+
     .card-window.is-opening-tv-bubble {
-      animation: tvOpenExpand 520ms cubic-bezier(0.2, 0.72, 0.18, 1) both;
+      animation: tvOpenExpand 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
       pointer-events: none;
       transform-origin: center;
-      will-change: transform, opacity, clip-path, filter;
+      will-change: transform, opacity;
     }
 
     .card-window.is-opening-tv-bubble::before,
@@ -639,23 +618,46 @@ body {
       animation: none;
     }
 
-    .card-window.is-closing-tv {
-      animation: tvCloseCollapse 520ms cubic-bezier(0.2, 0.72, 0.18, 1) forwards;
+    .card-window.is-window-shrink-closing {
+      animation: windowShrinkClose 340ms cubic-bezier(0.2, 0.8, 0.18, 1) forwards;
       pointer-events: none;
       transform-origin: center;
-      will-change: transform, opacity, clip-path, filter;
+      will-change: transform, opacity;
     }
 
-    .card-window.is-closing-tv::before {
+    .card-window.is-window-shrink-closing::before {
       opacity: 0;
       animation: none;
     }
 
-    .card-window.is-closing-tv::after {
-      animation: tvCloseFlash 520ms ease-out forwards;
+    .card-window.is-window-shrink-closing::after {
+      opacity: 0;
+      animation: none;
     }
 
-.card-window.is-restoring {
+    .card-window.is-window-shrink-closing .split-container,
+    .card-window.is-window-shrink-closing #card-webview,
+    .card-window.is-window-shrink-closing #split-webview,
+    .card-window.is-window-shrink-closing .loading-wave,
+    .card-window.is-window-shrink-closing .card-launch-fill,
+    .card-window.is-window-shrink-closing .media-hover-control {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+
+    .card-window.is-window-shrink-closing .card-content {
+      animation: none !important;
+      background: #05070f !important;
+      contain: paint;
+    }
+
+    .card-window.is-window-shrink-closing .card-titlebar {
+      opacity: 0.72;
+      transform: translateZ(0) scaleY(0.92);
+    }
+
+    .card-window.is-restoring {
       animation: zoomInExpand 250ms cubic-bezier(0.22, 1, 0.36, 1) both;
       pointer-events: auto;
     }
@@ -689,6 +691,11 @@ body {
     .theme-alt .card-titlebar {
       background: linear-gradient(135deg, rgba(255, 80, 150, 0.45), rgba(255, 70, 70, 0.45));
       border-bottom: 2px solid rgba(255, 255, 255, 0.22);
+    }
+
+    .theme-crimson .card-titlebar {
+      background: linear-gradient(135deg, rgba(190, 18, 60, 0.72), rgba(127, 29, 29, 0.7));
+      border-bottom: 2px solid rgba(255, 220, 225, 0.26);
     }
 
     .theme-ocean .card-titlebar {
@@ -1550,6 +1557,86 @@ body {
       }
     }
 
+    /* Color Fill Loading Animation */
+    .card-launch-fill.color-fill {
+      background: #0a0a0a;
+    }
+
+    .card-launch-fill.color-fill::before,
+    .card-launch-fill.color-fill::after {
+      opacity: 0;
+      animation: none;
+      background: none;
+    }
+
+    .card-launch-fill.color-fill .color-fill-container {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .card-launch-fill.color-fill .color-drop {
+      position: absolute;
+      top: -40px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 22px;
+      height: 30px;
+      background: var(--launch-ink-color, #4361ee);
+      border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+      filter: blur(0.5px);
+      box-shadow: 0 0 15px var(--launch-ink-color, #4361ee);
+      animation: colorDropFall 0.75s cubic-bezier(0.5, 0, 0.7, 0.2) forwards;
+      z-index: 10;
+    }
+
+    .card-launch-fill.color-fill .color-rise-container {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .card-launch-fill.color-fill .color-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 0;
+      animation: randomColorRise 1.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+
+    .card-launch-fill.color-fill .color-bar:nth-child(1) { background: #ff5096; animation-delay: 0.7s; }
+    .card-launch-fill.color-fill .color-bar:nth-child(2) { background: #00c6ff; animation-delay: 0.8s; }
+    .card-launch-fill.color-fill .color-bar:nth-child(3) { background: #4361ee; animation-delay: 0.9s; }
+    .card-launch-fill.color-fill .color-bar:nth-child(4) { background: #7209b7; animation-delay: 1.0s; }
+    .card-launch-fill.color-fill .color-bar:nth-child(5) { background: #f72585; animation-delay: 1.1s; }
+
+    .card-launch-fill.color-fill .final-fill {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 0;
+      background: var(--launch-ink-color, #4361ee);
+      animation: randomColorRise 1.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      animation-delay: 1.25s;
+      box-shadow: 0 -10px 30px rgba(0,0,0,0.3);
+    }
+
+    @keyframes colorDropFall {
+      0% { transform: translate(-50%, 0) scaleY(1.3); opacity: 1; }
+      80% { transform: translate(-50%, 680px) scaleY(1); opacity: 1; }
+      100% { transform: translate(-50%, 720px) scaleY(0.2) scaleX(3); opacity: 0; }
+    }
+
+    @keyframes randomColorRise {
+      0% { height: 0; }
+      100% { height: 100%; }
+    }
+
     .card-content.is-awaiting-first-content .split-container {
       opacity: 0;
     }
@@ -1829,7 +1916,8 @@ body {
       height: 4px;
       opacity: 0;
       transform: translateY(2px);
-      transition: opacity 0.2s ease, transform 0.2s ease;
+      transform-origin: top center;
+      transition: none;
       pointer-events: none;
       background:
         radial-gradient(circle at 10% 50%, rgba(120, 255, 214, 0.9) 0%, rgba(120, 255, 214, 0.0) 55%) 0 0 / 120px 100%,
@@ -1848,6 +1936,15 @@ body {
         radial-gradient(circle at 72% 50%, rgba(255, 170, 210, 0.85) 0%, rgba(255, 170, 210, 0.0) 55%) 0 0 / 160px 100%,
         linear-gradient(90deg, rgba(255, 80, 150, 0.0), rgba(255, 70, 70, 0.75), rgba(255, 80, 150, 0.0)) 0 0 / 220px 100%;
       filter: drop-shadow(0 2px 6px rgba(255, 80, 150, 0.55));
+    }
+
+    .theme-crimson .loading-wave {
+      background:
+        radial-gradient(circle at 12% 50%, rgba(255, 130, 145, 0.86) 0%, rgba(255, 130, 145, 0.0) 55%) 0 0 / 120px 100%,
+        radial-gradient(circle at 45% 50%, rgba(220, 38, 38, 0.9) 0%, rgba(220, 38, 38, 0.0) 55%) 0 0 / 140px 100%,
+        radial-gradient(circle at 72% 50%, rgba(255, 190, 198, 0.82) 0%, rgba(255, 190, 198, 0.0) 55%) 0 0 / 160px 100%,
+        linear-gradient(90deg, rgba(190, 18, 60, 0.0), rgba(220, 38, 38, 0.82), rgba(127, 29, 29, 0.0)) 0 0 / 220px 100%;
+      filter: drop-shadow(0 2px 6px rgba(220, 38, 38, 0.54));
     }
 
     .theme-ocean .loading-wave {
@@ -1934,6 +2031,12 @@ body {
       background:
         radial-gradient(circle at 50% 18%, rgba(255, 170, 214, 0.16), transparent 24%),
         linear-gradient(180deg, rgba(32, 5, 19, 0.985) 0%, rgba(20, 4, 12, 0.985) 100%);
+    }
+
+    .theme-crimson .visual-lock-overlay {
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255, 128, 148, 0.18), transparent 24%),
+        linear-gradient(180deg, rgba(42, 4, 12, 0.988) 0%, rgba(22, 4, 8, 0.992) 100%);
     }
 
     .theme-ocean .visual-lock-overlay {
@@ -2123,7 +2226,6 @@ body {
      /* Pause visual lock animations when media is not playing */
      .visual-lock-overlay:not(.media-playing) .visual-lock-eq span,
      .visual-lock-overlay:not(.media-playing) .visual-lock-rings span {
-       animation-play-state: paused;
      }
 
      .visual-lock-unlock {
@@ -2181,6 +2283,10 @@ body {
       background: linear-gradient(180deg, rgba(30, 5, 18, 0.99) 0%, rgba(18, 4, 11, 0.995) 100%);
     }
 
+    .theme-crimson .card-window.visual-lock-shell {
+      background: linear-gradient(180deg, rgba(44, 4, 12, 0.992) 0%, rgba(18, 3, 7, 0.996) 100%);
+    }
+
     .theme-ocean .card-window.visual-lock-shell {
       background: linear-gradient(180deg, rgba(4, 20, 38, 0.99) 0%, rgba(3, 10, 24, 0.995) 100%);
     }
@@ -2208,9 +2314,9 @@ body {
     .card-content.visual-lock-returning {
       visibility: visible;
       pointer-events: auto;
-      animation: tvOpenExpand 520ms cubic-bezier(0.2, 0.72, 0.18, 1) both;
+      animation: tvOpenExpand 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
       transform-origin: center;
-      will-change: transform, opacity, clip-path, filter;
+      will-change: transform, opacity;
       z-index: 2;
     }
 
@@ -2328,7 +2434,6 @@ body {
       transform-origin: bottom;
       transform: translateZ(0);
       will-change: transform, opacity;
-      animation-play-state: paused;
       box-shadow: 0 0 4px rgba(255, 111, 240, 0.5), 0 0 8px rgba(124, 247, 255, 0.3);
     }
 
@@ -2337,7 +2442,6 @@ body {
     }
 
     .audio-visualizer:not(.playing) span {
-      animation-play-state: paused;
     }
 
     .audio-visualizer.viz-style-pulse span {
@@ -2509,7 +2613,6 @@ body {
       min-height: 12px;
       text-align: left;
     }
-
     @keyframes audioPulse {
 
       0%,
@@ -2884,6 +2987,17 @@ body {
           <div class="ink-drop-droplet"></div>
           <div class="ink-drop-fill"></div>
         </div>
+        <div class="color-fill-container">
+          <div class="color-drop"></div>
+          <div class="color-rise-container">
+            <div class="color-bar"></div>
+            <div class="color-bar"></div>
+            <div class="color-bar"></div>
+            <div class="color-bar"></div>
+            <div class="color-bar"></div>
+            <div class="final-fill"></div>
+          </div>
+        </div>
       </div>
       <div class="split-container" id="split-container">
         <div class="split-pane split-pane-left">
@@ -2942,7 +3056,7 @@ body {
     const normalizedShape = shape === 'wave' || shape === 'curve' ? shape : 'default';
     const launchExperience = (params.get('launchExperience') || '').toLowerCase();
     const isSiteAppLaunch = launchExperience === 'site-app';
-    const allThemeClasses = ['theme-primary', 'theme-sunset', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-solstice'];
+    const allThemeClasses = ['theme-primary', 'theme-sunset', 'theme-crimson', 'theme-ocean', 'theme-emerald', 'theme-amber', 'theme-midnight', 'theme-cocoa', 'theme-solstice'];
     let currentThemeKey = normalizedTheme;
 
     let initialUrl = null;
@@ -3028,6 +3142,7 @@ body {
       cardLaunchFill.classList.toggle('none', loadingAnimation === 'none');
       cardLaunchFill.classList.toggle('water-fill', loadingAnimation === 'water-fill');
       cardLaunchFill.classList.toggle('ink-drop', loadingAnimation === 'ink-drop');
+      cardLaunchFill.classList.toggle('color-fill', loadingAnimation === 'color-fill');
     }
     const mediaHoverControl = document.getElementById('media-hover-control');
     const audioVisualizer = document.getElementById('audio-visualizer');
@@ -3108,6 +3223,8 @@ body {
      let visualLockActive = false;
      let cinemaModeActive = false;
      let cinemaModeTarget = null;
+     let fullVideoTarget = null;
+     let fullVideoFallbackCinemaActive = false;
     let cinemaToggleInFlight = false;
     let pendingDisplayMode = null;
     let activeDisplayMode = null;
@@ -3388,7 +3505,7 @@ body {
         <div class="notice-progress" aria-hidden="true"><span></span></div>
       `;
       if (cardWindowEl) {
-        cardWindowEl.classList.remove('is-closing-tv', 'is-minimizing', 'is-restoring');
+        cardWindowEl.classList.remove('is-window-shrink-closing', 'is-minimizing', 'is-restoring');
         void cardWindowEl.offsetWidth;
         cardWindowEl.classList.add('is-challenge-promoting');
       }
@@ -3940,6 +4057,95 @@ body {
         cinemaModeActive = false;
       }
       return !blackScreenDetected;
+    }
+
+    function getNativeVideoFullscreenScript(enable) {
+      if (!enable) {
+        return `
+          (async () => {
+            try {
+              if (document.fullscreenElement && document.exitFullscreen) {
+                await document.exitFullscreen();
+                return { ok: true, mode: 'exit' };
+              }
+              if (document.webkitFullscreenElement && document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+                return { ok: true, mode: 'webkit-exit' };
+              }
+            } catch (e) {}
+            return { ok: true, mode: 'none' };
+          })();
+        `;
+      }
+
+      return `
+        (async () => {
+          const isElementVisible = (el) => {
+            if (!el || !el.isConnected) return false;
+            const style = window.getComputedStyle(el);
+            if (!style || style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity || '1') <= 0.05) return false;
+            const rect = el.getBoundingClientRect();
+            return rect && rect.width >= 40 && rect.height >= 40 && rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth;
+          };
+          const videos = Array.from(document.querySelectorAll('video'));
+          const video = videos.find((item) => !item.paused && !item.ended && isElementVisible(item))
+            || videos.find((item) => isElementVisible(item) && (item.currentSrc || item.src))
+            || videos.find((item) => item.currentSrc || item.src)
+            || videos[0];
+          if (!video) return { ok: false, reason: 'no-video' };
+
+          const player = video.closest('[data-fullscreen], .html5-video-player, .video-js, .jwplayer, .plyr, .player, .video-player')
+            || video.parentElement
+            || video;
+          const candidates = [video, player, document.documentElement].filter(Boolean);
+          for (const candidate of candidates) {
+            try {
+              const request = candidate.requestFullscreen
+                || candidate.webkitRequestFullscreen
+                || candidate.webkitRequestFullScreen
+                || candidate.mozRequestFullScreen
+                || candidate.msRequestFullscreen;
+              if (!request) continue;
+              const value = request.call(candidate);
+              if (value && typeof value.then === 'function') await value;
+              try { video.setAttribute('controls', 'controls'); } catch (e) {}
+              return { ok: true, mode: 'native' };
+            } catch (e) {}
+          }
+          return { ok: false, reason: 'request-failed' };
+        })();
+      `;
+    }
+
+    async function setFullVideoMode(enabled) {
+      if (!enabled) {
+        const targets = fullVideoTarget ? [fullVideoTarget] : getMediaTargets();
+        for (const target of targets) {
+          await runMediaScript(target, getNativeVideoFullscreenScript(false), { bypassPending: true });
+        }
+        fullVideoTarget = null;
+        if (fullVideoFallbackCinemaActive) {
+          await setCinemaVideoMode(false);
+          fullVideoFallbackCinemaActive = false;
+        }
+        return true;
+      }
+
+      await setCinemaVideoMode(false);
+      fullVideoFallbackCinemaActive = false;
+      for (const target of getMediaCommandTargets()) {
+        const result = await runMediaScript(target, getNativeVideoFullscreenScript(true), { bypassPending: true });
+        if (result && result.ok) {
+          fullVideoTarget = target;
+          lastActiveMediaWebview = target;
+          return true;
+        }
+      }
+
+      const fallbackApplied = await setCinemaVideoMode(true);
+      fullVideoFallbackCinemaActive = !!fallbackApplied;
+      fullVideoTarget = fallbackApplied ? cinemaModeTarget : null;
+      return fallbackApplied;
     }
 
     // Detect if both videos are currently playing and optimize buffering
@@ -4522,7 +4728,7 @@ body {
         mediaProgressBtn.disabled = !shouldShow;
       }
       if (mediaSideFlamesBtn) {
-        mediaSideFlamesBtn.disabled = !shouldShow || (normalizedShape !== 'wave' && normalizedShape !== 'curve');
+        mediaSideFlamesBtn.disabled = normalizedShape !== 'wave' && normalizedShape !== 'curve';
       }
       if (mediaSeekBackBtn) {
         mediaSeekBackBtn.disabled = !shouldShow;
@@ -5612,17 +5818,170 @@ body {
         webview.src = target;
         urlInput.value = target;
         currentPageUrl = target;
+        lastGoodPrimaryUrl = target;
       } catch (e) { }
     };
+
+    const approvedNavigationUrls = new Set();
+    const recentlyAllowedNavigationUrls = new Map();
+    const blockedNavigationUrls = new Set();
+    let lastPrimaryUserGestureAt = 0;
+    let lastSplitUserGestureAt = 0;
+    let lastGoodPrimaryUrl = currentPageUrl || '';
+    let lastGoodSplitUrl = currentSplitUrl || '';
+
+    function getSiteBaseFromUrl(rawUrl) {
+      try {
+        const parts = new URL(String(rawUrl || '')).hostname.toLowerCase().split('.').filter(Boolean);
+        if (parts.length <= 2) return parts.join('.');
+        return parts.slice(-2).join('.');
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function shouldInspectNavigation(targetUrl, sourceUrl) {
+      if (!isHttpUrl(targetUrl) || !isHttpUrl(sourceUrl)) return false;
+      return getSiteBaseFromUrl(targetUrl) !== getSiteBaseFromUrl(sourceUrl);
+    }
+
+    function markNavigationApproved(targetUrl) {
+      if (!targetUrl) return;
+      approvedNavigationUrls.add(targetUrl);
+      recentlyAllowedNavigationUrls.set(targetUrl, Date.now() + 7000);
+    }
+
+    function hasNavigationApproval(targetUrl) {
+      if (!targetUrl) return false;
+      if (approvedNavigationUrls.has(targetUrl)) return true;
+      const expiresAt = recentlyAllowedNavigationUrls.get(targetUrl) || 0;
+      if (expiresAt > Date.now()) return true;
+      recentlyAllowedNavigationUrls.delete(targetUrl);
+      return false;
+    }
+
+    function consumeNavigationApproval(targetUrl) {
+      if (!targetUrl) return;
+      approvedNavigationUrls.delete(targetUrl);
+      const expiresAt = recentlyAllowedNavigationUrls.get(targetUrl) || 0;
+      if (expiresAt <= Date.now()) {
+        recentlyAllowedNavigationUrls.delete(targetUrl);
+      }
+    }
+
+    function restoreNavigationAfterBlock(targetWebview, sourceUrl) {
+      try {
+        if (targetWebview && typeof targetWebview.stop === 'function') targetWebview.stop();
+      } catch (e) { }
+      try {
+        const isSplitTarget = targetWebview === splitWebview;
+        const restoreUrl = sourceUrl || (isSplitTarget ? lastGoodSplitUrl : lastGoodPrimaryUrl) || '';
+        if (isSplitTarget) {
+          currentSplitUrl = restoreUrl;
+          if (splitUrlInput) splitUrlInput.value = restoreUrl;
+          isSplitNavigationLoading = false;
+          clearSplitLoadGuard();
+        } else {
+          currentPageUrl = restoreUrl;
+          if (urlInput) urlInput.value = restoreUrl;
+          isMainNavigationLoading = false;
+          firstContentSeenForMainNav = true;
+          clearMainLoadGuard();
+          clearMainFirstContentFallback();
+          setLaunchFillVisible(false);
+          setCardContentVisible(true);
+          if (loadingWaveVisible) setLoadingWave(false);
+        }
+        hideSecurityNoticeWhenAppropriate(true);
+        try {
+          const currentWebviewUrl = targetWebview && typeof targetWebview.getURL === 'function' ? targetWebview.getURL() : '';
+          if (restoreUrl && shouldInspectNavigation(currentWebviewUrl, restoreUrl)) {
+            markNavigationApproved(restoreUrl);
+            targetWebview.loadURL(restoreUrl);
+          }
+        } catch (e) { }
+      } catch (e) { }
+    }
+
+    async function continueNavigationIfAllowed(targetWebview, targetUrl, sourceUrl, hadRecentUserGesture) {
+      try {
+        if (window.cardAPI && typeof window.cardAPI.shouldBlockPopupUrl === 'function') {
+          const result = await window.cardAPI.shouldBlockPopupUrl({
+            url: targetUrl,
+            sourceUrl,
+            referrerUrl: sourceUrl,
+            hadRecentUserGesture
+          });
+          if (result && result.blocked) {
+            blockedNavigationUrls.add(targetUrl);
+            restoreNavigationAfterBlock(targetWebview, sourceUrl);
+            return;
+          }
+        }
+        markNavigationApproved(targetUrl);
+        targetWebview.loadURL(targetUrl);
+      } catch (err) {
+        console.warn('Navigation guard failed:', err);
+        restoreNavigationAfterBlock(targetWebview, sourceUrl);
+      }
+    }
+
+    async function blockUnapprovedStartedNavigation(targetWebview, targetUrl, sourceUrl) {
+      try {
+        if (!targetUrl || hasNavigationApproval(targetUrl) || !shouldInspectNavigation(targetUrl, sourceUrl)) {
+          return false;
+        }
+        if (window.cardAPI && typeof window.cardAPI.shouldBlockPopupUrl === 'function') {
+          const result = await window.cardAPI.shouldBlockPopupUrl({
+            url: targetUrl,
+            sourceUrl,
+            referrerUrl: sourceUrl,
+            hadRecentUserGesture: false
+          });
+          if (result && result.blocked) {
+            blockedNavigationUrls.add(targetUrl);
+            restoreNavigationAfterBlock(targetWebview, sourceUrl);
+            return true;
+          }
+        }
+      } catch (err) { }
+      return false;
+    }
+
+    function installNavigationGuard(targetWebview, getSourceUrl, hadRecentGesture) {
+      if (!targetWebview) return;
+      targetWebview.addEventListener('will-navigate', (e) => {
+        try {
+          const targetUrl = e && e.url ? String(e.url) : '';
+          if (!targetUrl) return;
+          if (hasNavigationApproval(targetUrl)) {
+            consumeNavigationApproval(targetUrl);
+            return;
+          }
+          const sourceUrl = String((typeof getSourceUrl === 'function' && getSourceUrl()) || '');
+          if (!shouldInspectNavigation(targetUrl, sourceUrl)) return;
+          e.preventDefault();
+          continueNavigationIfAllowed(targetWebview, targetUrl, sourceUrl, typeof hadRecentGesture === 'function' ? hadRecentGesture() : false);
+        } catch (err) { }
+      });
+    }
 
     // Load initial URL if provided
     if (initialUrl) {
       pendingInitialUrl = initialUrl;
     }
 
+    installNavigationGuard(webview, () => currentPageUrl || (webview && webview.getURL ? webview.getURL() : ''), () => Date.now() - lastPrimaryUserGestureAt < 5000);
+    installNavigationGuard(splitWebview, () => currentSplitUrl || (splitWebview && splitWebview.getURL ? splitWebview.getURL() : ''), () => Date.now() - lastSplitUserGestureAt < 5000);
+
     // Update URL and title when webview navigates
     webview.addEventListener('did-navigate', (e) => {
       try {
+        if (blockedNavigationUrls.has(e.url)) {
+          blockedNavigationUrls.delete(e.url);
+          restoreNavigationAfterBlock(webview, lastGoodPrimaryUrl);
+          return;
+        }
         if (isHttpUrl(e && e.url)) {
           hideSecurityNoticeWhenAppropriate(true);
         } else {
@@ -5632,6 +5991,7 @@ body {
         currentPageUrl = e.url;
         checkBookmarkStatus();
         if (!isCloudflareChallengeUrl(e.url)) {
+          lastGoodPrimaryUrl = e.url;
           lastNonChallengeUrl = e.url;
         } else if (window.cardAPI && window.cardAPI.sendToMain) {
           window.cardAPI.sendToMain('cloudflare-challenge', {
@@ -5645,6 +6005,11 @@ body {
 
     webview.addEventListener('did-navigate-in-page', (e) => {
       try {
+        if (blockedNavigationUrls.has(e.url)) {
+          blockedNavigationUrls.delete(e.url);
+          restoreNavigationAfterBlock(webview, lastGoodPrimaryUrl);
+          return;
+        }
         if (isHttpUrl(e && e.url)) {
           hideSecurityNoticeWhenAppropriate(true);
         } else {
@@ -5654,6 +6019,7 @@ body {
         currentPageUrl = e.url;
         checkBookmarkStatus();
         if (!isCloudflareChallengeUrl(e.url)) {
+          lastGoodPrimaryUrl = e.url;
           lastNonChallengeUrl = e.url;
         } else if (window.cardAPI && window.cardAPI.sendToMain) {
           window.cardAPI.sendToMain('cloudflare-challenge', {
@@ -5667,21 +6033,33 @@ body {
 
     if (splitWebview) {
       splitWebview.addEventListener('did-navigate', (e) => {
+        if (blockedNavigationUrls.has(e.url)) {
+          blockedNavigationUrls.delete(e.url);
+          restoreNavigationAfterBlock(splitWebview, lastGoodSplitUrl);
+          return;
+        }
         if (isHttpUrl(e && e.url)) {
           hideSecurityNoticeWhenAppropriate(true);
         } else {
           hideSecurityNoticeWhenAppropriate();
         }
         currentSplitUrl = e.url || '';
+        lastGoodSplitUrl = currentSplitUrl;
         if (splitUrlInput) splitUrlInput.value = currentSplitUrl;
       });
       splitWebview.addEventListener('did-navigate-in-page', (e) => {
+        if (blockedNavigationUrls.has(e.url)) {
+          blockedNavigationUrls.delete(e.url);
+          restoreNavigationAfterBlock(splitWebview, lastGoodSplitUrl);
+          return;
+        }
         if (isHttpUrl(e && e.url)) {
           hideSecurityNoticeWhenAppropriate(true);
         } else {
           hideSecurityNoticeWhenAppropriate();
         }
         currentSplitUrl = e.url || '';
+        lastGoodSplitUrl = currentSplitUrl;
         if (splitUrlInput) splitUrlInput.value = currentSplitUrl;
       });
       splitWebview.addEventListener('did-start-navigation', (e) => {
@@ -5707,6 +6085,7 @@ body {
         splitUrlInput.value = targetUrl;
       }
       currentSplitUrl = targetUrl;
+      markNavigationApproved(targetUrl);
       
       // Set the src attribute on the webview
       try {
@@ -5772,8 +6151,13 @@ body {
     });
 
     // Loading wave for render progress
-    webview.addEventListener('did-start-navigation', (e) => {
+    webview.addEventListener('did-start-navigation', async (e) => {
       if (e && e.isMainFrame) {
+        const targetUrl = String((e && e.url) || '');
+        const sourceUrl = lastGoodPrimaryUrl || currentPageUrl || (webview && webview.getURL ? webview.getURL() : '');
+        if (await blockUnapprovedStartedNavigation(webview, targetUrl, sourceUrl)) {
+          return;
+        }
         isMainNavigationLoading = true;
         firstContentSeenForMainNav = false;
         hideSecurityNoticeWhenAppropriate();
@@ -5816,6 +6200,13 @@ body {
         console.warn('[Card] webview did-fail-load:', e.errorCode, e.errorDescription, e.validatedURL || '');
       }
       if (e && e.isMainFrame) {
+        const failedUrl = String((e && (e.validatedURL || e.url)) || '');
+        const failedByBlocker = e.errorCode === -20 || /ERR_BLOCKED_BY_CLIENT|ERR_ABORTED/i.test(String(e.errorDescription || '')) || blockedNavigationUrls.has(failedUrl);
+        if (failedByBlocker && shouldInspectNavigation(failedUrl, lastGoodPrimaryUrl || currentPageUrl)) {
+          blockedNavigationUrls.delete(failedUrl);
+          restoreNavigationAfterBlock(webview, lastGoodPrimaryUrl || currentPageUrl);
+          return;
+        }
         isMainNavigationLoading = false;
       }
       clearMainLoadGuard();
@@ -5940,8 +6331,13 @@ body {
      });
 
     if (splitWebview) {
-       splitWebview.addEventListener('did-start-navigation', (e) => {
+       splitWebview.addEventListener('did-start-navigation', async (e) => {
          if (e && e.isMainFrame) {
+           const targetUrl = String((e && e.url) || '');
+           const sourceUrl = lastGoodSplitUrl || currentSplitUrl || (splitWebview && splitWebview.getURL ? splitWebview.getURL() : '');
+           if (await blockUnapprovedStartedNavigation(splitWebview, targetUrl, sourceUrl)) {
+             return;
+           }
            isSplitNavigationLoading = true;
            hideSecurityNoticeWhenAppropriate();
            startSplitLoadGuard();
@@ -5971,6 +6367,13 @@ body {
           console.warn('[Card] split webview did-fail-load:', e.errorCode, e.errorDescription, e.validatedURL || '');
         }
         if (e && e.isMainFrame) {
+          const failedUrl = String((e && (e.validatedURL || e.url)) || '');
+          const failedByBlocker = e.errorCode === -20 || /ERR_BLOCKED_BY_CLIENT|ERR_ABORTED/i.test(String(e.errorDescription || '')) || blockedNavigationUrls.has(failedUrl);
+          if (failedByBlocker && shouldInspectNavigation(failedUrl, lastGoodSplitUrl || currentSplitUrl)) {
+            blockedNavigationUrls.delete(failedUrl);
+            restoreNavigationAfterBlock(splitWebview, lastGoodSplitUrl || currentSplitUrl);
+            return;
+          }
           isSplitNavigationLoading = false;
         }
         clearSplitLoadGuard();
@@ -6136,7 +6539,7 @@ body {
     }
 
     // Intercept new-window events
-    webview.addEventListener('new-window', (e) => {
+    webview.addEventListener('new-window', async (e) => {
       if (isCloudflareChallengeUrl(e && e.url)) {
         return;
       }
@@ -6144,6 +6547,21 @@ body {
       const url = e.url;
       if (url) {
         try {
+          if (window.cardAPI && typeof window.cardAPI.shouldBlockPopupUrl === 'function') {
+            const result = await window.cardAPI.shouldBlockPopupUrl({
+              url,
+              sourceUrl: currentPageUrl || (webview && webview.getURL ? webview.getURL() : ''),
+              referrerUrl: currentPageUrl || '',
+              disposition: 'new-window',
+              hadRecentUserGesture: Date.now() - lastPrimaryUserGestureAt < 5000
+            });
+            if (result && result.blocked) {
+              blockedNavigationUrls.add(url);
+              restoreNavigationAfterBlock(webview, lastGoodPrimaryUrl || currentPageUrl);
+              return;
+            }
+          }
+          markNavigationApproved(url);
           webview.loadURL(url);
           urlInput.value = url;
           currentPageUrl = url;
@@ -6164,6 +6582,7 @@ body {
 
       if (e.channel === 'user-gesture') {
         try {
+          lastPrimaryUserGestureAt = Date.now();
           if (window.cardAPI && window.cardAPI.sendToMain && webview && webview.getWebContentsId) {
             window.cardAPI.sendToMain('webview-user-gesture', {
               id: webview.getWebContentsId()
@@ -6219,6 +6638,7 @@ body {
 
         if (e.channel === 'user-gesture') {
           try {
+            lastSplitUserGestureAt = Date.now();
             if (window.cardAPI && window.cardAPI.sendToMain && splitWebview && splitWebview.getWebContentsId) {
               window.cardAPI.sendToMain('webview-user-gesture', {
                 id: splitWebview.getWebContentsId()
@@ -6244,6 +6664,7 @@ body {
       const target = ev.detail;
       try {
         if (target) {
+          markNavigationApproved(target);
           webview.loadURL(target);
           urlInput.value = target;
           currentPageUrl = target;
@@ -6283,24 +6704,29 @@ body {
 if (isClosingCard || isMinimizingCard) return;
         isClosingCard = true;
         if (window.cardAPI && typeof window.cardAPI.hideVisualizerNow === 'function') {
-          try {
-            await window.cardAPI.hideVisualizerNow(cardId);
-          } catch (e) { }
+          window.cardAPI.hideVisualizerNow(cardId).catch(() => { });
         }
+        document.querySelectorAll('webview, .split-container, .loading-wave, .card-launch-fill, .media-hover-control').forEach((node) => {
+          try {
+            node.style.opacity = '0';
+            node.style.visibility = 'hidden';
+            node.style.pointerEvents = 'none';
+          } catch (e) { }
+        });
         if (cardWindowEl) {
           cardWindowEl.classList.remove('is-opening-tv');
           cardWindowEl.classList.remove('is-opening-tv-bubble');
           cardWindowEl.classList.remove('is-minimizing');
           cardWindowEl.classList.remove('is-restoring');
-          cardWindowEl.classList.remove('is-closing-tv');
+          cardWindowEl.classList.remove('is-window-shrink-closing');
           void cardWindowEl.offsetWidth;
-          cardWindowEl.classList.add('is-closing-tv');
+          cardWindowEl.classList.add('is-window-shrink-closing');
         }
-        await waitForCardAnimationEnd(cardWindowEl, 'tvCloseCollapse', 660);
-        await window.cardAPI.closeCard(cardId);
+        await waitForCardAnimationEnd(cardWindowEl, 'windowShrinkClose', 460);
+        await window.cardAPI.closeCard(cardId, { animationComplete: true });
       } catch (err) {
         console.error('Error closing card:', err);
-        if (cardWindowEl) cardWindowEl.classList.remove('is-closing-tv');
+        if (cardWindowEl) cardWindowEl.classList.remove('is-window-shrink-closing');
         isClosingCard = false;
       }
     });
@@ -6411,7 +6837,10 @@ if (isClosingCard || isMinimizingCard) return;
           
           let cinemaApplied = true;
           if (requestedDisplayMode === 'cinema') {
+            await setFullVideoMode(false);
             cinemaApplied = await setCinemaVideoMode(true);
+          } else {
+            cinemaApplied = await setFullVideoMode(true);
           }
           
           isFullscreen = true;
@@ -6429,20 +6858,23 @@ if (isClosingCard || isMinimizingCard) return;
           
           let cinemaApplied = true;
           if (requestedDisplayMode === 'cinema') {
+            await setFullVideoMode(false);
             cinemaApplied = await setCinemaVideoMode(true);
           } else {
             await setCinemaVideoMode(false);
+            cinemaApplied = await setFullVideoMode(true);
           }
           
           activeDisplayMode = requestedDisplayMode;
           syncCinemaChromeState();
-          if (requestedDisplayMode === 'cinema' && !cinemaApplied) {
+          if (!cinemaApplied) {
             showExpandedModeUnsupportedNotice(requestedDisplayMode);
           }
           fullscreenBtn.title = requestedDisplayMode === 'full' ? 'Exit Full Mode' : 'Exit Cinema Mode';
         } else {
           const restoreBounds = preFullscreenBounds ? { ...preFullscreenBounds } : null;
           const restoreWide = wasWideBeforeFullscreen;
+          await setFullVideoMode(false);
           await setCinemaVideoMode(false);
           await window.cardAPI.toggleFullscreen(cardId, false);
 
@@ -6621,7 +7053,7 @@ if (isClosingCard || isMinimizingCard) return;
 if (cardWindowEl) {
           cardWindowEl.classList.remove('is-opening-tv');
           cardWindowEl.classList.remove('is-opening-tv-bubble');
-          cardWindowEl.classList.remove('is-closing-tv');
+          cardWindowEl.classList.remove('is-window-shrink-closing');
           cardWindowEl.classList.remove('is-minimizing');
           cardWindowEl.classList.remove('is-restoring');
           // Restart animation if user rapidly clicks.
@@ -6655,7 +7087,7 @@ window.addEventListener('card-restore-animate', (event) => {
         const useBubbleRestoreAnimation = restoreDetail.source === 'bubble';
         cardWindowEl.classList.remove('is-opening-tv');
         cardWindowEl.classList.remove('is-opening-tv-bubble');
-        cardWindowEl.classList.remove('is-closing-tv');
+        cardWindowEl.classList.remove('is-window-shrink-closing');
         cardWindowEl.classList.remove('is-minimizing');
         cardWindowEl.classList.remove('is-restoring');
         void cardWindowEl.offsetWidth;
@@ -6925,6 +7357,7 @@ if (cardWindowEl) {
               console.error('Failed to open URL as bubble:', err);
               // Fallback: navigate in current card
               try {
+                markNavigationApproved(targetUrl);
                 webview.loadURL(targetUrl);
                 currentPageUrl = targetUrl;
               } catch (fallbackErr) {
@@ -6934,6 +7367,7 @@ if (cardWindowEl) {
           } else {
             // Fallback for older API: navigate in current card
             try {
+              markNavigationApproved(targetUrl);
               webview.loadURL(targetUrl);
               currentPageUrl = targetUrl;
               urlInput.value = '';

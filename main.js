@@ -1,10 +1,11 @@
-﻿
+
 // main.js
 const electron = require('electron');
 const app = electron.app;
 const BrowserWindow = electron.BrowserWindow;
 const ipcMain = electron.ipcMain;
 const session = electron.session;
+const webContents = electron.webContents;
 const shell = electron.shell;
 const dialog = electron.dialog;
 const { clipboard } = require('electron');
@@ -16,20 +17,37 @@ const { pathToFileURL } = require('url');
 const { Menu, MenuItem } = require('electron');
 const APP_ICON_PATH = path.join(__dirname, 'assets', 'discoverybrowser.ico');
 
-function dirLooksLikeBrowserProfile(dirPath) {
-  if (!dirPath) return false;
+function getBrowserProfileScore(dirPath) {
+  if (!dirPath) return 0;
   try {
-    const checks = [
-      path.join(dirPath, 'Partitions', 'webview'),
-      path.join(dirPath, 'Partitions', 'cards'),
-      path.join(dirPath, 'Network'),
-      path.join(dirPath, 'Cookies'),
-      path.join(dirPath, 'Local Storage'),
+    const weightedChecks = [
+      [path.join(dirPath, 'Partitions', 'webview', 'Network', 'Cookies'), 500],
+      [path.join(dirPath, 'Partitions', 'webview', 'Local Storage'), 260],
+      [path.join(dirPath, 'Partitions', 'webview', 'IndexedDB'), 220],
+      [path.join(dirPath, 'Partitions', 'webview'), 180],
+      [path.join(dirPath, 'Partitions', 'cards', 'Network', 'Cookies'), 180],
+      [path.join(dirPath, 'Partitions', 'cards'), 120],
+      [path.join(dirPath, 'Network', 'Cookies'), 120],
+      [path.join(dirPath, 'Cookies'), 100],
+      [path.join(dirPath, 'Local Storage'), 80],
     ];
-    return checks.some((candidate) => fs.existsSync(candidate));
+    return weightedChecks.reduce((score, [candidate, weight]) => {
+      try {
+        if (!fs.existsSync(candidate)) return score;
+        const stat = fs.statSync(candidate);
+        const sizeBonus = stat && stat.isFile() ? Math.min(80, Math.floor((stat.size || 0) / 1024)) : 0;
+        return score + weight + sizeBonus;
+      } catch (e) {
+        return score;
+      }
+    }, 0);
   } catch (e) {
-    return false;
+    return 0;
   }
+}
+
+function dirLooksLikeBrowserProfile(dirPath) {
+  return getBrowserProfileScore(dirPath) > 0;
 }
 
 function pickStableUserDataPath() {
@@ -52,26 +70,19 @@ function pickStableUserDataPath() {
     path.join(appDataPath, 'DiscoveryWeb'),
   ].filter(Boolean);
 
-  let bestPath = preferred;
-  let bestScore = -1;
+  let bestPath = '';
+  let bestScore = 0;
   for (const candidate of candidates) {
     if (!candidate || !fs.existsSync(candidate)) continue;
-    let score = 0;
-    if (dirLooksLikeBrowserProfile(candidate)) score += 100;
-    try {
-      const stat = fs.statSync(candidate);
-      const modifiedAt = stat && Number.isFinite(stat.mtimeMs) ? stat.mtimeMs : 0;
-      score += Math.floor(modifiedAt / 1000);
-    } catch (e) { }
+    const score = getBrowserProfileScore(candidate);
     if (score > bestScore) {
       bestScore = score;
       bestPath = candidate;
     }
   }
 
-  return bestPath || preferred;
+  return bestPath || preferred || defaultUserData || '';
 }
-
 try {
   const stableUserDataPath = pickStableUserDataPath();
   if (stableUserDataPath) {
@@ -418,7 +429,7 @@ app.on('web-contents-created', (event, contents) => {
 
   // Ensure all new windows/popups become card windows with the same layout
   try {
-    contents.setWindowOpenHandler(({ url }) => {
+    contents.setWindowOpenHandler(({ url, referrer }) => {
       let host = '';
       try {
         host = String(new URL(url).hostname || '').toLowerCase();
@@ -426,10 +437,29 @@ app.on('web-contents-created', (event, contents) => {
       if (isSecurityAllowlistedHost(host)) {
         return { action: 'allow' };
       }
-      openUrlInCard(url);
+      let sourceUrl = '';
+      try {
+        sourceUrl = contents.getURL();
+      } catch (e) { }
+      const referrerUrl = referrer && referrer.url;
+      if (shouldBlockNewWindowUrl(url, sourceUrl, referrerUrl)) {
+        notifyAdRedirectBlocked(url, sourceUrl, referrerUrl);
+        return { action: 'deny' };
+      }
+      openUrlInCard(url, { sourceUrl, referrerUrl });
       return { action: 'deny' };
     });
   } catch (e) { }
+
+  contents.on('will-navigate', (navEvent, navigationUrl) => {
+    try {
+      const sourceUrl = contents.getURL();
+      if (shouldBlockPopupOrRedirect(navigationUrl, sourceUrl, '')) {
+        navEvent.preventDefault();
+        notifyAdRedirectBlocked(navigationUrl, sourceUrl, '');
+      }
+    } catch (e) { }
+  });
 
   contents.on('context-menu', (e, props) => {
     const menu = new Menu();
@@ -834,6 +864,8 @@ if (require('electron').app.isPackaged) {
 let mainWindow;
 const cardWindows = new Map(); // cardId -> BrowserWindow
 const promotedChallengeWindows = new Map(); // normalizedUrl -> BrowserWindow
+const trustedSiteWindows = new Map(); // siteKey -> BrowserWindow
+const trustedSiteWebContentsIds = new Set(); // webContents ids that must never be re-promoted
 const cardBubbles = new Map(); // cardId -> bubble BrowserWindow
 const visualizerWidgets = new Map(); // cardId -> visualizer BrowserWindow
 const sideFlameWidgets = new Map(); // cardId -> side flames BrowserWindow
@@ -879,17 +911,96 @@ const MEDIA_PROGRESS_WIDGET_WIDTH = 176;
 const MEDIA_PROGRESS_WIDGET_HEIGHT = 16;
 const MEDIA_PROGRESS_WIDGET_BOTTOM_INSET = 10;
 const VISUALIZER_WIDGET_CLOSE_LEAD_MS = 42;
-const VISUALIZER_WIDGET_MINIMIZE_LEAD_MS = 42;
+const CARD_CLOSE_ANIMATION_TIMEOUT_MS = 460;
 const VISUALIZER_WIDGET_RESTORE_DELAY_MS = 590;
 const VISUALIZER_WIDGET_RESTORE_BOOST_MS = 220;
 const VISUALIZER_STYLE_KEYS = new Set(['bars', 'pulse', 'ladder', 'orbit']);
-const CARD_THEME_KEYS = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'solstice']);
-const CARD_THEME_CYCLE = ['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'solstice'];
+const CARD_THEME_KEYS = new Set(['primary', 'sunset', 'crimson', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'solstice']);
+const CARD_THEME_CYCLE = ['primary', 'sunset', 'crimson', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'solstice'];
 const CARD_LAUNCH_SIZE_MODES = new Set([
   CARD_LAUNCH_MODE_NORMAL,
   CARD_LAUNCH_MODE_WIDE,
   CARD_LAUNCH_MODE_FULLSCREEN,
 ]);
+
+async function playCardCloseAnimation(cardWindow) {
+  if (!cardWindow || cardWindow.isDestroyed()) return false;
+  const contents = cardWindow.webContents;
+  if (!contents || contents.isDestroyed()) return false;
+
+  try {
+    return await contents.executeJavaScript(`
+      (() => {
+        const timeoutMs = ${CARD_CLOSE_ANIMATION_TIMEOUT_MS};
+        const el = document.querySelector('.card-window');
+        if (!el) return Promise.resolve(false);
+        if (window.__cardCloseAnimationPromise) return window.__cardCloseAnimationPromise;
+
+        window.__cardCloseAnimationPromise = new Promise((resolve) => {
+          let done = false;
+          const finish = (played) => {
+            if (done) return;
+            done = true;
+            el.removeEventListener('animationend', onAnimationEnd);
+            resolve(played);
+          };
+          const onAnimationEnd = (event) => {
+            if (!event || event.target !== el) return;
+            if (event.animationName !== 'windowShrinkClose') return;
+            finish(true);
+          };
+
+          el.classList.remove(
+            'is-opening-tv',
+            'is-opening-tv-bubble',
+            'is-minimizing',
+            'is-restoring',
+            'is-window-shrink-closing'
+          );
+          document.querySelectorAll('webview, .split-container, .loading-wave, .card-launch-fill, .media-hover-control').forEach((node) => {
+            try {
+              node.style.opacity = '0';
+              node.style.visibility = 'hidden';
+              node.style.pointerEvents = 'none';
+            } catch (e) {}
+          });
+          void el.offsetWidth;
+          el.addEventListener('animationend', onAnimationEnd);
+
+          requestAnimationFrame(() => {
+            el.classList.add('is-window-shrink-closing');
+            setTimeout(() => finish(true), timeoutMs);
+          });
+        });
+
+        return window.__cardCloseAnimationPromise;
+      })()
+    `, true);
+  } catch (error) {
+    return false;
+  }
+}
+
+async function closeCardWindowWithAnimation(cardId, options = {}) {
+  const cardWindow = cardWindows.get(cardId);
+  if (!cardWindow || cardWindow.isDestroyed()) {
+    return { success: false, error: 'Card window not found' };
+  }
+
+  closeVisualizerWidget(cardId);
+  closeSideFlamesWidget(cardId);
+  closeMediaProgressWidget(cardId);
+
+  if (!options.animationComplete) {
+    await playCardCloseAnimation(cardWindow);
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, VISUALIZER_WIDGET_CLOSE_LEAD_MS));
+  if (!cardWindow.isDestroyed()) {
+    cardWindow.close();
+  }
+  return { success: true };
+}
 
 function normalizeCardThemeKey(themeKey) {
   const rawCandidate = String(themeKey || '').trim().toLowerCase();
@@ -1055,6 +1166,11 @@ const AUTH_EXTERNAL_HOSTS = new Set([
   'auth.yahoo.com',
   'api.login.yahoo.com',
 ]);
+
+const REDIRECT_AUTH_URLS_EXTERNALLY = true;
+// Disabled: this promotion path can recurse through session request hooks and
+// rapidly reopen Google auth windows. Do not enable without a reentrancy guard.
+const PROMOTE_GOOGLE_AUTH_TO_TRUSTED_WINDOW = false;
 
 function isAuthSensitiveUrl(rawUrl) {
   try {
@@ -1291,9 +1407,9 @@ function getSideFlamesWidgetBounds(cardWindow) {
 
 function sendSideFlamesWidgetState(cardId) {
   const widget = sideFlameWidgets.get(cardId);
-  const state = visualizerWidgetStates.get(cardId);
+  const state = visualizerWidgetStates.get(cardId) || {};
   const cardWindow = cardWindows.get(Number(cardId));
-  if (!widget || widget.isDestroyed() || !state || !cardWindow || cardWindow.isDestroyed()) return;
+  if (!widget || widget.isDestroyed() || !cardWindow || cardWindow.isDestroyed()) return;
   try {
     if (widget.webContents && !widget.webContents.isDestroyed()) {
       widget.webContents.send('side-flames-widget-state', {
@@ -1529,11 +1645,6 @@ function syncSideFlamesWidget(cardId) {
     closeSideFlamesWidget(cardId);
     return;
   }
-  const state = visualizerWidgetStates.get(cardId);
-  if (!state) {
-    closeSideFlamesWidget(cardId);
-    return;
-  }
   const widget = ensureSideFlamesWidget(cardId, cardWindow);
   if (!widget || widget.isDestroyed()) return;
   try {
@@ -1616,8 +1727,8 @@ function isVisualizerSuppressed(cardId) {
 function shouldShowVisualizerWidget(cardId, cardWindow) {
   const state = visualizerWidgetStates.get(cardId);
   const isLocked = visualizerWidgetLockStates.get(Number(cardId)) === true;
-  if (!visualizerEnabled || !state || (!state.hasMedia && state.isPlaying !== false)) return false;
-  if (!cardWindow || cardWindow.isDestroyed()) return false;
+  if (!visualizerEnabled || !state) return false;
+  if (!cardWindow || cardWindow.isDestroyed() || !cardWindow.__visualizerReady) return false;
   if (cardBubbles.has(cardId)) return false;
   if (isVisualizerSuppressed(cardId)) return false;
   const restoreBoostActive = hasVisualizerRestoreBoost(cardId);
@@ -1779,14 +1890,33 @@ function registerVisualizerWidgetLifecycle(cardId, cardWindow, themeKey) {
     setTimeout(() => syncAllMediaProgressWidgets(), 16);
   };
 
-  cardWindow.on('show', sync);
-  cardWindow.on('restore', sync);
-  cardWindow.on('focus', sync);
-  cardWindow.on('blur', deferSync);
-  cardWindow.on('move', sync);
-  cardWindow.on('resize', sync);
-  cardWindow.on('enter-full-screen', sync);
-  cardWindow.on('leave-full-screen', sync);
+  // Wait for the window UI to be fully loaded, then add a small delay to ensure 
+  // the card is visually present before showing the visualizer.
+  cardWindow.webContents.once('did-finish-load', () => {
+    setTimeout(() => {
+      if (!cardWindow || cardWindow.isDestroyed()) return;
+
+      updateBubbleMediaState(cardId, {
+        hasMedia: false,
+        isPlaying: false
+      });
+
+      cardWindow.__visualizerReady = true;
+
+      cardWindow.on('show', sync);
+      cardWindow.on('restore', sync);
+      cardWindow.on('focus', sync);
+      cardWindow.on('blur', deferSync);
+      cardWindow.on('move', sync);
+      cardWindow.on('resize', sync);
+      cardWindow.on('enter-full-screen', sync);
+      cardWindow.on('leave-full-screen', sync);
+      
+      // Initial sync to show if already visible
+      sync();
+    }, 300);
+  });
+
   cardWindow.on('hide', hideNow);
   cardWindow.on('minimize', hideNow);
   cardWindow.on('close', () => {
@@ -1805,30 +1935,47 @@ function bringBubbleWindowsToFront() {
     if (!bubble || bubble.isDestroyed()) continue;
     try {
       if (!bubble.isVisible()) bubble.showInactive();
-      try {
-        bubble.setAlwaysOnTop(true, 'screen-saver');
-      } catch (e) {
-        try { bubble.setAlwaysOnTop(true, 'pop-up-menu'); } catch (inner) { bubble.setAlwaysOnTop(true); }
-      }
-      if (typeof bubble.moveTop === 'function') {
-        bubble.moveTop();
-      }
-      setTimeout(() => {
-        try {
-          if (!bubble.isDestroyed()) {
-            try {
-              bubble.setAlwaysOnTop(true, 'floating');
-            } catch (e) {
-              bubble.setAlwaysOnTop(true);
-            }
-            if (typeof bubble.moveTop === 'function') {
-              bubble.moveTop();
-            }
-          }
-        } catch (e) { }
-      }, 120);
+      bubble.setAlwaysOnTop(false);
     } catch (e) { }
   }
+}
+
+function isGoogleAuthSensitiveUrl(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || ''));
+    const hostname = (parsed.hostname || '').toLowerCase();
+    if (hostname === 'accounts.google.com') return true;
+    if (hostname === 'accounts.youtube.com') return true;
+    if (hostname === 'myaccount.google.com') return true;
+    if (hostname.endsWith('.google.com') && parsed.pathname.startsWith('/o/oauth2')) return true;
+    if (hostname.endsWith('.google.com') && parsed.pathname.includes('/signin')) return true;
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+function isYouTubeUrl(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || ''));
+    const hostname = (parsed.hostname || '').toLowerCase();
+    return hostname === 'youtube.com'
+      || hostname.endsWith('.youtube.com')
+      || hostname === 'youtu.be'
+      || hostname === 'youtube-nocookie.com'
+      || hostname.endsWith('.youtube-nocookie.com');
+  } catch (e) {
+    return false;
+  }
+}
+
+function shouldOpenInTrustedSiteWindow(rawUrl) {
+  return false;
+}
+
+function isTrustedSiteWebContentsId(webContentsId) {
+  const id = Number(webContentsId);
+  return Number.isFinite(id) && trustedSiteWebContentsIds.has(id);
 }
 
 function deriveBubbleLabel(pageTitle, pageUrl) {
@@ -1847,7 +1994,7 @@ function extractTitleNotificationCount(rawTitle) {
   const patterns = [
     /^\((\d{1,4})\)/,
     /^\[(\d{1,4})\]/,
-    /^(\d{1,4})\s*[•\-:]/,
+    /^(\d{1,4})\s*[�\-:]/,
     /(\d{1,4})\+?\s*$/
   ];
   for (const pattern of patterns) {
@@ -1865,8 +2012,8 @@ function createCardBubble(cardId, cardWindow, meta = {}) {
     if (!cardWindow || cardWindow.isDestroyed()) return null;
     const existing = cardBubbles.get(cardId);
     if (existing && !existing.isDestroyed()) {
-      existing.show();
-      existing.focus();
+      if (!existing.isVisible()) existing.showInactive();
+      try { existing.setAlwaysOnTop(false); } catch (e) { }
       return existing;
     }
 
@@ -1895,7 +2042,7 @@ function createCardBubble(cardId, cardWindow, meta = {}) {
       maximizable: false,
       fullscreenable: false,
       skipTaskbar: true,
-      alwaysOnTop: true,
+      alwaysOnTop: false,
       hasShadow: true,
       show: false,
       webPreferences: {
@@ -1908,10 +2055,9 @@ function createCardBubble(cardId, cardWindow, meta = {}) {
     attachWindowHangRecovery(bubbleWindow, `card-bubble-${cardId}`);
 
     try {
-      bubbleWindow.setAlwaysOnTop(true, 'floating');
-    } catch (e) {
-      bubbleWindow.setAlwaysOnTop(true);
-    }
+      bubbleWindow.setAlwaysOnTop(false);
+      bubbleWindow.setVisibleOnAllWorkspaces(false);
+    } catch (e) { }
 
     const bubbleTheme = String((meta && meta.themeKey) || 'primary').toLowerCase();
     const bubblePath = path.join(__dirname, 'src', 'card-bubble.html');
@@ -1927,7 +2073,7 @@ function createCardBubble(cardId, cardWindow, meta = {}) {
       console.error('Error loading card bubble:', err);
     });
     bubbleWindow.once('ready-to-show', () => {
-      if (!bubbleWindow.isDestroyed()) bubbleWindow.show();
+      if (!bubbleWindow.isDestroyed()) bubbleWindow.showInactive();
       try {
         const existingCount = bubbleNotifications.get(cardId) || 0;
         bubbleWindow.webContents.send('bubble-notification-update', existingCount);
@@ -2526,6 +2672,15 @@ function openChallengeInFullBrowserWindow(url, options = {}) {
       if (!isHttpUrl(openUrl)) {
         return { action: 'deny' };
       }
+      let sourceUrl = '';
+      try {
+        sourceUrl = fullBrowserWindow.webContents.getURL();
+      } catch (e) { }
+      const referrerUrl = referrer && referrer.url;
+      if (shouldBlockNewWindowUrl(openUrl, sourceUrl, referrerUrl)) {
+        notifyAdRedirectBlocked(openUrl, sourceUrl, referrerUrl);
+        return { action: 'deny' };
+      }
       try {
         fullBrowserWindow.loadURL(openUrl);
         return { action: 'deny' };
@@ -2597,6 +2752,225 @@ function openChallengeInFullBrowserWindow(url, options = {}) {
   }
 
   return { opened: true, window: fullBrowserWindow };
+}
+
+function openTrustedGoogleAuthWindow(url, context = {}) {
+  if (!PROMOTE_GOOGLE_AUTH_TO_TRUSTED_WINDOW || !isGoogleAuthSensitiveUrl(url)) {
+    return { opened: false };
+  }
+
+  const targetUrl = String(url || '').trim();
+  const normalizedUrl = `google-auth:${targetUrl.toLowerCase()}`;
+  const existing = promotedChallengeWindows.get(normalizedUrl);
+  if (existing && !existing.isDestroyed()) {
+    try {
+      if (existing.isMinimized()) existing.restore();
+      existing.show();
+      existing.focus();
+      existing.loadURL(targetUrl);
+    } catch (e) { }
+    return { opened: true, window: existing };
+  }
+
+  let windowX = 120;
+  let windowY = 70;
+  let windowWidth = 1180;
+  let windowHeight = 820;
+  try {
+    const { screen } = require('electron');
+    const display = screen.getPrimaryDisplay();
+    const workArea = display && display.workAreaSize ? display.workAreaSize : { width: 1440, height: 900 };
+    windowWidth = Math.min(1280, Math.max(980, Math.floor(workArea.width * 0.78)));
+    windowHeight = Math.min(920, Math.max(720, Math.floor(workArea.height * 0.82)));
+    windowX = Math.max(30, Math.floor((workArea.width - windowWidth) / 2));
+    windowY = Math.max(30, Math.floor((workArea.height - windowHeight) / 2));
+  } catch (e) { }
+
+  const authWindow = new BrowserWindow({
+    width: windowWidth,
+    height: windowHeight,
+    x: windowX,
+    y: windowY,
+    minWidth: 920,
+    minHeight: 680,
+    icon: APP_ICON_PATH,
+    frame: true,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#ffffff',
+    title: 'Google Sign In - Discovery Browser',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: true,
+      backgroundThrottling: false,
+      partition: 'persist:webview',
+    },
+  });
+  attachWindowHangRecovery(authWindow, `google-auth-${Date.now()}`);
+  try { authWindow.webContents.setUserAgent(CHROME_LIKE_UA); } catch (e) { }
+
+  try {
+    authWindow.webContents.setWindowOpenHandler(({ url: openUrl }) => {
+      if (!isHttpUrl(openUrl)) return { action: 'deny' };
+      try {
+        authWindow.loadURL(openUrl);
+        return { action: 'deny' };
+      } catch (e) {
+        return { action: 'allow' };
+      }
+    });
+  } catch (e) { }
+
+  authWindow.once('ready-to-show', () => {
+    try {
+      authWindow.show();
+      authWindow.focus();
+    } catch (e) { }
+  });
+
+  authWindow.webContents.on('page-title-updated', (event, title) => {
+    try {
+      if (title && !authWindow.isDestroyed()) {
+        authWindow.setTitle(`${title} - Discovery Browser`);
+      }
+    } catch (e) { }
+  });
+
+  authWindow.on('closed', () => {
+    const current = promotedChallengeWindows.get(normalizedUrl);
+    if (current === authWindow) {
+      promotedChallengeWindows.delete(normalizedUrl);
+    }
+  });
+
+  promotedChallengeWindows.set(normalizedUrl, authWindow);
+  authWindow.loadURL(targetUrl).catch((err) => {
+    console.error('[Google Auth] Failed to load URL:', err);
+    const current = promotedChallengeWindows.get(normalizedUrl);
+    if (current === authWindow) {
+      promotedChallengeWindows.delete(normalizedUrl);
+    }
+    try {
+      if (!authWindow.isDestroyed()) authWindow.close();
+    } catch (e) { }
+  });
+
+  return { opened: true, window: authWindow };
+}
+
+function openTrustedSiteWindow(url, options = {}) {
+  const targetUrl = String(url || '').trim();
+  if (!isHttpUrl(targetUrl) || !shouldOpenInTrustedSiteWindow(targetUrl)) {
+    return { opened: false };
+  }
+
+  const siteKey = isYouTubeUrl(targetUrl) ? 'youtube' : 'site';
+  const existing = trustedSiteWindows.get(siteKey);
+  if (existing && !existing.isDestroyed()) {
+    try {
+      if (existing.isMinimized()) existing.restore();
+      existing.show();
+      existing.focus();
+      existing.loadURL(targetUrl);
+    } catch (e) { }
+    return { opened: true, window: existing };
+  }
+
+  let windowX = 90;
+  let windowY = 50;
+  let windowWidth = 1280;
+  let windowHeight = 860;
+  try {
+    const { screen } = require('electron');
+    const display = screen.getPrimaryDisplay();
+    const workArea = display && display.workAreaSize ? display.workAreaSize : { width: 1440, height: 900 };
+    windowWidth = Math.min(1440, Math.max(1100, Math.floor(workArea.width * 0.84)));
+    windowHeight = Math.min(980, Math.max(760, Math.floor(workArea.height * 0.88)));
+    windowX = Math.max(24, Math.floor((workArea.width - windowWidth) / 2));
+    windowY = Math.max(24, Math.floor((workArea.height - windowHeight) / 2));
+  } catch (e) { }
+
+  const trustedWindow = new BrowserWindow({
+    width: windowWidth,
+    height: windowHeight,
+    x: windowX,
+    y: windowY,
+    minWidth: 980,
+    minHeight: 700,
+    icon: APP_ICON_PATH,
+    frame: true,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#ffffff',
+    title: 'YouTube - Discovery Browser',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: true,
+      backgroundThrottling: false,
+      partition: 'persist:webview',
+    },
+  });
+  attachWindowHangRecovery(trustedWindow, `trusted-site-${siteKey}-${Date.now()}`);
+  trustedSiteWindows.set(siteKey, trustedWindow);
+  try {
+    trustedSiteWebContentsIds.add(trustedWindow.webContents.id);
+    trustedWindow.webContents.setUserAgent(CHROME_LIKE_UA);
+  } catch (e) { }
+
+  try {
+    trustedWindow.webContents.setWindowOpenHandler(({ url: openUrl }) => {
+      if (!isHttpUrl(openUrl)) return { action: 'deny' };
+      try {
+        trustedWindow.loadURL(openUrl);
+        return { action: 'deny' };
+      } catch (e) {
+        return { action: 'allow' };
+      }
+    });
+  } catch (e) { }
+
+  trustedWindow.once('ready-to-show', () => {
+    try {
+      trustedWindow.show();
+      trustedWindow.focus();
+    } catch (e) { }
+  });
+
+  trustedWindow.webContents.on('page-title-updated', (event, title) => {
+    try {
+      if (title && !trustedWindow.isDestroyed()) {
+        trustedWindow.setTitle(`${title} - Discovery Browser`);
+      }
+    } catch (e) { }
+  });
+
+  trustedWindow.on('closed', () => {
+    const current = trustedSiteWindows.get(siteKey);
+    if (current === trustedWindow) {
+      trustedSiteWindows.delete(siteKey);
+    }
+    try {
+      trustedSiteWebContentsIds.delete(trustedWindow.webContents.id);
+    } catch (e) { }
+  });
+
+  trustedWindow.loadURL(targetUrl).catch((err) => {
+    console.error('[Trusted Site] Failed to load URL:', err);
+    const current = trustedSiteWindows.get(siteKey);
+    if (current === trustedWindow) {
+      trustedSiteWindows.delete(siteKey);
+    }
+    try {
+      trustedSiteWebContentsIds.delete(trustedWindow.webContents.id);
+      if (!trustedWindow.isDestroyed()) trustedWindow.close();
+    } catch (e) { }
+  });
+
+  return { opened: true, window: trustedWindow };
 }
 
 function openAuthInExternalBrowser(url, context = {}) {
@@ -2714,13 +3088,37 @@ function createCardDirectly(url, options = {}) {
       return null;
     }
 
-    if (isAuthSensitiveUrl(targetUrl)) {
+    // Check for existing card window with the same initial URL
+    if (pendingStartupLaunchExperience !== 'site-app') {
+      for (const [existingCardId, existingWin] of cardWindows.entries()) {
+        try {
+          if (existingWin && !existingWin.isDestroyed() && existingWin.__initialUrl === targetUrl) {
+            if (existingWin.isMinimized()) existingWin.restore();
+            if (!existingWin.isVisible()) existingWin.show();
+            existingWin.focus();
+            return existingWin;
+          }
+        } catch (e) { }
+      }
+    }
+
+    if (PROMOTE_GOOGLE_AUTH_TO_TRUSTED_WINDOW && isGoogleAuthSensitiveUrl(targetUrl)) {
+      openTrustedGoogleAuthWindow(targetUrl);
+      return null;
+    }
+
+    if (shouldOpenInTrustedSiteWindow(targetUrl)) {
+      openTrustedSiteWindow(targetUrl);
+      return null;
+    }
+
+    if (REDIRECT_AUTH_URLS_EXTERNALLY && isAuthSensitiveUrl(targetUrl)) {
       queueAuthRedirectExternally(targetUrl);
       return null;
     }
 
     // Use provided theme or fall back to current saved theme
-    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'solstice']);
+    const allowedThemes = new Set(['primary', 'sunset', 'crimson', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'solstice']);
     const effectiveTheme = opts.themeKey || currentCardTheme;
     const requestedTheme = String(effectiveTheme || '').toLowerCase() === 'frost'
       ? 'solstice'
@@ -2731,7 +3129,7 @@ function createCardDirectly(url, options = {}) {
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
 
     // Use provided loading animation or fall back to current saved animation
-    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'ink-drop']);
+    const allowedLoadingAnimations = new Set(['none', 'static-tv', 'water-fill', 'ink-drop', 'color-fill']);
     const effectiveLoadingAnimation = opts.loadingAnimation || currentLoadingAnimation;
     const normalizedLoadingAnimation = allowedLoadingAnimations.has(String(effectiveLoadingAnimation || '').toLowerCase())
       ? String(effectiveLoadingAnimation || '').toLowerCase()
@@ -2783,9 +3181,22 @@ function createCardDirectly(url, options = {}) {
         partition: 'persist:cards',
       },
     });
+
+    // Make site-app windows independent in the taskbar
+    if (process.platform === 'win32') {
+      try {
+        if (launchExperience === 'site-app' || pendingStartupLaunchExperience === 'site-app') {
+          const host = new URL(targetUrl).hostname.replace(/^www\./i, '');
+          const appId = `com.discovery.browser.app.${host}`;
+          cardWindow.setAppUserModelId(appId);
+        }
+      } catch (e) { }
+    }
+
     attachWindowHangRecovery(cardWindow, `direct-card-${cardId}`);
     registerVisualizerWidgetLifecycle(cardId, cardWindow, cardTheme);
     cardWindow.__cardShape = cardShape;
+    cardWindow.__initialUrl = targetUrl;
 
     if (launchMode === CARD_LAUNCH_MODE_FULLSCREEN && !minimizeAfterShow) {
       const applyFullscreen = () => {
@@ -2832,7 +3243,7 @@ function createCardDirectly(url, options = {}) {
               cardWindow.minimize();
             }
           } catch (e) { }
-        }, 500);
+        }, 80);
       };
       cardWindow.once('ready-to-show', scheduleMinimize);
       cardWindow.webContents.once('did-finish-load', scheduleMinimize);
@@ -2871,7 +3282,12 @@ function createCardDirectly(url, options = {}) {
         try {
           sourceUrl = cardWindow.webContents.getURL();
         } catch (e) { }
-        openUrlInCard(openUrl, { sourceUrl, referrerUrl: referrer && referrer.url });
+        const referrerUrl = referrer && referrer.url;
+        if (shouldBlockNewWindowUrl(openUrl, sourceUrl, referrerUrl)) {
+          notifyAdRedirectBlocked(openUrl, sourceUrl, referrerUrl);
+          return { action: 'deny' };
+        }
+        openUrlInCard(openUrl, { sourceUrl, referrerUrl });
         return { action: 'deny' };
       });
     } catch (e) { }
@@ -3008,7 +3424,17 @@ function openUrlInCard(url, context = {}) {
     if (!isHttpUrl(targetUrl)) {
       return;
     }
-    if (isAuthSensitiveUrl(targetUrl)) {
+    if (PROMOTE_GOOGLE_AUTH_TO_TRUSTED_WINDOW && isGoogleAuthSensitiveUrl(targetUrl)) {
+      openTrustedGoogleAuthWindow(targetUrl, context);
+      return;
+    }
+
+    if (shouldOpenInTrustedSiteWindow(targetUrl)) {
+      openTrustedSiteWindow(targetUrl, context);
+      return;
+    }
+
+    if (REDIRECT_AUTH_URLS_EXTERNALLY && isAuthSensitiveUrl(targetUrl)) {
       queueAuthRedirectExternally(targetUrl, context);
       return;
     }
@@ -3028,7 +3454,17 @@ function openUrlAsBubble(url, meta = {}) {
     if (!isHttpUrl(targetUrl)) {
       return null;
     }
-    if (isAuthSensitiveUrl(targetUrl)) {
+    if (PROMOTE_GOOGLE_AUTH_TO_TRUSTED_WINDOW && isGoogleAuthSensitiveUrl(targetUrl)) {
+      openTrustedGoogleAuthWindow(targetUrl, { sourceUrl: meta.sourceUrl });
+      return null;
+    }
+
+    if (shouldOpenInTrustedSiteWindow(targetUrl)) {
+      openTrustedSiteWindow(targetUrl, { sourceUrl: meta.sourceUrl });
+      return null;
+    }
+
+    if (REDIRECT_AUTH_URLS_EXTERNALLY && isAuthSensitiveUrl(targetUrl)) {
       // Auth URLs should still open externally, not as bubbles
       queueAuthRedirectExternally(targetUrl, { sourceUrl: meta.sourceUrl });
       return null;
@@ -3170,6 +3606,73 @@ function ensureUniquePath(savePath) {
 }
 
 // Map MIME types to file extensions
+function isMediaPlayerWebContentsId(webContentsId) {
+  try {
+    if (!mediaPlayerWindow || mediaPlayerWindow.isDestroyed() || !webContentsId) return false;
+    const wc = webContents.fromId(Number(webContentsId));
+    if (!wc || wc.isDestroyed()) return false;
+    if (wc === mediaPlayerWindow.webContents) return true;
+    const host = wc.hostWebContents;
+    return !!host && !host.isDestroyed() && host === mediaPlayerWindow.webContents;
+  } catch (e) {
+    return false;
+  }
+}
+
+function getHeaderValue(headers, name) {
+  try {
+    const target = String(name || '').toLowerCase();
+    for (const [key, value] of Object.entries(headers || {})) {
+      if (String(key).toLowerCase() !== target) continue;
+      if (Array.isArray(value)) return String(value[0] || '');
+      return String(value || '');
+    }
+  } catch (e) { }
+  return '';
+}
+
+function isYouTubeMediaPlayerUrl(rawUrl) {
+  try {
+    const host = new URL(String(rawUrl || '')).hostname.toLowerCase();
+    return host === 'youtube.com'
+      || host.endsWith('.youtube.com')
+      || host === 'youtu.be'
+      || host === 'googlevideo.com'
+      || host.endsWith('.googlevideo.com')
+      || host === 'ytimg.com'
+      || host.endsWith('.ytimg.com');
+  } catch (e) {
+    return false;
+  }
+}
+
+function isLikelyMediaStreamResponse(details) {
+  try {
+    const rawUrl = String(details && details.url || '');
+    if (!rawUrl || isYouTubeMediaPlayerUrl(rawUrl)) return false;
+    if (/^(blob|data|javascript):/i.test(rawUrl)) return false;
+    const parsed = new URL(rawUrl);
+    const pathname = parsed.pathname.toLowerCase();
+    const contentType = getHeaderValue(details.responseHeaders, 'content-type').toLowerCase();
+    if (/mpegurl|vnd\.apple\.mpegurl|dash\+xml|mp2t|x-mpegurl/.test(contentType)) return false;
+    if (contentType.startsWith('audio/')) return true;
+    if (/^video\/(mp4|webm|ogg|quicktime|x-matroska|x-msvideo)/.test(contentType)) return true;
+    if (/\.(mp4|m4v|webm|mov|mkv|avi|flv|mp3|wav|ogg|oga|aac|m4a|flac|opus)(?:$|[?#])/.test(pathname)) return true;
+    if (details.resourceType === 'media' && /^video\/(mp4|webm|ogg|quicktime|x-matroska|x-msvideo)/.test(contentType)) return true;
+  } catch (e) { }
+  return false;
+}
+
+function notifyMediaPlayerStreamDetected(details) {
+  try {
+    if (!mediaPlayerWindow || mediaPlayerWindow.isDestroyed()) return;
+    if (!isMediaPlayerWebContentsId(details && details.webContentsId)) return;
+    if (!isLikelyMediaStreamResponse(details)) return;
+    const streamUrl = String(details.url || '');
+    if (!streamUrl) return;
+    mediaPlayerWindow.webContents.send('stream-detected', streamUrl);
+  } catch (e) { }
+}
 function extensionFromMime(mime) {
   if (!mime) return '';
   const mimeMap = {
@@ -3413,7 +3916,11 @@ ipcMain.handle('create-site-shortcut', async (event, siteData = {}) => {
     const shortcutPath = path.join(desktopPath, `${shortcutName}.lnk`);
     const shortcutOperation = fs.existsSync(shortcutPath) ? 'update' : 'create';
     const launchArgs = buildShortcutLaunchArgs(targetUrl);
-    const iconPath = fs.existsSync(APP_ICON_PATH) ? APP_ICON_PATH : process.execPath;
+    
+    // In packaged apps, we MUST use the executable itself for the icon because Windows 
+    // cannot resolve icons inside an ASAR archive.
+    const iconPath = app.isPackaged ? process.execPath : (fs.existsSync(APP_ICON_PATH) ? APP_ICON_PATH : process.execPath);
+    
     const description = `Open ${shortcutName} in Discovery Browser`;
     const workDir = app.isPackaged
       ? path.dirname(process.execPath)
@@ -3473,7 +3980,7 @@ ipcMain.handle('get-visualizer-enabled', async () => {
 // Card theme management - store user's preferred theme for external URL cards
 ipcMain.handle('set-card-theme', async (event, themeKey) => {
   try {
-    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'solstice']);
+    const allowedThemes = new Set(['primary', 'sunset', 'crimson', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'solstice']);
     const requestedTheme = String(themeKey || '').toLowerCase() === 'frost'
       ? 'solstice'
       : String(themeKey || '').toLowerCase();
@@ -3512,7 +4019,7 @@ ipcMain.handle('get-card-shape', async () => {
 
 ipcMain.handle('set-loading-animation', async (event, loadingAnimationKey) => {
   try {
-    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'ink-drop']);
+    const allowedLoadingAnimations = new Set(['none', 'static-tv', 'water-fill', 'ink-drop', 'color-fill']);
     if (allowedLoadingAnimations.has(String(loadingAnimationKey || '').toLowerCase())) {
       currentLoadingAnimation = String(loadingAnimationKey || '').toLowerCase();
     }
@@ -3647,11 +4154,49 @@ process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
 });
 
+let storageFlushTimer = null;
+
+function getPersistentBrowserSessions() {
+  const sessions = [];
+  try { sessions.push(session.defaultSession); } catch (e) { }
+  for (const partitionName of ['persist:webview', 'persist:cards', 'persist:readmode']) {
+    try {
+      sessions.push(session.fromPartition(partitionName));
+    } catch (e) { }
+  }
+  return Array.from(new Set(sessions.filter(Boolean)));
+}
+
+function flushBrowserSessionStorage() {
+  for (const sess of getPersistentBrowserSessions()) {
+    try {
+      if (sess.cookies && typeof sess.cookies.flushStore === 'function') {
+        sess.cookies.flushStore(() => { });
+      }
+    } catch (e) { }
+    try {
+      if (typeof sess.flushStorageData === 'function') {
+        sess.flushStorageData();
+      }
+    } catch (e) { }
+  }
+}
+
+function startStoragePersistenceFlush() {
+  if (storageFlushTimer) return;
+  storageFlushTimer = setInterval(() => {
+    flushBrowserSessionStorage();
+  }, 60000);
+  if (storageFlushTimer && typeof storageFlushTimer.unref === 'function') {
+    storageFlushTimer.unref();
+  }
+}
 // Handle app ready
 app.on('ready', () => {
   console.log('[App] Ready event fired, starting app...');
   try {
     loadCardPreferencesFromDisk();
+    startStoragePersistenceFlush();
     createMainWindow();
   } catch (error) {
     console.error('[App] Error in createMainWindow:', error);
@@ -3659,6 +4204,7 @@ app.on('ready', () => {
 });
 
 app.on('before-quit', () => {
+  flushBrowserSessionStorage();
   writeCardPreferencesToDisk();
   flushPermissionDecisionPersist();
   saveFavoritesToDisk();
@@ -3861,7 +4407,12 @@ function createMainWindow() {
       try {
         sourceUrl = mainWindow.webContents.getURL();
       } catch (e) { }
-      openUrlInCard(url, { sourceUrl, referrerUrl: referrer && referrer.url });
+      const referrerUrl = referrer && referrer.url;
+      if (shouldBlockNewWindowUrl(url, sourceUrl, referrerUrl)) {
+        notifyAdRedirectBlocked(url, sourceUrl, referrerUrl);
+        return { action: 'deny' };
+      }
+      openUrlInCard(url, { sourceUrl, referrerUrl });
       return { action: 'deny' };
     });
   } catch (e) { }
@@ -3906,6 +4457,8 @@ let blocklist = new Set();
 let blockExactHosts = new Set();
 let blockSuffixHosts = [];
 let blockSubstringPatterns = [];
+const redirectExactHosts = new Set();
+let redirectSuffixHosts = [];
 const downloadHistory = []; // newest first
 const DOWNLOAD_HISTORY_FILENAME = 'download-history.json';
 let downloadHistoryLoaded = false;
@@ -4018,12 +4571,110 @@ function isSecurityAllowlistedHost(hostname) {
   return false;
 }
 
+function getHostnameFromUrl(rawUrl) {
+  try {
+    return String(new URL(String(rawUrl || '')).hostname || '').toLowerCase();
+  } catch (e) {
+    const match = String(rawUrl || '').match(/^[a-z][a-z0-9+.-]*:\/\/([^/?#:]+)/i);
+    return match ? String(match[1] || '').toLowerCase() : '';
+  }
+}
+
+function isBlockedAdHost(hostname) {
+  const host = String(hostname || '').toLowerCase();
+  if (!host || isSocialAllowlistedHost(host) || isSecurityAllowlistedHost(host)) return false;
+  if (blockExactHosts.has(host)) return true;
+  for (const blocked of blockSuffixHosts) {
+    if (host.endsWith('.' + blocked)) return true;
+  }
+  for (const pattern of blockSubstringPatterns) {
+    if (host.includes(pattern)) return true;
+  }
+  return false;
+}
+
+function isKnownRedirectHost(hostname) {
+  const host = String(hostname || '').toLowerCase();
+  if (!host || isSocialAllowlistedHost(host) || isSecurityAllowlistedHost(host)) return false;
+  if (redirectExactHosts.has(host)) return true;
+  for (const blocked of redirectSuffixHosts) {
+    if (host.endsWith('.' + blocked)) return true;
+  }
+  return false;
+}
+
+function getSiteBase(hostname) {
+  const parts = String(hostname || '').toLowerCase().split('.').filter(Boolean);
+  if (parts.length <= 2) return parts.join('.');
+  return parts.slice(-2).join('.');
+}
+
+function isLikelyAdRedirectUrl(rawUrl, sourceUrl = '', referrerUrl = '') {
+  if (!rawUrl || blocklist.size === 0) return false;
+  let urlObj;
+  try {
+    urlObj = new URL(String(rawUrl));
+  } catch (e) {
+    return false;
+  }
+
+  const host = String(urlObj.hostname || '').toLowerCase();
+  if (!host || isSocialAllowlistedHost(host) || isSecurityAllowlistedHost(host)) return false;
+  if (isBlockedAdHost(host) || isKnownRedirectHost(host)) return true;
+
+  const sourceHost = getHostnameFromUrl(referrerUrl) || getHostnameFromUrl(sourceUrl);
+  const hasExternalSource = sourceHost && getSiteBase(sourceHost) !== getSiteBase(host);
+  const redirectParamNames = ['url', 'u', 'redirect', 'redirect_url', 'redir', 'r', 'to', 'target', 'destination', 'dest', 'link', 'out', 'go'];
+  for (const name of redirectParamNames) {
+    const value = urlObj.searchParams.get(name);
+    if (!value) continue;
+    let destinationHost = '';
+    try {
+      destinationHost = new URL(value, urlObj.href).hostname.toLowerCase();
+    } catch (e) { }
+    if (!destinationHost) continue;
+    if (isBlockedAdHost(destinationHost) || isKnownRedirectHost(destinationHost)) return true;
+    if (hasExternalSource && getSiteBase(destinationHost) !== getSiteBase(sourceHost)) return true;
+  }
+
+  const redirectPathPattern = /(^|[/?#&._-])(ad|ads|advert|click|clk|track|tracker|tracking|redirect|redir|out|pop|popup)([/?#&._=-]|$)/i;
+  return hasExternalSource && redirectPathPattern.test(urlObj.href);
+}
+
+function notifyAdRedirectBlocked(rawUrl, sourceUrl = '', referrerUrl = '') {
+  try {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const host = getHostnameFromUrl(rawUrl) || String(rawUrl || '').slice(0, 80);
+    const refHost = getHostnameFromUrl(referrerUrl) || getHostnameFromUrl(sourceUrl);
+    safeIpcSend(mainWindow.webContents, 'ad-redirect-blocked', host, refHost, rawUrl);
+  } catch (e) { }
+}
+
+function shouldBlockPopupOrRedirect(rawUrl, sourceUrl = '', referrerUrl = '') {
+  if (blocklist.size === 0) return false;
+  const host = getHostnameFromUrl(rawUrl);
+  if (!host || isSocialAllowlistedHost(host) || isSecurityAllowlistedHost(host)) return false;
+  return isLikelyAdRedirectUrl(rawUrl, sourceUrl, referrerUrl);
+}
+
+function shouldBlockNewWindowUrl(rawUrl, sourceUrl = '', referrerUrl = '') {
+  if (shouldBlockPopupOrRedirect(rawUrl, sourceUrl, referrerUrl)) return true;
+  if (blocklist.size === 0) return false;
+  const targetHost = getHostnameFromUrl(rawUrl);
+  const sourceHost = getHostnameFromUrl(sourceUrl) || getHostnameFromUrl(referrerUrl);
+  if (!targetHost || !sourceHost) return false;
+  if (isSocialAllowlistedHost(targetHost) || isSecurityAllowlistedHost(targetHost)) return false;
+  return getSiteBase(targetHost) !== getSiteBase(sourceHost);
+}
+
 function applyAddons(addonsArray) {
   // Build a blocklist based on addon metadata heuristics
   blocklist.clear();
   blockExactHosts.clear();
   blockSuffixHosts = [];
   blockSubstringPatterns = [];
+  redirectExactHosts.clear();
+  redirectSuffixHosts = [];
   if (!Array.isArray(addonsArray)) return;
 
   // Comprehensive ad and tracking host blocklist (common ad networks)
@@ -4078,24 +4729,35 @@ function applyAddons(addonsArray) {
     'ads.', 'ad.', 'adv.', 'adserver', 'advertising',
   ];
 
+  const defaultRedirectHosts = [
+    'adf.ly', 'adfly.click', 'adfoc.us', 'linkvertise.com',
+    'linkredirect.com', 'linkbucks.com', 'clk.best', 'clk.ink',
+    'clksite.com', 'clickserve.com', 'clicksor.com', 'fastclick.net',
+    'popads.net', 'popcash.net', 'propellerads.com', 'propeller-tracking.com',
+    'onclickads.net', 'onclickmega.com', 'trafficjunky.net',
+    'exoclick.com', 'exosrv.com', 'juicyads.com', 'hilltopads.net',
+    'revenuehits.com', 'mgid.com', 'taboola.com', 'outbrain.com',
+    'mks98.com', 'trafficfactory.biz', 'adsterra.com', 'adsterra.org',
+    'adsterra-network.com', 'highperformancegate.com', 'highperformancedisplayformat.com',
+    'onclickalgo.com', 'onclickperformance.com', 'popunder.net',
+    's.click.aliexpress.com', 'click.aliexpress.com', 'best.aliexpress.com',
+    'bit.ly', 'tinyurl.com', 'ow.ly', 'buff.ly', 'is.gd',
+    'short2url.com', 'short.link', 'shortened.me', 'ourl.co',
+  ];
+
   let hasAdBlocker = false;
   addonsArray.forEach(a => {
     if (a && a.enabled) {
-      const name = (a.name || '').toLowerCase();
-      const desc = (a.description || '').toLowerCase();
-
-      // Detect ad blocker addons
-      if (name.includes('ublock') || name.includes('adblock') ||
-        name.includes('ad block') || name.includes('adblocker') ||
-        desc.includes('block ads') || desc.includes('advertisement')) {
-        hasAdBlocker = true;
-        defaultAdHosts.forEach(h => blocklist.add(h));
-      }
+      hasAdBlocker = true;
+      defaultAdHosts.forEach(h => blocklist.add(h));
+      defaultRedirectHosts.forEach(h => redirectExactHosts.add(h));
     }
   });
 
   if (!hasAdBlocker) {
     blocklist.clear();
+    redirectExactHosts.clear();
+    redirectSuffixHosts = [];
     return;
   }
 
@@ -4111,6 +4773,8 @@ function applyAddons(addonsArray) {
       blockSubstringPatterns.push(blocked);
     }
   }
+
+  redirectSuffixHosts = Array.from(redirectExactHosts);
 }
 
 function setupAddonBlocking() {
@@ -4124,7 +4788,34 @@ function setupAddonBlocking() {
 
   const requestHandler = (details, callback) => {
     try {
-      if (details && details.resourceType === 'mainFrame' && isAuthSensitiveUrl(details.url)) {
+      if (
+        details
+        && details.resourceType === 'mainFrame'
+        && !isTrustedSiteWebContentsId(details.webContentsId)
+        && shouldOpenInTrustedSiteWindow(details.url)
+      ) {
+        openTrustedSiteWindow(details.url, {
+          referrerUrl: details.referrer || '',
+        });
+        return callback({ cancel: true });
+      }
+
+      if (PROMOTE_GOOGLE_AUTH_TO_TRUSTED_WINDOW && details && details.resourceType === 'mainFrame' && isGoogleAuthSensitiveUrl(details.url)) {
+        let sourceUrl = '';
+        try {
+          if (details.webContentsId) {
+            const wc = webContents.fromId(details.webContentsId);
+            if (wc && !wc.isDestroyed()) sourceUrl = wc.getURL();
+          }
+        } catch (e) { }
+        openTrustedGoogleAuthWindow(details.url, {
+          sourceUrl,
+          referrerUrl: details.referrer || '',
+        });
+        return callback({ cancel: true });
+      }
+
+      if (REDIRECT_AUTH_URLS_EXTERNALLY && details && details.resourceType === 'mainFrame' && isAuthSensitiveUrl(details.url)) {
         let sourceUrl = '';
         try {
           if (details.webContentsId) {
@@ -4140,43 +4831,37 @@ function setupAddonBlocking() {
       }
 
       const reqUrl = details.url || '';
-      let hostname = '';
-
-      try {
-        hostname = new URL(reqUrl).hostname;
-      } catch (e) {
-        const match = reqUrl.match(/^https?:\/\/([^/?#]+)/);
-        hostname = match ? match[1] : reqUrl;
-      }
+      const hostname = getHostnameFromUrl(reqUrl);
 
       if (blocklist.size > 0) {
-        const host = String(hostname || '').toLowerCase();
-        // Never block top-level navigations; only filter subresources.
-        // Blocking a main frame can look like total connectivity failure.
+        const localHost = String(hostname || '').toLowerCase();
+        const referrer = String(details && details.referrer || '');
+        let sourceUrl = '';
+        try {
+          if (details.webContentsId) {
+            const wc = webContents.fromId(details.webContentsId);
+            if (wc && !wc.isDestroyed()) sourceUrl = wc.getURL();
+          }
+        } catch (e) { }
         if (details && details.resourceType === 'mainFrame') {
+          const sourceHost = getHostnameFromUrl(sourceUrl);
+          const isInPageNavigation = !!sourceHost && getSiteBase(sourceHost) !== getSiteBase(localHost);
+          const isRedirectBlocked = isInPageNavigation && isLikelyAdRedirectUrl(reqUrl, sourceUrl, referrer);
+          if (isRedirectBlocked) {
+            notifyAdRedirectBlocked(reqUrl, sourceUrl, referrer);
+            return callback({ cancel: true });
+          }
           return callback({ cancel: false });
         }
-        if (isSocialAllowlistedHost(host)) {
+        if (isSocialAllowlistedHost(localHost)) {
           return callback({ cancel: false });
         }
-        if (isSecurityAllowlistedHost(host)) {
+        if (isSecurityAllowlistedHost(localHost)) {
           return callback({ cancel: false });
         }
 
-        if (blockExactHosts.has(host)) {
+        if (isBlockedAdHost(localHost) || isKnownRedirectHost(localHost) || isLikelyAdRedirectUrl(reqUrl, sourceUrl, referrer)) {
           return callback({ cancel: true });
-        }
-
-        for (const blocked of blockSuffixHosts) {
-          if (host.endsWith('.' + blocked)) {
-            return callback({ cancel: true });
-          }
-        }
-
-        for (const pattern of blockSubstringPatterns) {
-          if (host.includes(pattern)) {
-            return callback({ cancel: true });
-          }
         }
       }
     } catch (e) {
@@ -4216,6 +4901,7 @@ function setupAddonBlocking() {
   // Rewriting CSP on Cloudflare/Turnstile pages can cause the challenge to fail.
   const cspOverrideHandler = (details, callback) => {
     const responseHeaders = Object.assign({}, details.responseHeaders);
+    notifyMediaPlayerStreamDetected(details);
     callback({ responseHeaders });
   };
 
@@ -4261,7 +4947,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
         error: 'A required update must be installed before continuing.'
       };
     }
-    const allowedThemes = new Set(['primary', 'sunset', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'solstice']);
+    const allowedThemes = new Set(['primary', 'sunset', 'crimson', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'alt', 'solstice']);
     const requestedTheme = String(themeKey || '').toLowerCase() === 'frost'
       ? 'solstice'
       : String(themeKey || '').toLowerCase();
@@ -4270,7 +4956,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       : 'primary';
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
     const cardShape = normalizeCardShapeKey(shapeKey || currentCardShape);
-    const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'ink-drop']);
+    const allowedLoadingAnimations = new Set(['none', 'static-tv', 'water-fill', 'ink-drop', 'color-fill']);
     const normalizedLoadingAnimation = allowedLoadingAnimations.has(String(currentLoadingAnimation || '').toLowerCase())
       ? String(currentLoadingAnimation || '').toLowerCase()
       : 'static-tv';
@@ -4280,7 +4966,36 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       return { success: false, error: 'Invalid or unsupported URL scheme' };
     }
 
-    if (isAuthSensitiveUrl(targetUrl)) {
+    // Check for existing card window with the same initial URL
+    for (const [existingCardId, existingWin] of cardWindows.entries()) {
+      try {
+        if (existingWin && !existingWin.isDestroyed() && existingWin.__initialUrl === targetUrl) {
+          if (existingWin.isMinimized()) existingWin.restore();
+          if (!existingWin.isVisible()) existingWin.show();
+          existingWin.focus();
+          return { success: true, cardId: existingCardId, alreadyOpen: true };
+        }
+      } catch (e) { }
+    }
+
+    if (PROMOTE_GOOGLE_AUTH_TO_TRUSTED_WINDOW && isGoogleAuthSensitiveUrl(targetUrl)) {
+      openTrustedGoogleAuthWindow(targetUrl);
+      if (deferInitialMainShow) {
+        deferInitialMainShow = false;
+        pendingStartupUrl = null;
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+          mainWindow.show();
+        }
+      }
+      return { success: false, externalOpened: false, authWindowOpened: true, reason: 'google-auth-window-opened' };
+    }
+
+    if (shouldOpenInTrustedSiteWindow(targetUrl)) {
+      openTrustedSiteWindow(targetUrl);
+      return { success: false, trustedSiteWindowOpened: true, reason: 'trusted-site-window-opened' };
+    }
+
+    if (REDIRECT_AUTH_URLS_EXTERNALLY && isAuthSensitiveUrl(targetUrl)) {
       queueAuthRedirectExternally(targetUrl);
       if (deferInitialMainShow) {
         deferInitialMainShow = false;
@@ -4376,7 +5091,12 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
         try {
           sourceUrl = cardWindow.webContents.getURL();
         } catch (e) { }
-        openUrlInCard(url, { sourceUrl, referrerUrl: referrer && referrer.url });
+        const referrerUrl = referrer && referrer.url;
+        if (shouldBlockNewWindowUrl(url, sourceUrl, referrerUrl)) {
+          notifyAdRedirectBlocked(url, sourceUrl, referrerUrl);
+          return { action: 'deny' };
+        }
+        openUrlInCard(url, { sourceUrl, referrerUrl });
         return { action: 'deny' };
       });
     } catch (e) { }
@@ -4507,7 +5227,17 @@ ipcMain.handle('navigate-card', async (event, cardId, url) => {
       return { success: false, error: 'Invalid or unsupported URL scheme' };
     }
 
-    if (isAuthSensitiveUrl(targetUrl)) {
+    if (PROMOTE_GOOGLE_AUTH_TO_TRUSTED_WINDOW && isGoogleAuthSensitiveUrl(targetUrl)) {
+      openTrustedGoogleAuthWindow(targetUrl);
+      return { success: false, externalOpened: false, authWindowOpened: true, reason: 'google-auth-window-opened' };
+    }
+
+    if (shouldOpenInTrustedSiteWindow(targetUrl)) {
+      openTrustedSiteWindow(targetUrl);
+      return { success: false, trustedSiteWindowOpened: true, reason: 'trusted-site-window-opened' };
+    }
+
+    if (REDIRECT_AUTH_URLS_EXTERNALLY && isAuthSensitiveUrl(targetUrl)) {
       queueAuthRedirectExternally(targetUrl);
       return { success: false, externalOpened: true, reason: 'auth-url-opened-externally' };
     }
@@ -4526,19 +5256,9 @@ ipcMain.handle('navigate-card', async (event, cardId, url) => {
 });
 
 // Close card
-ipcMain.handle('close-card', async (event, cardId) => {
+ipcMain.handle('close-card', async (event, cardId, options = {}) => {
   try {
-    const cardWindow = cardWindows.get(cardId);
-    if (!cardWindow || cardWindow.isDestroyed()) {
-      return { success: false, error: 'Card window not found' };
-    }
-
-    closeVisualizerWidget(cardId);
-    closeSideFlamesWidget(cardId);
-    closeMediaProgressWidget(cardId);
-    await new Promise((resolve) => setTimeout(resolve, VISUALIZER_WIDGET_CLOSE_LEAD_MS));
-    cardWindow.close();
-    return { success: true };
+    return await closeCardWindowWithAnimation(cardId, options);
   } catch (error) {
     console.error('Error closing card:', error);
     return { success: false, error: error.message };
@@ -4668,7 +5388,6 @@ ipcMain.handle('minimize-card', async (event, cardId, pageUrl = '', pageTitle = 
 
     hideVisualizerWidget(cardId);
     hideSideFlamesWidget(cardId);
-    await new Promise((resolve) => setTimeout(resolve, VISUALIZER_WIDGET_MINIMIZE_LEAD_MS));
     createCardBubble(cardId, cardWindow, { pageUrl, pageTitle, themeKey });
     cardWindow.hide();
     syncVisualizerWidget(cardId);
@@ -4694,10 +5413,7 @@ ipcMain.handle('close-bubble-and-card', async (event, cardId) => {
     const cardWindow = cardWindows.get(cardId);
     if (cardWindow && !cardWindow.isDestroyed()) {
       try {
-        closeVisualizerWidget(cardId);
-        closeSideFlamesWidget(cardId);
-        await new Promise((resolve) => setTimeout(resolve, VISUALIZER_WIDGET_CLOSE_LEAD_MS));
-        cardWindow.close();
+        await closeCardWindowWithAnimation(cardId);
       } catch (e) { }
     }
     // Then close the bubble
@@ -4720,9 +5436,7 @@ ipcMain.handle('show-bubble-context-menu', async (event, cardId) => {
       const cardWindow = cardWindows.get(cardId);
       if (cardWindow && !cardWindow.isDestroyed()) {
         try {
-          closeVisualizerWidget(cardId);
-          await new Promise((resolve) => setTimeout(resolve, VISUALIZER_WIDGET_CLOSE_LEAD_MS));
-          cardWindow.close();
+          await closeCardWindowWithAnimation(cardId);
         } catch (e) { }
       }
       closeCardBubble(cardId);
@@ -4742,7 +5456,7 @@ ipcMain.handle('cycle-windows', async (event, currentCardId) => {
 
   if (cards.length === 0) return { success: true };
 
-  // Single card — cycle to main app instead of looping back to the card
+  // Single card � cycle to main app instead of looping back to the card
   if (cards.length === 1) {
     try {
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -5188,7 +5902,7 @@ function getOfflineArticlePath(articleId) {
 
 // Save article HTML content to disk for offline access
 ipcMain.handle('save-offline-article', async (event, articleId, url) => {
-  // Legacy stub — payload is now saved directly from readmode via save-article-payload
+  // Legacy stub � payload is now saved directly from readmode via save-article-payload
   return { success: true, skipped: true };
 });
 
@@ -5806,7 +6520,7 @@ ipcMain.handle('toggle-bookmark', async (event, bookmarkData) => {
   }
 });
 
-// Card window: check if URL is bookmarked â€” answered directly, no round-trip
+// Card window: check if URL is bookmarked — answered directly, no round-trip
 ipcMain.handle('is-bookmarked', async (event, url) => {
   for (const folder of bookmarkFolders) {
     if (folder.bookmarks && folder.bookmarks.some(b => b.url === url)) {
@@ -5816,7 +6530,7 @@ ipcMain.handle('is-bookmarked', async (event, url) => {
   return false;
 });
 
-// Card window: get folder list â€” answered directly, no round-trip
+// Card window: get folder list — answered directly, no round-trip
 ipcMain.handle('get-bookmark-folders', async (event) => {
   return bookmarkFolders.map(f => ({
     id: f.id,
@@ -6005,6 +6719,37 @@ ipcMain.handle('update-addons', async (event, addonsArray) => {
   }
 });
 
+ipcMain.handle('should-block-popup-url', async (event, payload = {}) => {
+  try {
+    const rawUrl = payload && payload.url;
+    const sourceUrl = payload && payload.sourceUrl;
+    const referrerUrl = payload && payload.referrerUrl;
+    const hadRecentUserGesture = payload && payload.hadRecentUserGesture !== false;
+    const isNewWindow = payload && payload.disposition === 'new-window';
+    let blocked = isNewWindow
+      ? shouldBlockNewWindowUrl(rawUrl, sourceUrl, referrerUrl)
+      : shouldBlockPopupOrRedirect(rawUrl, sourceUrl, referrerUrl);
+    if (!blocked && !hadRecentUserGesture && blocklist.size > 0) {
+      const targetHost = getHostnameFromUrl(rawUrl);
+      const sourceHost = getHostnameFromUrl(sourceUrl) || getHostnameFromUrl(referrerUrl);
+      if (
+        targetHost &&
+        sourceHost &&
+        getSiteBase(targetHost) !== getSiteBase(sourceHost) &&
+        !isSocialAllowlistedHost(targetHost) &&
+        !isSecurityAllowlistedHost(targetHost)
+      ) {
+        blocked = true;
+      }
+    }
+    if (blocked) notifyAdRedirectBlocked(rawUrl, sourceUrl, referrerUrl);
+    return { blocked };
+  } catch (error) {
+    console.error('Error checking popup URL:', error);
+    return { blocked: false, error: error.message };
+  }
+});
+
 // Add manual default browser setting method
 function openDefaultAppsSettings() {
   if (process.platform === 'win32') {
@@ -6086,10 +6831,8 @@ function closeAllCardsForForcedUpdate() {
   for (const [cardId, cardWindow] of cardWindows.entries()) {
     try {
       closeCardBubble(cardId);
-      closeVisualizerWidget(cardId);
-      closeMediaProgressWidget(cardId);
       if (cardWindow && !cardWindow.isDestroyed()) {
-        cardWindow.close();
+        closeCardWindowWithAnimation(cardId).catch(() => { });
       }
     } catch (e) { }
   }

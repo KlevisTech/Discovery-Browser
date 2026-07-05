@@ -18,8 +18,8 @@ contextBridge.exposeInMainWorld('cardAPI', {
     ipcRenderer.invoke('navigate-card', cardId, url),
 
   // Close card
-  closeCard: (cardId) =>
-    ipcRenderer.invoke('close-card', cardId),
+  closeCard: (cardId, options) =>
+    ipcRenderer.invoke('close-card', cardId, options),
 
   // Hide the visualizer immediately while the card close animation runs
   hideVisualizerNow: (cardId) =>
@@ -119,6 +119,7 @@ contextBridge.exposeInMainWorld('cardAPI', {
 
   // Send custom events to main process
   sendToMain: (channel, payload) => ipcRenderer.send(channel, payload),
+  shouldBlockPopupUrl: (payload) => ipcRenderer.invoke('should-block-popup-url', payload),
   getUserAgent: () => ipcRenderer.invoke('get-user-agent'),
 
   // Open readmode card - creates a phone-sized reading view
