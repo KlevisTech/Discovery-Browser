@@ -8,11 +8,12 @@ const session = electron.session;
 const webContents = electron.webContents;
 const shell = electron.shell;
 const dialog = electron.dialog;
+const nativeImage = electron.nativeImage;
 const { clipboard } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const { pathToFileURL } = require('url');
+const { pathToFileURL, fileURLToPath } = require('url');
 
 const { Menu, MenuItem } = require('electron');
 const APP_ICON_PATH = path.join(__dirname, 'assets', 'discoverybrowser.ico');
@@ -339,6 +340,7 @@ if (!app.isPackaged && process.env.DISCOVERY_DISABLE_GPU_SANDBOX === '1') {
   app.commandLine.appendSwitch('disable-gpu-sandbox');
 }
 app.commandLine.appendSwitch('use-angle', 'd3d11'); // Use D3D11 ANGLE backend for Windows stability
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // QUIC/HTTP3 can cause ERR_QUIC_PROTOCOL_ERROR in some environments.
 app.commandLine.appendSwitch('disable-quic');
 app.commandLine.appendSwitch('disable-http3');
@@ -922,6 +924,59 @@ const CARD_LAUNCH_SIZE_MODES = new Set([
   CARD_LAUNCH_MODE_WIDE,
   CARD_LAUNCH_MODE_FULLSCREEN,
 ]);
+const CARD_LOADING_ANIMATION_KEYS = new Set(['none', 'static-tv', 'water-fill', 'color-fill']);
+
+async function playMediaPlayerCloseAnimation(targetWindow) {
+  if (!targetWindow || targetWindow.isDestroyed()) return false;
+  const contents = targetWindow.webContents;
+  if (!contents || contents.isDestroyed()) return false;
+
+  try {
+    return await contents.executeJavaScript(`
+      (() => {
+        const timeoutMs = ${CARD_CLOSE_ANIMATION_TIMEOUT_MS};
+        const el = document.querySelector('.player-shell');
+        if (!el) return Promise.resolve(false);
+        if (window.__mediaPlayerCloseAnimationPromise) return window.__mediaPlayerCloseAnimationPromise;
+
+        window.__mediaPlayerCloseAnimationPromise = new Promise((resolve) => {
+          let done = false;
+          const finish = (played) => {
+            if (done) return;
+            done = true;
+            el.removeEventListener('animationend', onAnimationEnd);
+            resolve(played);
+          };
+          const onAnimationEnd = (event) => {
+            if (!event || event.target !== el) return;
+            if (event.animationName !== 'windowShrinkClose') return;
+            finish(true);
+          };
+
+          el.classList.remove('is-opening-tv', 'is-window-shrink-closing');
+          document.querySelectorAll('video, audio, webview, .stream-webview, #stream-webview-host, .floating-window, .playlist-sidebar, .context-menu').forEach((node) => {
+            try {
+              node.style.opacity = '0';
+              node.style.visibility = 'hidden';
+              node.style.pointerEvents = 'none';
+            } catch (e) {}
+          });
+          void el.offsetWidth;
+          el.addEventListener('animationend', onAnimationEnd);
+
+          requestAnimationFrame(() => {
+            el.classList.add('is-window-shrink-closing');
+            setTimeout(() => finish(true), timeoutMs);
+          });
+        });
+
+        return window.__mediaPlayerCloseAnimationPromise;
+      })()
+    `, true);
+  } catch (error) {
+    return false;
+  }
+}
 
 async function playCardCloseAnimation(cardWindow) {
   if (!cardWindow || cardWindow.isDestroyed()) return false;
@@ -1021,6 +1076,9 @@ function broadcastCardThemeChanged(themeKey) {
   try {
     safeIpcSend(mainWindow && mainWindow.webContents, 'card-theme-changed', normalizedTheme);
   } catch (e) { }
+  try {
+    safeIpcSend(mediaPlayerWindow && mediaPlayerWindow.webContents, 'card-theme-changed', normalizedTheme);
+  } catch (e) { }
 }
 
 const CARD_PREFERENCES_FILENAME = 'card-preferences.json';
@@ -1040,6 +1098,9 @@ function loadCardPreferencesFromDisk() {
     const raw = fs.readFileSync(filePath, 'utf8');
     const parsed = raw ? JSON.parse(raw) : {};
     currentCardTheme = normalizeCardThemeKey(parsed && parsed.themeKey);
+    currentLoadingAnimation = normalizeCardLoadingAnimationKey(parsed && parsed.loadingAnimationKey);
+    currentCardLaunchSizeMode = normalizeCardLaunchSizeMode(parsed && parsed.launchSizeMode);
+    currentCardShape = normalizeCardShapeKey(parsed && parsed.shapeKey);
   } catch (e) {
     console.warn('Failed to load persisted card preferences:', getStorageErrorMessage(e, 'card preferences'));
     if (isJsonParseError(e)) {
@@ -1057,12 +1118,20 @@ function writeCardPreferencesToDisk() {
       version: 1,
       updatedAt: Date.now(),
       themeKey: normalizeCardThemeKey(currentCardTheme),
+      loadingAnimationKey: normalizeCardLoadingAnimationKey(currentLoadingAnimation),
+      launchSizeMode: normalizeCardLaunchSizeMode(currentCardLaunchSizeMode),
+      shapeKey: normalizeCardShapeKey(currentCardShape),
     };
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
   } catch (e) {
     console.warn('Failed to persist card preferences:', e.message || e);
   }
+}
+
+function normalizeCardLoadingAnimationKey(animationKey) {
+  const candidate = String(animationKey || '').trim().toLowerCase();
+  return CARD_LOADING_ANIMATION_KEYS.has(candidate) ? candidate : 'static-tv';
 }
 
 function normalizeVisualizerStyleKey(styleKey) {
@@ -1994,7 +2063,7 @@ function extractTitleNotificationCount(rawTitle) {
   const patterns = [
     /^\((\d{1,4})\)/,
     /^\[(\d{1,4})\]/,
-    /^(\d{1,4})\s*[•\-:]/,
+    /^(\d{1,4})\s*[â€¢\-:]/,
     /(\d{1,4})\+?\s*$/
   ];
   for (const pattern of patterns) {
@@ -2665,6 +2734,59 @@ function openChallengeInFullBrowserWindow(url, options = {}) {
   });
   attachWindowHangRecovery(fullBrowserWindow, `challenge-browser-${Date.now()}`);
   fullBrowserWindow.__discoveryChallengeNoticeDismissed = false;
+  let challengeCompletionInProgress = false;
+  let challengeVerified = false;
+  let challengeRelaunchTimer = null;
+  const challengeSession = fullBrowserWindow.webContents.session;
+  let challengeHostname = '';
+  try { challengeHostname = new URL(targetUrl).hostname.toLowerCase(); } catch (e) { }
+
+  const cleanupChallengeHandoff = () => {
+    if (challengeRelaunchTimer) {
+      clearTimeout(challengeRelaunchTimer);
+      challengeRelaunchTimer = null;
+    }
+    try { challengeSession.cookies.removeListener('changed', onChallengeCookieChanged); } catch (e) { }
+  };
+
+  const relaunchChallengeSiteAsCard = () => {
+    if (challengeCompletionInProgress) return;
+    challengeCompletionInProgress = true;
+    cleanupChallengeHandoff();
+    try {
+      if (!fullBrowserWindow.isDestroyed()) fullBrowserWindow.close();
+    } catch (e) { }
+    setTimeout(() => {
+      try {
+        createCardDirectly(targetUrl);
+      } catch (error) {
+        console.error('[Challenge Browser] Failed to relaunch verified site as a card:', error);
+      }
+    }, 420);
+  };
+
+  const scheduleVerifiedChallengeRelaunch = () => {
+    if (!challengeVerified || challengeCompletionInProgress || fullBrowserWindow.isDestroyed()) return;
+    if (challengeRelaunchTimer) clearTimeout(challengeRelaunchTimer);
+    challengeRelaunchTimer = setTimeout(() => {
+      challengeRelaunchTimer = null;
+      if (fullBrowserWindow.isDestroyed()) return;
+      if (fullBrowserWindow.webContents.isLoading()) {
+        scheduleVerifiedChallengeRelaunch();
+        return;
+      }
+      relaunchChallengeSiteAsCard();
+    }, 700);
+  };
+
+  function onChallengeCookieChanged(event, cookie, cause, removed) {
+    if (removed || !cookie || cookie.name !== 'cf_clearance' || !cookie.value) return;
+    const cookieDomain = String(cookie.domain || '').replace(/^\./, '').toLowerCase();
+    if (challengeHostname && cookieDomain && challengeHostname !== cookieDomain && !challengeHostname.endsWith(`.${cookieDomain}`)) return;
+    challengeVerified = true;
+    scheduleVerifiedChallengeRelaunch();
+  }
+  challengeSession.cookies.on('changed', onChallengeCookieChanged);
   try { fullBrowserWindow.webContents.setUserAgent(CHROME_LIKE_UA); } catch (e) { }
 
   try {
@@ -2700,6 +2822,7 @@ function openChallengeInFullBrowserWindow(url, options = {}) {
 
   fullBrowserWindow.webContents.on('did-finish-load', () => {
     installChallengeNotice(fullBrowserWindow);
+    scheduleVerifiedChallengeRelaunch();
   });
 
   fullBrowserWindow.webContents.on('console-message', (event, level, message) => {
@@ -2719,6 +2842,7 @@ function openChallengeInFullBrowserWindow(url, options = {}) {
   });
 
   fullBrowserWindow.on('closed', () => {
+    cleanupChallengeHandoff();
     const current = promotedChallengeWindows.get(normalizedUrl);
     if (current === fullBrowserWindow) {
       promotedChallengeWindows.delete(normalizedUrl);
@@ -3064,6 +3188,97 @@ function queueAuthRedirectExternally(authUrl, context = {}) {
 
 // Counter for generating unique card IDs for direct creation
 let directCardIdCounter = 100000;
+let prewarmedCardWindow = null;
+let prewarmCardWindowTimer = null;
+
+function getCardWindowOptions({ width, height, x, y, skipTaskbar = false, show = true } = {}) {
+  return {
+    width: Number.isFinite(Number(width)) ? Number(width) : 850,
+    height: Number.isFinite(Number(height)) ? Number(height) : 500,
+    x: Number.isFinite(Number(x)) ? Number(x) : 200,
+    y: Number.isFinite(Number(y)) ? Number(y) : 150,
+    icon: APP_ICON_PATH,
+    frame: false,
+    transparent: true,
+    resizable: true,
+    skipTaskbar: !!skipTaskbar,
+    show: !!show,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
+      webviewTag: true,
+      preload: path.join(__dirname, 'preload-card.js'),
+      enableWebSQL: false,
+      spellcheck: true,
+      backgroundThrottling: true,
+      enablePreferredSizeMode: true,
+      partition: 'persist:cards',
+    },
+  };
+}
+
+function createCardBrowserWindow(options, label) {
+  const win = new BrowserWindow(getCardWindowOptions(options));
+  attachWindowHangRecovery(win, label || 'card-window');
+  return win;
+}
+
+function schedulePrewarmCardWindow(delayMs = 900) {
+  if (prewarmCardWindowTimer) clearTimeout(prewarmCardWindowTimer);
+  prewarmCardWindowTimer = setTimeout(() => {
+    prewarmCardWindowTimer = null;
+    ensurePrewarmedCardWindow();
+  }, Math.max(0, Number(delayMs) || 0));
+  if (prewarmCardWindowTimer && typeof prewarmCardWindowTimer.unref === 'function') {
+    prewarmCardWindowTimer.unref();
+  }
+}
+
+function ensurePrewarmedCardWindow() {
+  if (prewarmedCardWindow && !prewarmedCardWindow.isDestroyed()) return prewarmedCardWindow;
+  try {
+    const size = getLaunchWindowSizeByMode(CARD_LAUNCH_MODE_NORMAL, currentCardShape);
+    const win = createCardBrowserWindow({
+      width: size.width,
+      height: size.height,
+      x: -32000,
+      y: -32000,
+      skipTaskbar: true,
+      show: false,
+    }, 'prewarmed-card');
+    prewarmedCardWindow = win;
+    win.on('closed', () => {
+      if (prewarmedCardWindow === win) prewarmedCardWindow = null;
+    });
+    try { win.loadURL('about:blank').catch(() => { }); } catch (e) { }
+    return win;
+  } catch (e) {
+    console.warn('Failed to prewarm card window:', e.message || e);
+    return null;
+  }
+}
+
+function takePrewarmedCardWindow(options, label) {
+  const win = prewarmedCardWindow;
+  if (!win || win.isDestroyed()) return createCardBrowserWindow(options, label);
+  prewarmedCardWindow = null;
+  try {
+    win.setBounds({
+      x: Number.isFinite(Number(options && options.x)) ? Number(options.x) : 200,
+      y: Number.isFinite(Number(options && options.y)) ? Number(options.y) : 150,
+      width: Number.isFinite(Number(options && options.width)) ? Number(options.width) : 850,
+      height: Number.isFinite(Number(options && options.height)) ? Number(options.height) : 500,
+    }, false);
+  } catch (e) { }
+  try { win.setSkipTaskbar(!!(options && options.skipTaskbar)); } catch (e) { }
+  try {
+    if (options && options.show !== false) win.show();
+  } catch (e) { }
+  schedulePrewarmCardWindow(1400);
+  return win;
+}
 
 // Direct card creation function - creates card window immediately without renderer round-trip
 // This ensures instant visual feedback when external apps call the browser
@@ -3129,11 +3344,7 @@ function createCardDirectly(url, options = {}) {
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
 
     // Use provided loading animation or fall back to current saved animation
-    const allowedLoadingAnimations = new Set(['none', 'static-tv', 'water-fill', 'ink-drop', 'color-fill']);
-    const effectiveLoadingAnimation = opts.loadingAnimation || currentLoadingAnimation;
-    const normalizedLoadingAnimation = allowedLoadingAnimations.has(String(effectiveLoadingAnimation || '').toLowerCase())
-      ? String(effectiveLoadingAnimation || '').toLowerCase()
-      : 'static-tv';
+    const normalizedLoadingAnimation = normalizeCardLoadingAnimationKey(opts.loadingAnimation || currentLoadingAnimation);
 
     // Generate unique card ID
     const cardId = ++directCardIdCounter;
@@ -3155,32 +3366,15 @@ function createCardDirectly(url, options = {}) {
       }
     } catch (e) { }
 
-    // Create floating card window with visible background for instant display
-    const cardWindow = new BrowserWindow({
+    // Create or reuse a warmed floating card window for faster visible launch.
+    const cardWindow = takePrewarmedCardWindow({
       width: launchSize.width,
       height: launchSize.height,
       x: finalX,
       y: finalY,
-      icon: APP_ICON_PATH,
-      frame: false,
-      transparent: true,
-      resizable: true,
-      skipTaskbar: minimizeAfterShow, // Hide from taskbar when opening as bubble
-      show: true, // Always show initially
-      backgroundColor: '#00000000', // Transparent for rounded corners from HTML
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        sandbox: false,
-        webviewTag: true,
-        preload: path.join(__dirname, 'preload-card.js'),
-        enableWebSQL: false,
-        spellcheck: true,
-        backgroundThrottling: true,
-        enablePreferredSizeMode: true,
-        partition: 'persist:cards',
-      },
-    });
+      skipTaskbar: minimizeAfterShow,
+      show: true,
+    }, `direct-card-${cardId}`);
 
     // Make site-app windows independent in the taskbar
     if (process.platform === 'win32') {
@@ -4003,6 +4197,7 @@ ipcMain.handle('get-card-theme', async () => {
 ipcMain.handle('set-card-shape', async (event, shapeKey) => {
   try {
     currentCardShape = normalizeCardShapeKey(shapeKey);
+    writeCardPreferencesToDisk();
     return { success: true, shape: currentCardShape };
   } catch (e) {
     return { success: false, error: e.message };
@@ -4019,10 +4214,8 @@ ipcMain.handle('get-card-shape', async () => {
 
 ipcMain.handle('set-loading-animation', async (event, loadingAnimationKey) => {
   try {
-    const allowedLoadingAnimations = new Set(['none', 'static-tv', 'water-fill', 'ink-drop', 'color-fill']);
-    if (allowedLoadingAnimations.has(String(loadingAnimationKey || '').toLowerCase())) {
-      currentLoadingAnimation = String(loadingAnimationKey || '').toLowerCase();
-    }
+    currentLoadingAnimation = normalizeCardLoadingAnimationKey(loadingAnimationKey);
+    writeCardPreferencesToDisk();
     return { success: true, loadingAnimation: currentLoadingAnimation };
   } catch (e) {
     return { success: false, error: e.message };
@@ -4040,6 +4233,7 @@ ipcMain.handle('get-loading-animation', async () => {
 ipcMain.handle('set-card-launch-size-mode', async (event, mode) => {
   try {
     currentCardLaunchSizeMode = normalizeCardLaunchSizeMode(mode);
+    writeCardPreferencesToDisk();
     return { success: true, mode: currentCardLaunchSizeMode };
   } catch (e) {
     return { success: false, error: e.message };
@@ -4395,6 +4589,8 @@ function createMainWindow() {
 
   mainWindow.loadFile('src/index.html').then(() => {
     console.log('[App] index.html loaded successfully');
+    schedulePrewarmCardWindow(700);
+    setTimeout(prewarmMediaPlayerWindow, 1200);
   }).catch(err => {
     console.error('[App] Failed to load index.html:', err);
   });
@@ -4667,6 +4863,13 @@ function shouldBlockNewWindowUrl(rawUrl, sourceUrl = '', referrerUrl = '') {
   return getSiteBase(targetHost) !== getSiteBase(sourceHost);
 }
 
+function isAdBlockingAddon(addon) {
+  if (!addon || addon.enabled !== true) return false;
+  if (addon.builtInId === 'discovery-ad-blocker') return true;
+  const identity = `${addon.name || ''} ${addon.description || ''}`.toLowerCase();
+  return /(?:^|\s)(?:u?block|ad[ -]?block(?:er)?|adguard|privacy badger)(?:\s|$)/i.test(identity);
+}
+
 function applyAddons(addonsArray) {
   // Build a blocklist based on addon metadata heuristics
   blocklist.clear();
@@ -4745,14 +4948,12 @@ function applyAddons(addonsArray) {
     'short2url.com', 'short.link', 'shortened.me', 'ourl.co',
   ];
 
-  let hasAdBlocker = false;
-  addonsArray.forEach(a => {
-    if (a && a.enabled) {
-      hasAdBlocker = true;
-      defaultAdHosts.forEach(h => blocklist.add(h));
-      defaultRedirectHosts.forEach(h => redirectExactHosts.add(h));
-    }
-  });
+  const hasAdBlocker = addonsArray.some(isAdBlockingAddon);
+
+  if (hasAdBlocker) {
+    defaultAdHosts.forEach(h => blocklist.add(h));
+    defaultRedirectHosts.forEach(h => redirectExactHosts.add(h));
+  }
 
   if (!hasAdBlocker) {
     blocklist.clear();
@@ -4938,7 +5139,7 @@ function setupAddonBlocking() {
 // ========================
 
 // Enhanced create-card handler with beautiful animations
-ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'primary', launchSizeMode = null, isBubbleMode = null, shapeKey = null) => {
+ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'primary', launchSizeMode = null, isBubbleMode = null, shapeKey = null, loadingAnimationKey = null) => {
   try {
     if (updateEnforcementState.isForcedUpdate) {
       return {
@@ -4956,10 +5157,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       : 'primary';
     const cardTheme = normalizedTheme === 'alt' ? 'sunset' : normalizedTheme;
     const cardShape = normalizeCardShapeKey(shapeKey || currentCardShape);
-    const allowedLoadingAnimations = new Set(['none', 'static-tv', 'water-fill', 'ink-drop', 'color-fill']);
-    const normalizedLoadingAnimation = allowedLoadingAnimations.has(String(currentLoadingAnimation || '').toLowerCase())
-      ? String(currentLoadingAnimation || '').toLowerCase()
-      : 'static-tv';
+    const normalizedLoadingAnimation = normalizeCardLoadingAnimationKey(loadingAnimationKey || currentLoadingAnimation);
 
     let targetUrl = normalizeTypedNavigationTarget(url);
     if (!targetUrl) {
@@ -5033,35 +5231,15 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       }
     }
 
-    // Create floating card window with visible background for instant display
-    const cardWindow = new BrowserWindow({
+    // Create or reuse a warmed floating card window for faster visible launch.
+    const cardWindow = takePrewarmedCardWindow({
       width: launchSize.width,
       height: launchSize.height,
       x: finalX,
       y: finalY,
-      icon: APP_ICON_PATH,
-      frame: false,
-      transparent: true, // Enable transparency for smooth animations
-      resizable: true,
       skipTaskbar: false,
-      show: true, // Show immediately for instant visual feedback
-      backgroundColor: '#00000000', // Transparent for rounded corners from HTML
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        sandbox: false,
-        webviewTag: true,
-        preload: path.join(__dirname, 'preload-card.js'),
-        // PERFORMANCE OPTIMIZATIONS:
-        enableWebSQL: false,
-        spellcheck: true,
-        // Let Chromium throttle background card renderers so hidden cards do not
-        // keep consuming full CPU/GPU while video plays in the active card.
-        backgroundThrottling: true,
-        enablePreferredSizeMode: true,
-        partition: 'persist:cards',
-      },
-    });
+      show: true,
+    }, `card-${cardId}`);
     attachWindowHangRecovery(cardWindow, `card-${cardId}`);
     registerVisualizerWidgetLifecycle(cardId, cardWindow, cardTheme);
     cardWindow.__cardShape = cardShape;
@@ -5456,7 +5634,7 @@ ipcMain.handle('cycle-windows', async (event, currentCardId) => {
 
   if (cards.length === 0) return { success: true };
 
-  // Single card — cycle to main app instead of looping back to the card
+  // Single card â€” cycle to main app instead of looping back to the card
   if (cards.length === 1) {
     try {
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -5902,7 +6080,7 @@ function getOfflineArticlePath(articleId) {
 
 // Save article HTML content to disk for offline access
 ipcMain.handle('save-offline-article', async (event, articleId, url) => {
-  // Legacy stub — payload is now saved directly from readmode via save-article-payload
+  // Legacy stub â€” payload is now saved directly from readmode via save-article-payload
   return { success: true, skipped: true };
 });
 
@@ -5946,89 +6124,140 @@ ipcMain.handle('get-article-payload', async (event, articleId) => {
   }
 });
 
+function getMediaPlayerCinemaBounds() {
+  let finalX = 120;
+  let finalY = 12;
+  let windowWidth = 1280;
+  let windowHeight = CARD_CINEMA_HEIGHT;
+  try {
+    const { screen } = require('electron');
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { x: workX, y: workY, width: screenWidth, height: screenHeight } = primaryDisplay.workArea;
+    const topGap = 12;
+    const availableHeight = Math.max(360, screenHeight - topGap);
+    windowWidth = Math.max(640, Math.round(screenWidth));
+    windowHeight = Math.round(Math.min(availableHeight, CARD_CINEMA_HEIGHT));
+    finalX = workX;
+    finalY = workY + topGap;
+  } catch (e) { }
+  return { x: finalX, y: finalY, width: windowWidth, height: windowHeight };
+}
+
+function sendMediaPlayerInitialSourceWhenReady(win, source) {
+  if (!source || !win || win.isDestroyed()) return;
+  const sendSource = () => {
+    if (!win.isDestroyed()) win.webContents.send('media-player-open-source', source);
+  };
+  try {
+    if (win.webContents.isLoading()) {
+      win.webContents.once('did-finish-load', sendSource);
+    } else {
+      sendSource();
+    }
+  } catch (e) {
+    sendSource();
+  }
+}
+
+function createMediaPlayerBrowserWindow(options = {}) {
+  const { show = true } = options;
+  const { x: finalX, y: finalY, width: windowWidth, height: windowHeight } = getMediaPlayerCinemaBounds();
+  const win = new BrowserWindow({
+    width: windowWidth,
+    height: windowHeight,
+    minWidth: 640,
+    minHeight: 360,
+    x: finalX,
+    y: finalY,
+    icon: APP_ICON_PATH,
+    frame: false,
+    transparent: true,
+    resizable: true,
+    skipTaskbar: false,
+    show,
+    paintWhenInitiallyHidden: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
+      webviewTag: true,
+      preload: path.join(__dirname, 'preload-media-player.js'),
+      enableWebSQL: false,
+      spellcheck: true,
+      backgroundThrottling: false,
+      partition: 'persist:webview',
+      additionalArguments: [`--discovery-media-theme=${encodeURIComponent(currentCardTheme || 'primary')}`],
+    },
+  });
+
+  win.on('closed', () => {
+    if (mediaPlayerWindow === win) mediaPlayerWindow = null;
+  });
+
+  return win;
+}
+
+function prewarmMediaPlayerWindow() {
+  if (mediaPlayerWindow && !mediaPlayerWindow.isDestroyed()) return;
+  try {
+    const mediaPlayerHtmlPath = path.join(__dirname, 'src', 'media-player.html');
+    mediaPlayerWindow = createMediaPlayerBrowserWindow({ show: false });
+    const prewarmedWindow = mediaPlayerWindow;
+    prewarmedWindow.loadFile(mediaPlayerHtmlPath).catch((error) => {
+      console.error('Error prewarming media player:', error);
+      if (mediaPlayerWindow === prewarmedWindow && !prewarmedWindow.isDestroyed()) {
+        prewarmedWindow.close();
+      }
+    });
+  } catch (error) {
+    console.error('Error creating prewarmed media player:', error);
+  }
+}
 ipcMain.handle('open-media-player', async (event, initialSource = null) => {
   try {
     const mediaPlayerHtmlPath = path.join(__dirname, 'src', 'media-player.html');
-    function getMediaPlayerCinemaBounds() {
-      let finalX = 120;
-      let finalY = 12;
-      let windowWidth = 1280;
-      let windowHeight = CARD_CINEMA_HEIGHT;
-      try {
-        const { screen } = require('electron');
-        const primaryDisplay = screen.getPrimaryDisplay();
-        const { x: workX, y: workY, width: screenWidth, height: screenHeight } = primaryDisplay.workArea;
-        const topGap = 12;
-        const availableHeight = Math.max(360, screenHeight - topGap);
-        windowWidth = Math.max(640, Math.round(screenWidth));
-        windowHeight = Math.round(Math.min(availableHeight, CARD_CINEMA_HEIGHT));
-        finalX = workX;
-        finalY = workY + topGap;
-      } catch (e) { }
-      return { x: finalX, y: finalY, width: windowWidth, height: windowHeight };
-    }
 
     if (mediaPlayerWindow && !mediaPlayerWindow.isDestroyed()) {
-      await mediaPlayerWindow.loadFile(mediaPlayerHtmlPath);
       try {
         mediaPlayerWindow.setBounds(getMediaPlayerCinemaBounds());
+        if (mediaPlayerWindow.isMinimized()) mediaPlayerWindow.restore();
       } catch (e) { }
       mediaPlayerWindow.show();
       mediaPlayerWindow.focus();
-      if (initialSource) {
-        mediaPlayerWindow.webContents.send('media-player-open-source', initialSource);
-      }
-      return { success: true };
+      sendMediaPlayerInitialSourceWhenReady(mediaPlayerWindow, initialSource);
+      return { success: true, reused: true };
     }
 
-    const { x: finalX, y: finalY, width: windowWidth, height: windowHeight } = getMediaPlayerCinemaBounds();
+    mediaPlayerWindow = createMediaPlayerBrowserWindow({ show: true });
+    const openedWindow = mediaPlayerWindow;
 
-    mediaPlayerWindow = new BrowserWindow({
-      width: windowWidth,
-      height: windowHeight,
-      minWidth: 640,
-      minHeight: 360,
-      x: finalX,
-      y: finalY,
-      icon: APP_ICON_PATH,
-      frame: false,
-      transparent: true,
-      resizable: true,
-      skipTaskbar: false,
-      show: true,
-      backgroundColor: '#00000000',
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        sandbox: false,
-        webviewTag: true,
-        preload: path.join(__dirname, 'preload-media-player.js'),
-        enableWebSQL: false,
-        spellcheck: true,
-        backgroundThrottling: false,
-        partition: 'persist:webview',
-      },
-    });
+    openedWindow.loadFile(mediaPlayerHtmlPath)
+      .then(() => sendMediaPlayerInitialSourceWhenReady(openedWindow, initialSource))
+      .catch((error) => {
+        console.error('Error loading media player:', error);
+        if (mediaPlayerWindow === openedWindow && !openedWindow.isDestroyed()) {
+          openedWindow.close();
+        }
+      });
 
-    mediaPlayerWindow.on('closed', () => {
-      mediaPlayerWindow = null;
-    });
-
-    await mediaPlayerWindow.loadFile(mediaPlayerHtmlPath);
-    if (initialSource) {
-      mediaPlayerWindow.webContents.send('media-player-open-source', initialSource);
-    }
-    return { success: true };
+    openedWindow.focus();
+    return { success: true, loading: true };
   } catch (error) {
     console.error('Error opening media player:', error);
     return { success: false, error: error.message };
   }
 });
 
-ipcMain.handle('close-media-player-window', async (event) => {
+ipcMain.handle('close-media-player-window', async (event, options = {}) => {
   try {
     const win = BrowserWindow.fromWebContents(event.sender);
-    if (win && !win.isDestroyed()) win.close();
+    if (win && !win.isDestroyed()) {
+      if (!options || !options.animationComplete) {
+        await playMediaPlayerCloseAnimation(win);
+      }
+      win.close();
+    }
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -6135,13 +6364,26 @@ ipcMain.handle('pick-media-folder', async (event) => {
   }
 });
 
-ipcMain.handle('open-media-player-external', async (event, targetUrl) => {
+
+ipcMain.handle('get-media-file-thumbnail', async (event, targetPath) => {
   try {
-    if (!targetUrl) return { success: false, error: 'Missing URL' };
-    await shell.openExternal(String(targetUrl));
-    return { success: true };
+    const rawPath = String(targetPath || '').trim();
+    if (!rawPath) return { success: false, thumbnail: '' };
+    const resolvedInput = /^file:/i.test(rawPath) ? fileURLToPath(rawPath) : rawPath;
+    const filePath = path.resolve(resolvedInput);
+    const mediaThumbnailExtensions = new Set([
+      'mp4', 'webm', 'm4v', 'mov', 'mkv', 'avi', 'flv',
+      'mp3', 'wav', 'ogg', 'oga', 'aac', 'm4a', 'flac', 'opus'
+    ]);
+    const extension = path.extname(filePath).slice(1).toLowerCase();
+    if (!mediaThumbnailExtensions.has(extension) || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+      return { success: false, thumbnail: '' };
+    }
+    const thumbnail = await nativeImage.createThumbnailFromPath(filePath, { width: 320, height: 180 });
+    if (!thumbnail || thumbnail.isEmpty()) return { success: false, thumbnail: '' };
+    return { success: true, thumbnail: thumbnail.toDataURL() };
   } catch (error) {
-    return { success: false, error: error.message };
+    return { success: false, thumbnail: '', error: error.message };
   }
 });
 
@@ -6294,7 +6536,7 @@ ipcMain.on('cloudflare-challenge', (event, payload) => {
     recentChallengeRedirects.set(cardId, now);
     const targetUrl = String(payload && (payload.targetUrl || payload.challengeUrl) || '').trim();
     if (!targetUrl) return;
-    const challengeMessage = 'This site needs Full Browser Mode. Complete the security check in this larger browser window, then continue browsing here.';
+    const challengeMessage = 'This site needs Full Browser Mode. Complete the security check here. When verification succeeds, this window will close and the site will reopen automatically as a normal Discovery card.';
     const cardWindow = cardWindows.get(cardId);
     if (cardWindow && !cardWindow.isDestroyed()) {
       cardWindow.webContents.send('cloudflare-challenge-banner', {
@@ -6814,6 +7056,7 @@ function resolveRemoteUpdatePolicy(payload = {}) {
 const updateEnforcementState = {
   isForcedUpdate: false,
   latestVersion: '',
+  minimumRequiredVersion: '',
   updateUrl: '',
   updateMessage: '',
   checkedAt: 0,
@@ -6822,6 +7065,7 @@ const updateEnforcementState = {
 function setUpdateEnforcementState(nextState = {}) {
   updateEnforcementState.isForcedUpdate = !!nextState.isForcedUpdate;
   updateEnforcementState.latestVersion = String(nextState.latestVersion || '').trim();
+  updateEnforcementState.minimumRequiredVersion = String(nextState.minimumRequiredVersion || '').trim();
   updateEnforcementState.updateUrl = String(nextState.updateUrl || '').trim();
   updateEnforcementState.updateMessage = String(nextState.updateMessage || '').trim();
   updateEnforcementState.checkedAt = Date.now();
@@ -6873,6 +7117,24 @@ function extractVersionFromAnyPayload(payload) {
   return '';
 }
 
+function extractMinimumRequiredVersion(payload = {}) {
+  if (!payload || typeof payload !== 'object') return '';
+  const candidates = [
+    payload.minimumRequiredVersion,
+    payload.minimum_required_version,
+    payload.minimumVersion,
+    payload.minimum_version,
+    payload.minRequiredVersion,
+    payload.min_required_version,
+  ];
+  for (const value of candidates) {
+    if (typeof value === 'string' && /^v?\d+\.\d+\.\d+(?:[-+].*)?$/i.test(value.trim())) {
+      return value.trim();
+    }
+  }
+  return '';
+}
+
 async function fetchLatestVersionFromRemote() {
   const sourceUrl = getConfiguredUpdateCheckUrl();
   const endpoints = [sourceUrl];
@@ -6919,6 +7181,13 @@ async function fetchLatestVersionFromRemote() {
           || payload.force_update
           || payload.required
           || payload.requiredUpdate
+          || payload.required_update
+          || payload.minimumRequiredVersion
+          || payload.minimum_required_version
+          || payload.minimumVersion
+          || payload.minimum_version
+          || payload.minRequiredVersion
+          || payload.min_required_version
         ));
         if (hasPolicy) {
           return candidate;
@@ -6947,12 +7216,25 @@ ipcMain.handle('get-update-status', async () => {
     const updateUrl = (remote.payload && remote.payload.updateUrl) || getConfiguredUpdateUrl();
     const updateMessage = String(remote.payload?.message || '').trim();
     const policy = resolveRemoteUpdatePolicy(remote.payload || {});
+    const minimumRequiredVersion = extractMinimumRequiredVersion(remote.payload || {});
     const hasLatest = latestVersion.length > 0;
-    const isUpdateAvailable = hasLatest ? compareVersions(latestVersion, currentVersion) > 0 : false;
-    const isForcedUpdate = isUpdateAvailable && policy.isForcedUpdate;
+    const hasMinimum = minimumRequiredVersion.length > 0;
+    const isBelowMinimum = hasMinimum && compareVersions(minimumRequiredVersion, currentVersion) > 0;
+    const hasNewerLatest = hasLatest && compareVersions(latestVersion, currentVersion) > 0;
+    const isUpdateAvailable = hasNewerLatest || isBelowMinimum;
+
+    // A minimum version takes precedence over the legacy global forced flag.
+    // Old clients can still see updateMode forced, while clients satisfying
+    // the minimum treat newer releases as optional.
+    const isForcedUpdate = hasMinimum
+      ? isBelowMinimum
+      : (isUpdateAvailable && policy.isForcedUpdate);
+    const effectiveUpdatePolicy = isForcedUpdate ? 'forced' : 'lenient';
+
     setUpdateEnforcementState({
       isForcedUpdate,
       latestVersion: hasLatest ? latestVersion : currentVersion,
+      minimumRequiredVersion,
       updateUrl,
       updateMessage,
     });
@@ -6964,26 +7246,33 @@ ipcMain.handle('get-update-status', async () => {
       success: true,
       currentVersion,
       latestVersion: hasLatest ? latestVersion : currentVersion,
+      minimumRequiredVersion,
       isUpdateAvailable,
       isForcedUpdate,
-      updatePolicy: policy.updatePolicy,
+      updatePolicy: effectiveUpdatePolicy,
       updateUrl,
       checkedFrom: remote.source || getConfiguredUpdateCheckUrl(),
-      updateMessage: updateMessage || (isUpdateAvailable
-        ? `Version ${latestVersion} is available.`
-        : `You are running the latest version (${currentVersion}).`)
+      updateMessage: updateMessage || (isForcedUpdate
+        ? `Version ${minimumRequiredVersion || latestVersion} or newer is required.`
+        : (isUpdateAvailable
+          ? `Version ${latestVersion} is available.`
+          : `You are running the latest version (${currentVersion}).`))
     };
   } catch (error) {
+    const retainedForcedState = updateEnforcementState.isForcedUpdate === true;
     return {
       success: false,
       error: error && error.message ? error.message : 'Failed to read update status',
       currentVersion: String(app.getVersion ? app.getVersion() : '0.0.0'),
-      latestVersion: '',
-      isUpdateAvailable: false,
-      isForcedUpdate: false,
-      updatePolicy: 'lenient',
-      updateUrl: getConfiguredUpdateUrl(),
-      updateMessage: 'Unable to check update status right now.'
+      latestVersion: updateEnforcementState.latestVersion || '',
+      minimumRequiredVersion: updateEnforcementState.minimumRequiredVersion || '',
+      isUpdateAvailable: retainedForcedState,
+      isForcedUpdate: retainedForcedState,
+      updatePolicy: retainedForcedState ? 'forced' : 'lenient',
+      updateUrl: updateEnforcementState.updateUrl || getConfiguredUpdateUrl(),
+      updateMessage: retainedForcedState
+        ? (updateEnforcementState.updateMessage || 'The required update could not be rechecked. Install the required version to continue.')
+        : 'Unable to check update status right now.'
     };
   }
 });

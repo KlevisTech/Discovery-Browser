@@ -59,6 +59,9 @@
     <div class="menu-item">
       <button class="menu-btn" data-menu="help">Help</button>
       <div class="menu-dropdown" id="help-menu">
+        <div class="menu-item-option" data-action="view-help">Discovery Browser Help</div>
+        <div class="menu-item-option" data-action="keyboard-shortcuts">Keyboard Shortcuts</div>
+        <div class="menu-divider"></div>
         <div class="menu-item-option" data-action="about">About Discovery Browser</div>
         <div class="menu-item-option" data-action="support">Support</div>
         <div class="menu-item-option" data-action="check-updates">Check for Updates</div>
@@ -387,6 +390,179 @@
         </div>
         <div id="notification-list" class="notification-list"></div>
       </div>
+    </div>
+
+    <!-- Discovery Browser Help Center -->
+    <div id="help-center" class="help-center" aria-hidden="true">
+      <div class="help-center__backdrop" data-help-close></div>
+      <section class="help-center__dialog" role="dialog" aria-modal="true" aria-labelledby="help-center-title">
+        <header class="help-center__header">
+          <div>
+            <p class="help-center__eyebrow">DISCOVERY BROWSER GUIDE</p>
+            <h2 id="help-center-title">Help Center</h2>
+            <p>Features, workflows, shortcuts, and troubleshooting in one place.</p>
+          </div>
+          <button id="close-help-center" class="help-center__close" type="button" aria-label="Close Help Center">X</button>
+        </header>
+        <div class="help-center__search-wrap">
+          <input id="help-search-input" class="help-center__search" type="search" placeholder="Search help topics..." autocomplete="off">
+          <span id="help-search-status" class="help-center__search-status" aria-live="polite"></span>
+        </div>
+        <div class="help-center__layout">
+          <nav class="help-center__nav" aria-label="Help topics">
+            <button class="help-nav-btn is-active" data-help-section="overview">Overview</button>
+            <button class="help-nav-btn" data-help-section="getting-started">Getting started</button>
+            <button class="help-nav-btn" data-help-section="cards">Card browsing</button>
+            <button class="help-nav-btn" data-help-section="media">Media Player</button>
+            <button class="help-nav-btn" data-help-section="reading">Reader Mode</button>
+            <button class="help-nav-btn" data-help-section="library">Library and home</button>
+            <button class="help-nav-btn" data-help-section="customize">Settings</button>
+            <button class="help-nav-btn" data-help-section="privacy">Privacy and safety</button>
+            <button class="help-nav-btn" data-help-section="google-signin">Google sign-in</button>
+            <button class="help-nav-btn" data-help-section="shortcuts">Keyboard shortcuts</button>
+            <button class="help-nav-btn" data-help-section="troubleshooting">Troubleshooting</button>
+            <button class="help-nav-btn" data-help-section="about">About</button>
+          </nav>
+          <main id="help-center-content" class="help-center__content">
+            <article class="help-section is-active" data-help-content="overview">
+              <div class="help-hero">
+                <div><span class="help-badge">Version 3.0.0</span><h3>Browse in focused, independent cards</h3><p>Discovery Browser keeps the home screen as a control center and opens sites in movable card windows. Each card has navigation, layout, reading, media, bookmark, download, and site-app tools.</p></div>
+                <div class="help-hero__mark">DB</div>
+              </div>
+              <div class="help-grid help-grid--3">
+                <section class="help-card"><h4>Search and launch</h4><p>Type a web address or search term in the main address field and press Enter. A new card opens using your saved theme, shape, size, and loading animation.</p></section>
+                <section class="help-card"><h4>Work across cards</h4><p>Use Visited Sites to reopen recent cards, Favorites for pinned sites, and the card counter to see how many site windows are active.</p></section>
+                <section class="help-card"><h4>Built-in tools</h4><p>Open local media, read and save articles, review recaps and highlights, manage extensions, track downloads, and customize every new card.</p></section>
+              </div>
+              <div class="help-callout"><strong>Start here:</strong> enter a site in the address field, use the card title bar to navigate, then open Settings to choose the layout that fits your workflow.</div>
+            </article>
+
+            <article class="help-section" data-help-content="getting-started">
+              <h3>Getting started</h3><p class="help-lead">The main window is your launcher and library; websites open in separate card windows.</p>
+              <ol class="help-steps">
+                <li><span>1</span><div><h4>Open a site or search</h4><p>Enter a URL or words in the main address field, then press <kbd>Enter</kbd>. The selected search engine is used when the text is not a web address.</p></div></li>
+                <li><span>2</span><div><h4>Manage active sites</h4><p>Visited Sites shows recent destinations and supports up to eight visible entries. Close a card when finished or minimize it into a background bubble when media should continue.</p></div></li>
+                <li><span>3</span><div><h4>Pin important sites</h4><p>Add up to eight Favorites from the home tray for one-click access. Give a favorite an optional custom title.</p></div></li>
+                <li><span>4</span><div><h4>Choose your defaults</h4><p>Open Settings to select the search engine, card launch size, per-site layouts, card shape, header theme, loading animation, and audio visualizer.</p></div></li>
+              </ol>
+              <div class="help-grid help-grid--2">
+                <section class="help-card"><h4>Home widgets</h4><ul><li>Clock and date</li><li>Top Stories with paging and refresh</li><li>Update notifications</li><li>Download progress ring</li></ul></section>
+                <section class="help-card"><h4>Header tools</h4><ul><li>Media Player for local audio/video</li><li>Recap for saved articles and highlights</li><li>Upload for local documents in Reader Mode</li><li>Extensions, Settings, and developer Support</li></ul></section>
+              </div>
+            </article>
+
+            <article class="help-section" data-help-content="cards">
+              <h3>Card browsing</h3><p class="help-lead">Every website card is a focused browser window with its own controls.</p>
+              <div class="help-grid help-grid--2">
+                <section class="help-card"><h4>Navigation and layout</h4><ul><li>Back, Forward, and Reload navigate the active site.</li><li>Wide View expands the card horizontally.</li><li>Fullscreen expands the complete site view.</li><li>Split Screen opens a second site beside the first.</li><li>Zoom controls change the active page scale.</li></ul></section>
+                <section class="help-card"><h4>Save and reopen</h4><ul><li>Bookmark saves the current page into a chosen folder.</li><li>Read Mode extracts readable article content.</li><li>Add Site App To Desktop creates or updates a Windows shortcut.</li><li>The download ring reports active downloads.</li></ul></section>
+                <section class="help-card"><h4>Media tools on a card</h4><ul><li>Hover the centered visualizer to open playback controls.</li><li>Play/pause, seek 10 seconds, mute, and adjust volume.</li><li>Change visualizer style, side flames, and progress widget.</li><li>Visual Lock keeps the media visualization available.</li><li>Cinema and Full modes expand compatible video players.</li></ul></section>
+                <section class="help-card"><h4>Compatibility notes</h4><p>Some protected or cross-origin players cannot be pulled into Cinema mode. Discovery checks for a renderable frame, restores the original page on failure, and recommends the site's own fullscreen control.</p></section>
+              </div>
+              <div class="help-callout"><strong>Split Screen:</strong> click the split button, enter the second URL, and press Enter. Use <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd> to toggle it quickly.</div>
+            </article>
+
+            <article class="help-section" data-help-content="media">
+              <h3>Media Player</h3><p class="help-lead">Play local audio and video without opening a website.</p>
+              <div class="help-grid help-grid--2">
+                <section class="help-card"><h4>Open and organize media</h4><ul><li>Open File selects one supported local media file.</li><li>Add Folder creates an expandable playlist tray.</li><li>Video files display native Windows thumbnails and names.</li><li>Right-click a folder header to remove it.</li><li>Previous/next track follows folder order.</li></ul></section>
+                <section class="help-card"><h4>Playback and visuals</h4><ul><li>Play/pause, seek, volume, mute, and progress controls.</li><li>Audio displays embedded album art when Windows provides it.</li><li>Viz toggles the header visualizer and remembers the choice.</li><li>The sidebar button shows or hides playlists.</li><li>The controls button hides or reveals player chrome.</li></ul></section>
+                <section class="help-card"><h4>Recently played</h4><p>The home grid stores up to 30 recent items, five per page. Local videos use native thumbnails. Select a card to replay it.</p></section>
+                <section class="help-card"><h4>Home and floating playback</h4><p>Press Home while audio/video is actively playing to keep it in a floating player. If playback is paused or ended, Home clears it instead.</p></section>
+              </div>
+              <div class="help-callout"><strong>Supported local formats:</strong> MP4, WebM, M4V, MOV, MP3, WAV, OGG, AAC, M4A, FLAC, and Opus. Playback still depends on codecs available to Chromium and Windows.</div>
+            </article>
+
+            <article class="help-section" data-help-content="reading">
+              <h3>Reader Mode</h3><p class="help-lead">Turn compatible pages and local text documents into a focused reading view.</p>
+              <div class="help-grid help-grid--2">
+                <section class="help-card"><h4>Reading controls</h4><ul><li>Back, Forward, and Refresh reader navigation.</li><li>Choose a reading font and toggle dark mode.</li><li>Use Fullscreen for distraction-free reading.</li><li>Images and supported embedded videos remain inline.</li></ul></section>
+                <section class="help-card"><h4>Save your work</h4><ul><li>Bookmark Reading Position remembers where you stopped.</li><li>Save Article stores an offline article payload.</li><li>Select text to create highlights.</li><li>Open the highlights tray to revisit saved passages.</li><li>Recap groups saved articles and linked highlights.</li></ul></section>
+                <section class="help-card"><h4>Magic Cursor</h4><p>Enable Magic Cursor to highlight readable blocks. Move through blocks with the arrow keys, choose an effect from its menu, and press Escape to leave the mode.</p></section>
+                <section class="help-card"><h4>Local documents</h4><p>Use the Upload button on the main screen to select a supported text-based document. PDF upload is currently disabled.</p></section>
+              </div>
+            </article>
+
+            <article class="help-section" data-help-content="library">
+              <h3>Library and home screen</h3><div class="help-grid help-grid--2">
+                <section class="help-card"><h4>History</h4><p>Settings &gt; History lists visited pages. Reopen an entry or clear the complete history.</p></section>
+                <section class="help-card"><h4>Bookmarks</h4><p>Create folders, save pages from card windows, reopen bookmarks, rename folders, and remove entries you no longer need.</p></section>
+                <section class="help-card"><h4>Saved Articles and Recap</h4><p>Reader Mode saves article content locally. Recap provides a dedicated window for browsing saved articles and their highlights.</p></section>
+                <section class="help-card"><h4>Downloads</h4><p>The main and card download rings show active progress. Settings &gt; Downloads lists completed items and lets you clear the list.</p></section>
+                <section class="help-card"><h4>Extensions</h4><p>Open Extensions to switch the built-in Discovery Ad Blocker on or off. It blocks common ads, trackers, pop-ups, and advertising redirects without requiring a download. You can also search the discovery catalog, install supported add-ons, review installed entries, and remove third-party add-ons when needed.</p></section>
+                <section class="help-card"><h4>Updates</h4><p>The bell opens update notices. Check now requests the latest available update information.</p></section>
+              </div>
+            </article>
+
+            <article class="help-section" data-help-content="customize">
+              <h3>Settings and customization</h3><div class="help-grid help-grid--2">
+                <section class="help-card"><h4>Default browser</h4><p>Open Windows Default apps and choose Discovery Browser for web links.</p></section>
+                <section class="help-card"><h4>Search engine</h4><p>Select the engine used for text entered in the main address/search field.</p></section>
+                <section class="help-card"><h4>Window size and site layouts</h4><p>Choose Normal, Wide, or Fullscreen for new cards. Add domain-specific rules when a site needs its own launch layout.</p></section>
+                <section class="help-card"><h4>Shape and theme</h4><p>Choose the default card shell and header color theme for cards opened next.</p></section>
+                <section class="help-card"><h4>Loading animation</h4><p>Choose None, Static TV, Water Fill, or Color Fill for new card launches.</p></section>
+                <section class="help-card"><h4>Audio visualizer</h4><p>Enable or disable the animated equalizer on card title bars. Disable it if media playback becomes choppy on lower-powered hardware.</p></section>
+              </div>
+            </article>
+
+            <article class="help-section" data-help-content="privacy">
+              <h3>Privacy, safety, and data</h3><div class="help-grid help-grid--2">
+                <section class="help-card"><h4>Local browser data</h4><p>History, bookmarks, articles, downloads metadata, favorites, media history, preferences, and sign-in storage are kept in the browser profile on this computer.</p></section>
+                <section class="help-card"><h4>Delete All Data</h4><p>Settings &gt; Delete Data removes local history, bookmarks, passwords, downloads list, extensions, notifications, tabs, and sign-in data. This action is destructive.</p></section>
+                <section class="help-card"><h4>Redirect and ad protection</h4><p>Discovery blocks known ad/tracker hosts and suspicious popup or redirect behavior. Some site functions may be affected when they depend on blocked domains.</p></section>
+                <section class="help-card"><h4>Authentication redirects</h4><p>Sensitive Google and OAuth pages are redirected to an installed Chrome, Edge, or Firefox browser because embedded card sign-in may be rejected. External browser cookies do not automatically transfer back to Discovery. See the Google sign-in help topic.</p></section>
+                <section class="help-card"><h4>Downloads and external files</h4><p>Only open files you trust. Downloaded content is handled by Chromium and stored in your configured Windows download location.</p></section>
+                <section class="help-card"><h4>Developer Tools</h4><p>Developer Tools are available from View for diagnostics. They expose page internals and are intended for advanced troubleshooting.</p></section>
+              </div>
+            </article>
+
+            <article class="help-section" data-help-content="google-signin">
+              <h3>Why Google sign-in may not complete</h3>
+              <p class="help-lead">Google account authentication is handled differently from ordinary website browsing.</p>
+              <div class="help-callout"><strong>This is an authentication compatibility limitation, not an incorrect password.</strong> Google may refuse sign-in pages running inside embedded browser views such as Discovery's website cards.</div>
+              <div class="help-grid help-grid--2">
+                <section class="help-card"><h4>Why Discovery opens another browser</h4><p>Discovery treats Google account and OAuth pages as sensitive authentication. Instead of repeatedly loading a flow that Google may reject inside a card, the app offers to open it in an installed Chrome, Edge, or Firefox window.</p></section>
+                <section class="help-card"><h4>Why the login may not return to Discovery</h4><p>The external browser and Discovery use separate browser profiles and cookie stores. Completing Google sign-in externally does not automatically copy that Google session into a Discovery card.</p></section>
+                <section class="help-card"><h4>What users should do</h4><ol><li>Accept the prompt to open the sign-in in Chrome, Edge, or Firefox.</li><li>Complete the Google account flow there.</li><li>Continue using that service in the external browser when it requires the Google session.</li><li>Return to Discovery for pages that do not require embedded Google authentication.</li></ol></section>
+                <section class="help-card"><h4>What may still work in Discovery</h4><p>A site's own username-and-password form may work normally. The limitation mainly affects Sign in with Google, Google OAuth consent, accounts.google.com, and services that require Google cookies inside the card.</p></section>
+                <section class="help-card"><h4>What will not fix it</h4><p>Repeated reloads, Force Reload, changing the card shape, disabling the visualizer, or deleting local data cannot override a provider's embedded-browser policy. Delete All Data should not be used for this issue.</p></section>
+                <section class="help-card"><h4>Safety note</h4><p>Only enter Google credentials on a genuine Google page opened in a browser you trust. Check that the address belongs to google.com before continuing.</p></section>
+              </div>
+              <p class="help-footnote">Discovery cannot guarantee Google account sign-in inside cards until a provider-supported desktop authentication flow is available.</p>
+            </article>
+
+            <article class="help-section" data-help-content="shortcuts">
+              <h3>Keyboard shortcuts</h3><p class="help-lead">These are the shortcuts implemented directly by Discovery Browser. A shortcut works in the window named in its group.</p>
+              <div class="shortcut-group"><h4>Main screen</h4><div class="shortcut-row"><span>Open address/search entry</span><span><kbd>Enter</kbd></span></div><div class="shortcut-row"><span>Submit Google/search widget</span><span><kbd>Enter</kbd></span></div><div class="shortcut-row"><span>Submit custom site layout</span><span><kbd>Enter</kbd></span></div></div>
+              <div class="shortcut-group"><h4>Help and dialogs</h4><div class="shortcut-row"><span>Close the Help Center</span><span><kbd>Esc</kbd></span></div><div class="shortcut-row"><span>Confirm a bookmark-folder or favorite dialog</span><span><kbd>Enter</kbd></span></div><div class="shortcut-row"><span>Cancel a folder/favorite dialog or close a favorite context menu</span><span><kbd>Esc</kbd></span></div></div>
+              <div class="shortcut-group"><h4>Website cards</h4><div class="shortcut-row"><span>Toggle Split Screen</span><span><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd></span></div><div class="shortcut-row"><span>Open typed card URL</span><span><kbd>Enter</kbd></span></div><div class="shortcut-row"><span>Open split-pane URL</span><span><kbd>Enter</kbd></span></div><div class="shortcut-row"><span>Close the media hover panel</span><span><kbd>Esc</kbd></span></div></div>
+              <div class="shortcut-group"><h4>Media Player</h4><div class="shortcut-row"><span>Open a local file</span><span><kbd>Ctrl</kbd> + <kbd>O</kbd></span></div><div class="shortcut-row"><span>Toggle fullscreen</span><span><kbd>F</kbd></span></div><div class="shortcut-row"><span>Play or pause</span><span><kbd>Space</kbd></span></div><div class="shortcut-row"><span>Seek backward 10 seconds</span><span><kbd>Left Arrow</kbd></span></div><div class="shortcut-row"><span>Seek forward 10 seconds</span><span><kbd>Right Arrow</kbd></span></div><div class="shortcut-row"><span>Hide or show controls</span><span><kbd>H</kbd></span></div></div>
+              <div class="shortcut-group"><h4>Reader Mode</h4><div class="shortcut-row"><span>Next Magic Cursor block / scroll down</span><span><kbd>Down Arrow</kbd></span></div><div class="shortcut-row"><span>Previous Magic Cursor block / scroll up</span><span><kbd>Up Arrow</kbd></span></div><div class="shortcut-row"><span>Previous lightbox image</span><span><kbd>Left Arrow</kbd></span></div><div class="shortcut-row"><span>Next lightbox image</span><span><kbd>Right Arrow</kbd></span></div><div class="shortcut-row"><span>Close lightbox, menu, Magic Cursor, or Reader Mode</span><span><kbd>Esc</kbd></span></div></div>
+              <div class="help-callout"><strong>Text fields:</strong> media single-key shortcuts are disabled while typing in an input or text area. Standard Windows editing shortcuts may still be provided by the focused page or system.</div>
+            </article>
+
+            <article class="help-section" data-help-content="troubleshooting">
+              <h3>Troubleshooting</h3><div class="help-grid help-grid--2">
+                <section class="help-card"><h4>Cinema mode shows black</h4><p>Wait for the video to start, then try Cinema again. If the compatibility notice appears, use the player's own fullscreen control. Protected and cross-origin video may not support extraction.</p></section>
+                <section class="help-card"><h4>Video is choppy</h4><p>Disable Settings &gt; Audio Visualizer, close unused cards, turn off side flames or progress widgets, and retry playback.</p></section>
+                <section class="help-card"><h4>Media thumbnail is missing</h4><p>Restart after an update. Windows must be able to generate a thumbnail for that codec. Unsupported formats show the fallback tile.</p></section>
+                <section class="help-card"><h4>Album art is missing</h4><p>The audio file must contain artwork that Windows can read. Files without embedded art keep Discovery's generated audio disc.</p></section>
+                <section class="help-card"><h4>Google sign-in will not complete</h4><p>Use the external-browser prompt. Google may reject embedded card authentication, and an external Google session may not transfer back into Discovery. Open the Google sign-in topic for the full explanation.</p></section>
+                <section class="help-card"><h4>Resetting a problem</h4><p>Close and reopen the affected card first. Use Delete All Data only as a last resort because it removes browser profile data.</p></section>
+              </div>
+            </article>
+
+            <article class="help-section" data-help-content="about">
+              <h3>About Discovery Browser</h3>
+              <div class="about-discovery"><img src="../assets/discoverybrowser.jpeg" alt="Discovery Browser"><div><h4>Discovery Browser 3.0.0</h4><p>A card-style desktop web browser built with Electron, designed around focused site windows, reading, local media, and a customizable home control center.</p></div></div>
+              <div class="help-grid help-grid--2"><section class="help-card"><h4>Updates</h4><p>Use Help &gt; Check for Updates or the bell on the home screen.</p></section><section class="help-card"><h4>Support</h4><p>Use Help &gt; Support or the Support button to find developer contact and contribution details.</p></section></div>
+              <p class="help-footnote">Feature availability can vary by website, media codec, operating-system support, and embedded-player restrictions.</p>
+            </article>
+
+            <div id="help-no-results" class="help-no-results" hidden><h3>No matching help topics</h3><p>Try a broader word such as media, cards, reader, settings, or shortcuts.</p></div>
+          </main>
+        </div>
+      </section>
     </div>
 
     <!-- Support panel (hidden by default) -->

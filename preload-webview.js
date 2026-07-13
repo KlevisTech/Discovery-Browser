@@ -443,3 +443,118 @@ try {
     });
   }
 })();
+// Media player bridge: detect and style playable media from inside the webview.
+// This avoids repeated host-side executeJavaScript calls, which some sites reject.
+(function initializeDiscoveryMediaBridge() {
+  if (!ipcRenderer) return;
+
+  const STYLE_ID = 'discovery-media-player-focus-style';
+  let lastSentAt = 0;
+
+  function getActiveMedia() {
+    try {
+      const media = Array.from(document.querySelectorAll('video, audio'));
+      return media.find((node) => node && !node.paused) || media[0] || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function applyMediaFocus(target) {
+    try {
+      if (!target || target.tagName !== 'VIDEO') return false;
+      let style = document.getElementById(STYLE_ID);
+      if (!style) {
+        style = document.createElement('style');
+        style.id = STYLE_ID;
+        (document.head || document.documentElement || document.body).appendChild(style);
+      }
+      style.textContent = [
+        'html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; height: 100% !important; overflow: hidden !important; background: #000 !important; }',
+        'video { position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; min-width: 100vw !important; min-height: 100vh !important; object-fit: contain !important; transform: none !important; opacity: 1 !important; visibility: visible !important; display: block !important; z-index: 2147483647 !important; background: #000 !important; }'
+      ].join('\n');
+      target.setAttribute('controls', 'controls');
+      target.setAttribute('playsinline', '');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function sendMediaState(reason) {
+    try {
+      const active = getActiveMedia();
+      const title = document.title || '';
+      if (!active) {
+        ipcRenderer.sendToHost('media-state', { hasMedia: false, title, reason });
+        return;
+      }
+      if (!active.paused) applyMediaFocus(active);
+      const sourceNode = active.querySelector ? active.querySelector('source[src]') : null;
+      ipcRenderer.sendToHost('media-state', {
+        hasMedia: true,
+        title,
+        reason,
+        paused: !!active.paused,
+        currentSrc: String(active.currentSrc || active.src || (sourceNode && sourceNode.src) || ''),
+        currentTime: Number(active.currentTime || 0),
+        duration: Number(active.duration || 0),
+        volume: typeof active.volume === 'number' ? active.volume : 1,
+        muted: !!active.muted,
+        mediaType: active.tagName === 'AUDIO' ? 'audio' : 'video'
+      });
+    } catch (e) {
+      try { ipcRenderer.sendToHost('media-state', { hasMedia: false, error: e && e.message ? e.message : String(e), reason }); } catch (err) {}
+    }
+  }
+
+  function sendThrottled(reason) {
+    const now = Date.now();
+    if (now - lastSentAt < 350) return;
+    lastSentAt = now;
+    sendMediaState(reason);
+  }
+
+  function attachMedia(node) {
+    try {
+      if (!node || node.__discoveryMediaBridgeAttached || !/^(VIDEO|AUDIO)$/i.test(node.tagName || '')) return;
+      node.__discoveryMediaBridgeAttached = true;
+      node.addEventListener('play', () => sendMediaState('play'), true);
+      node.addEventListener('playing', () => sendMediaState('playing'), true);
+      node.addEventListener('pause', () => sendMediaState('pause'), true);
+      node.addEventListener('ended', () => sendMediaState('ended'), true);
+      node.addEventListener('volumechange', () => sendThrottled('volumechange'), true);
+      node.addEventListener('timeupdate', () => sendThrottled('timeupdate'), true);
+      node.addEventListener('loadedmetadata', () => sendMediaState('loadedmetadata'), true);
+    } catch (e) {}
+  }
+
+  function scanMedia() {
+    try {
+      document.querySelectorAll('video, audio').forEach(attachMedia);
+      sendThrottled('scan');
+    } catch (e) {}
+  }
+
+  document.addEventListener('play', (event) => {
+    attachMedia(event.target);
+    sendMediaState('document-play');
+  }, true);
+
+  document.addEventListener('pause', (event) => {
+    attachMedia(event.target);
+    sendMediaState('document-pause');
+  }, true);
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scanMedia, { once: true });
+  } else {
+    scanMedia();
+  }
+
+  try {
+    const observer = new MutationObserver(scanMedia);
+    observer.observe(document.documentElement || document.body, { childList: true, subtree: true });
+    window.addEventListener('beforeunload', () => observer.disconnect());
+  } catch (e) {}
+})();

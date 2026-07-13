@@ -18,7 +18,7 @@
           ? 'sunset'
           : (rawTheme === 'frost' ? 'solstice' : rawTheme);
         const allowedThemes = new Set(['primary', 'sunset', 'crimson', 'ocean', 'emerald', 'amber', 'midnight', 'cocoa', 'solstice']);
-        const allowedLoadingAnimations = new Set(['static-tv', 'water-fill', 'ink-drop', 'color-fill']);
+        const allowedLoadingAnimations = new Set(['none', 'static-tv', 'water-fill', 'color-fill']);
         const normalizedShape = rawShape === 'wave' || rawShape === 'curve' ? rawShape : 'default';
         const normalizedLoadingAnimation = allowedLoadingAnimations.has(rawLoadingAnimation) ? rawLoadingAnimation : 'static-tv';
         const normalizedLaunchExperience = rawLaunchExperience === 'site-app' ? 'site-app' : '';
@@ -1157,15 +1157,15 @@ body {
       animation: siteAppOverlayExit 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
 
-    .card-launch-fill::before,
-    .card-launch-fill::after {
+    html[data-loading-animation="static-tv"] .card-launch-fill::before,
+    html[data-loading-animation="static-tv"] .card-launch-fill::after {
       content: '';
       position: absolute;
       inset: 0;
       pointer-events: none;
     }
 
-    .card-launch-fill::before {
+    html[data-loading-animation="static-tv"] .card-launch-fill::before {
       opacity: 0.95;
       background:
         repeating-linear-gradient(0deg,
@@ -1180,7 +1180,7 @@ body {
       animation: signalScanlines 220ms steps(6) infinite;
     }
 
-    .card-launch-fill::after {
+    html[data-loading-animation="static-tv"] .card-launch-fill::after {
       inset: 12px;
       opacity: 0.86;
       background:
@@ -1479,81 +1479,6 @@ body {
       100% {
         transform: translateY(-200px) scale(0.5);
         opacity: 0;
-      }
-    }
-
-    /* Ink Drop Loading Animation */
-    .card-launch-fill.ink-drop {
-      background: #111;
-    }
-
-    .card-launch-fill.ink-drop::before {
-      opacity: 0;
-      animation: none;
-    }
-
-    .card-launch-fill.ink-drop::after {
-      opacity: 0;
-      animation: none;
-      background: none;
-    }
-
-    .card-launch-fill.ink-drop .ink-drop-container {
-      position: absolute;
-      inset: 0;
-      overflow: hidden;
-      pointer-events: none;
-      display: flex;
-      justify-content: center;
-    }
-
-    .card-launch-fill.ink-drop .ink-drop-droplet {
-      position: absolute;
-      top: -40px;
-      width: 18px;
-      height: 24px;
-      background: var(--launch-ink-color, #000);
-      border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-      filter: blur(0.5px);
-      animation: inkDropletFall 0.8s cubic-bezier(0.5, 0, 0.7, 0.2) forwards;
-    }
-
-    .card-launch-fill.ink-drop .ink-drop-fill {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      height: 0;
-      background: var(--launch-ink-color, #000);
-      animation: inkFillRise 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-      animation-delay: 0.75s;
-    }
-
-    @keyframes inkDropletFall {
-      0% {
-        transform: translateY(0) scaleY(1.3);
-        opacity: 1;
-      }
-      70% {
-        transform: translateY(660px) scaleY(1.1);
-        opacity: 1;
-      }
-      85% {
-        transform: translateY(700px) scaleY(0.6) scaleX(1.4);
-        opacity: 1;
-      }
-      100% {
-        transform: translateY(720px) scaleY(0.2) scaleX(2.5);
-        opacity: 0;
-      }
-    }
-
-    @keyframes inkFillRise {
-      0% {
-        height: 0;
-      }
-      100% {
-        height: 100%;
       }
     }
 
@@ -2983,10 +2908,6 @@ body {
             <div class="bubble"></div>
           </div>
         </div>
-        <div class="ink-drop-container">
-          <div class="ink-drop-droplet"></div>
-          <div class="ink-drop-fill"></div>
-        </div>
         <div class="color-fill-container">
           <div class="color-drop"></div>
           <div class="color-rise-container">
@@ -3141,7 +3062,6 @@ body {
     if (cardLaunchFill) {
       cardLaunchFill.classList.toggle('none', loadingAnimation === 'none');
       cardLaunchFill.classList.toggle('water-fill', loadingAnimation === 'water-fill');
-      cardLaunchFill.classList.toggle('ink-drop', loadingAnimation === 'ink-drop');
       cardLaunchFill.classList.toggle('color-fill', loadingAnimation === 'color-fill');
     }
     const mediaHoverControl = document.getElementById('media-hover-control');
@@ -4024,10 +3944,21 @@ body {
     }
 
     async function detectCinemaBlackScreen(targetWebview) {
-      if (!targetWebview) return false;
-      await new Promise((resolve) => setTimeout(resolve, 850));
-      const validation = await runMediaScript(targetWebview, getCinemaModeValidationScript(), { bypassPending: true });
-      return !!(validation && validation.blackScreen === true);
+      if (!targetWebview) return true;
+      const sampleDelays = [450, 700, 1000];
+      let visibleFrameSamples = 0;
+      let lastValidation = null;
+      for (const delay of sampleDelays) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        lastValidation = await runMediaScript(targetWebview, getCinemaModeValidationScript(), { bypassPending: true });
+        if (lastValidation && lastValidation.supported === true && lastValidation.blackScreen !== true) {
+          visibleFrameSamples += 1;
+        }
+      }
+      return visibleFrameSamples < 2
+        || !lastValidation
+        || lastValidation.supported !== true
+        || lastValidation.blackScreen === true;
     }
 
     async function setCinemaVideoMode(enabled) {
@@ -4054,7 +3985,10 @@ body {
       if (!enabled || !applied || !cinemaModeTarget) return applied;
       const blackScreenDetected = await detectCinemaBlackScreen(cinemaModeTarget);
       if (blackScreenDetected) {
+        const failedTarget = cinemaModeTarget;
         cinemaModeActive = false;
+        cinemaModeTarget = null;
+        await runMediaScript(failedTarget, getCinemaModeScript(false), { bypassPending: true });
       }
       return !blackScreenDetected;
     }
@@ -5438,20 +5372,113 @@ body {
       });
     }
 
-    function toggleCinemaMode() {
-      pendingDisplayMode = 'cinema';
-      if (fullscreenBtn && typeof fullscreenBtn.click === 'function') {
-        fullscreenBtn.click();
+    async function toggleMediaDisplayMode(requestedDisplayMode) {
+      if (cinemaToggleInFlight) return;
+      cinemaToggleInFlight = true;
+      const mode = requestedDisplayMode === 'cinema' ? 'cinema' : 'full';
+      try {
+        if (!isFullscreen) {
+          const pos = window.cardAPI.getWindowPosition();
+          preFullscreenBounds = {
+            x: pos.x,
+            y: pos.y,
+            width: window.outerWidth || (isWideView ? WIDE_WIDTH : NORMAL_WIDTH),
+            height: window.outerHeight || (isWideView ? WIDE_HEIGHT : NORMAL_HEIGHT),
+          };
+          wasWideBeforeFullscreen = isWideView;
+
+          await window.cardAPI.toggleFullscreen(cardId, true, mode);
+
+          let mediaApplied = true;
+          if (mode === 'cinema') {
+            await setFullVideoMode(false);
+            mediaApplied = await setCinemaVideoMode(true);
+          } else {
+            mediaApplied = await setFullVideoMode(true);
+          }
+
+          isFullscreen = true;
+          activeDisplayMode = mode;
+          syncCinemaChromeState();
+          if (!mediaApplied) {
+            showExpandedModeUnsupportedNotice(mode);
+          }
+          fullscreenBtn.style.background = 'rgba(100, 255, 100, 0.8)';
+          fullscreenBtn.textContent = '\u26F6';
+          fullscreenBtn.title = mode === 'full' ? 'Exit Full Mode' : 'Exit Cinema Mode';
+          setSplitVisibility();
+          return;
+        }
+
+        if (mode !== activeDisplayMode) {
+          await window.cardAPI.toggleFullscreen(cardId, true, mode);
+          let mediaApplied = true;
+          if (mode === 'cinema') {
+            await setFullVideoMode(false);
+            mediaApplied = await setCinemaVideoMode(true);
+          } else {
+            await setCinemaVideoMode(false);
+            mediaApplied = await setFullVideoMode(true);
+          }
+          activeDisplayMode = mode;
+          syncCinemaChromeState();
+          if (!mediaApplied) {
+            showExpandedModeUnsupportedNotice(mode);
+          }
+          fullscreenBtn.title = mode === 'full' ? 'Exit Full Mode' : 'Exit Cinema Mode';
+          return;
+        }
+
+        const restoreBounds = preFullscreenBounds ? { ...preFullscreenBounds } : null;
+        const restoreWide = wasWideBeforeFullscreen;
+        await setFullVideoMode(false);
+        await setCinemaVideoMode(false);
+        await window.cardAPI.toggleFullscreen(cardId, false);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        if (restoreWide) {
+          const screenWidth = window.screen.availWidth;
+          const wideX = Math.floor((screenWidth - WIDE_WIDTH) / 2);
+          await window.cardAPI.resizeCard(
+            cardId,
+            wideX,
+            restoreBounds ? restoreBounds.y : window.screenY,
+            WIDE_WIDTH,
+            WIDE_HEIGHT
+          );
+        } else if (restoreBounds) {
+          await window.cardAPI.resizeCard(
+            cardId,
+            restoreBounds.x,
+            restoreBounds.y,
+            restoreBounds.width,
+            restoreBounds.height
+          );
+        }
+        isFullscreen = false;
+        activeDisplayMode = null;
+        syncCinemaChromeState({ reveal: true });
+        isWideView = restoreWide;
+        preFullscreenBounds = null;
+        wasWideBeforeFullscreen = false;
+        wideBtn.style.background = isWideView ? 'rgba(100, 255, 100, 0.8)' : 'rgba(100, 200, 255, 0.7)';
+        wideBtn.title = isWideView ? `Normal View (${NORMAL_WIDTH}px)` : `Wide View (${WIDE_WIDTH}px)`;
+        fullscreenBtn.style.background = 'rgba(100, 200, 255, 0.7)';
+        fullscreenBtn.title = 'Fullscreen Mode';
+        setSplitVisibility();
+      } catch (err) {
+        console.error('Error toggling media display mode:', err);
+      } finally {
+        cinemaToggleInFlight = false;
       }
+    }
+
+    function toggleCinemaMode() {
+      toggleMediaDisplayMode('cinema');
     }
 
     function toggleFullMode() {
-      pendingDisplayMode = 'full';
-      if (fullscreenBtn && typeof fullscreenBtn.click === 'function') {
-        fullscreenBtn.click();
-      }
+      toggleMediaDisplayMode('full');
     }
-
     function showCinemaFailureOverlay(message) {
       const existing = document.getElementById('cinema-failure-overlay');
       if (existing) existing.remove();
@@ -6819,11 +6846,9 @@ if (isClosingCard || isMinimizingCard) return;
     fullscreenBtn.addEventListener('click', async () => {
       if (cinemaToggleInFlight) return;
       cinemaToggleInFlight = true;
-      const requestedDisplayMode = pendingDisplayMode === 'cinema' ? 'cinema' : 'full';
       pendingDisplayMode = null;
       try {
         if (!isFullscreen) {
-          // Save current bounds and mode before entering fullscreen-like view
           const pos = window.cardAPI.getWindowPosition();
           preFullscreenBounds = {
             x: pos.x,
@@ -6833,44 +6858,16 @@ if (isClosingCard || isMinimizingCard) return;
           };
           wasWideBeforeFullscreen = isWideView;
 
-          await window.cardAPI.toggleFullscreen(cardId, true, requestedDisplayMode);
-          
-          let cinemaApplied = true;
-          if (requestedDisplayMode === 'cinema') {
-            await setFullVideoMode(false);
-            cinemaApplied = await setCinemaVideoMode(true);
-          } else {
-            cinemaApplied = await setFullVideoMode(true);
-          }
-          
+          await setFullVideoMode(false);
+          await setCinemaVideoMode(false);
+          await window.cardAPI.toggleFullscreen(cardId, true, 'full');
+
           isFullscreen = true;
-          activeDisplayMode = requestedDisplayMode;
+          activeDisplayMode = 'full';
           syncCinemaChromeState();
-          if (!cinemaApplied) {
-            showExpandedModeUnsupportedNotice(requestedDisplayMode);
-          }
-          fullscreenBtn.style.background = 'rgba(100, 255, 100, 0.8)'; // Green when active
-          fullscreenBtn.textContent = '⛶';
-          fullscreenBtn.title = requestedDisplayMode === 'full' ? 'Exit Full Mode' : 'Exit Cinema Mode';
+          fullscreenBtn.style.background = 'rgba(100, 255, 100, 0.8)';
+          fullscreenBtn.title = 'Exit Fullscreen View';
           setSplitVisibility();
-        } else if (requestedDisplayMode !== activeDisplayMode) {
-          await window.cardAPI.toggleFullscreen(cardId, true, requestedDisplayMode);
-          
-          let cinemaApplied = true;
-          if (requestedDisplayMode === 'cinema') {
-            await setFullVideoMode(false);
-            cinemaApplied = await setCinemaVideoMode(true);
-          } else {
-            await setCinemaVideoMode(false);
-            cinemaApplied = await setFullVideoMode(true);
-          }
-          
-          activeDisplayMode = requestedDisplayMode;
-          syncCinemaChromeState();
-          if (!cinemaApplied) {
-            showExpandedModeUnsupportedNotice(requestedDisplayMode);
-          }
-          fullscreenBtn.title = requestedDisplayMode === 'full' ? 'Exit Full Mode' : 'Exit Cinema Mode';
         } else {
           const restoreBounds = preFullscreenBounds ? { ...preFullscreenBounds } : null;
           const restoreWide = wasWideBeforeFullscreen;
@@ -6878,7 +6875,6 @@ if (isClosingCard || isMinimizingCard) return;
           await setCinemaVideoMode(false);
           await window.cardAPI.toggleFullscreen(cardId, false);
 
-          // Restore the exact size/mode the card had before entering fullscreen
           await new Promise((resolve) => setTimeout(resolve, 100));
           if (restoreWide) {
             const screenWidth = window.screen.availWidth;
@@ -6918,7 +6914,6 @@ if (isClosingCard || isMinimizingCard) return;
         cinemaToggleInFlight = false;
       }
     });
-
     if (splitBtn) {
       splitBtn.addEventListener('click', () => {
         // Split screen works in all screen sizes now

@@ -1,5 +1,18 @@
 //renderer.js
 
+const DISCOVERY_AD_BLOCKER_NAME = 'Discovery Ad Blocker';
+const DISCOVERY_AD_BLOCKER_ID = 'discovery-ad-blocker';
+
+function createDiscoveryAdBlockerAddon() {
+  return {
+    name: DISCOVERY_AD_BLOCKER_NAME,
+    builtInId: DISCOVERY_AD_BLOCKER_ID,
+    builtIn: true,
+    enabled: false,
+    description: 'Blocks common ads, trackers, pop-ups, and advertising redirects.',
+  };
+}
+
 /**
  * Discovery Browser - Renderer Process
  * Handles card management for window-based architecture
@@ -200,12 +213,6 @@ class DiscoveryBrowser {
         preview: 'linear-gradient(180deg, rgba(115,166,255,0.6) 0%, rgba(88,216,255,0.7) 30%, rgba(67,97,238,0.8) 60%, rgba(240,124,217,0.6) 100%)',
       },
       {
-        key: 'ink-drop',
-        name: 'Ink Drop',
-        description: 'A single drop falls and triggers a rising tide of ink.',
-        preview: 'linear-gradient(180deg, #1a1a1a 0%, #000000 100%)',
-      },
-      {
         key: 'color-fill',
         name: 'Color Fill',
         description: 'A falling droplet of card color triggers a vibrant rising tide of random hues.',
@@ -301,9 +308,11 @@ class DiscoveryBrowser {
       });
     }
     if (this.mediaPlayerBtn) {
-      this.mediaPlayerBtn.addEventListener('click', async () => {
+      this.mediaPlayerBtn.addEventListener('click', () => {
         try {
-          await window.electronAPI.openMediaPlayer();
+          window.electronAPI.openMediaPlayer().catch((e) => {
+            console.error('Failed to open media player:', e);
+          });
         } catch (e) {
           console.error('Failed to open media player:', e);
         }
@@ -360,7 +369,7 @@ class DiscoveryBrowser {
 
     this.loadSearchEngine();
     await this.loadCardTheme();
-    this.loadLoadingAnimation();
+    await this.loadLoadingAnimation();
     this.loadCardLaunchSizeMode();
     await this.loadCardShape();
     this.loadSiteLayoutOverrides();
@@ -512,6 +521,31 @@ class DiscoveryBrowser {
           });
         }
       });
+    });
+
+    this.helpCenter = document.getElementById('help-center');
+    this.closeHelpCenterBtn = document.getElementById('close-help-center');
+    this.helpSearchInput = document.getElementById('help-search-input');
+    this.helpSearchStatus = document.getElementById('help-search-status');
+    this.helpNoResults = document.getElementById('help-no-results');
+    this.helpNavButtons = Array.from(document.querySelectorAll('.help-nav-btn'));
+    this.helpSections = Array.from(document.querySelectorAll('.help-section'));
+
+    this.closeHelpCenterBtn?.addEventListener('click', () => this.closeHelpCenter());
+    this.helpCenter?.querySelector('[data-help-close]')?.addEventListener('click', () => this.closeHelpCenter());
+    this.helpNavButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        this.helpSearchInput.value = '';
+        this.filterHelpTopics('');
+        this.activateHelpSection(button.dataset.helpSection || 'overview');
+      });
+    });
+    this.helpSearchInput?.addEventListener('input', () => this.filterHelpTopics(this.helpSearchInput.value));
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && this.helpCenter?.classList.contains('is-open')) {
+        event.preventDefault();
+        this.closeHelpCenter();
+      }
     });
 
     if (this.notificationsBtn) {
@@ -1259,15 +1293,22 @@ class DiscoveryBrowser {
     } catch (e) { }
   }
 
-  loadLoadingAnimation() {
+  async loadLoadingAnimation() {
     try {
-      const saved = localStorage.getItem('loadingAnimationKey');
-      if (saved && this.loadingAnimations.some(a => a.key === saved)) {
-        this.loadingAnimationKey = saved;
+      let resolvedAnimation = null;
+      if (window.electronAPI && window.electronAPI.getLoadingAnimation) {
+        resolvedAnimation = await window.electronAPI.getLoadingAnimation();
       }
-      // Sync loading animation to main process for external URL cards
+      const saved = localStorage.getItem('loadingAnimationKey');
+      const candidate = saved || resolvedAnimation;
+      if (candidate && this.loadingAnimations.some(a => a.key === candidate)) {
+        this.loadingAnimationKey = candidate;
+      }
+      try {
+        localStorage.setItem('loadingAnimationKey', this.loadingAnimationKey);
+      } catch (e) { }
       if (window.electronAPI && window.electronAPI.setLoadingAnimation) {
-        window.electronAPI.setLoadingAnimation(this.loadingAnimationKey);
+        await window.electronAPI.setLoadingAnimation(this.loadingAnimationKey);
       }
     } catch (e) { }
   }
@@ -1993,6 +2034,61 @@ class DiscoveryBrowser {
     if (isHidden) this.renderNotifications();
   }
 
+  openHelpCenter(section = 'overview') {
+    if (!this.helpCenter) return;
+    [this.settingsPanel, this.extensionsPanel, this.notificationPanel, this.supportPanel].forEach((panel) => {
+      if (!panel) return;
+      panel.setAttribute('aria-hidden', 'true');
+      panel.style.display = 'none';
+    });
+    this.helpSearchInput.value = '';
+    this.filterHelpTopics('');
+    this.activateHelpSection(section);
+    this.helpCenter.classList.add('is-open');
+    this.helpCenter.setAttribute('aria-hidden', 'false');
+    this.helpPreviousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.setTimeout(() => this.helpSearchInput?.focus(), 80);
+  }
+
+  closeHelpCenter() {
+    if (!this.helpCenter) return;
+    this.helpCenter.classList.remove('is-open');
+    this.helpCenter.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = this.helpPreviousBodyOverflow || '';
+  }
+
+  activateHelpSection(section) {
+    const target = this.helpSections.find((item) => item.dataset.helpContent === section) || this.helpSections[0];
+    if (!target) return;
+    this.helpSections.forEach((item) => item.classList.toggle('is-active', item === target));
+    this.helpNavButtons.forEach((button) => button.classList.toggle('is-active', button.dataset.helpSection === target.dataset.helpContent));
+    const content = document.getElementById('help-center-content');
+    if (content) content.scrollTop = 0;
+  }
+
+  filterHelpTopics(rawQuery) {
+    const query = String(rawQuery || '').trim().toLowerCase();
+    let matches = 0;
+    let firstMatch = null;
+    this.helpSections.forEach((section) => {
+      const isMatch = !query || section.textContent.toLowerCase().includes(query);
+      const navButton = this.helpNavButtons.find((button) => button.dataset.helpSection === section.dataset.helpContent);
+      if (navButton) navButton.hidden = !isMatch;
+      if (isMatch) {
+        matches += 1;
+        if (!firstMatch) firstMatch = section;
+      }
+    });
+    if (this.helpNoResults) this.helpNoResults.hidden = matches !== 0;
+    if (this.helpSearchStatus) this.helpSearchStatus.textContent = query ? matches + (matches === 1 ? ' topic' : ' topics') : '';
+    if (query && firstMatch) this.activateHelpSection(firstMatch.dataset.helpContent);
+    if (query && !firstMatch) {
+      this.helpSections.forEach((section) => section.classList.remove('is-active'));
+      this.helpNavButtons.forEach((button) => button.classList.remove('is-active'));
+    }
+  }
+
   toggleSupport() {
     if (!this.supportPanel) return;
 
@@ -2128,7 +2224,7 @@ class DiscoveryBrowser {
       copy.textContent = status.updateMessage || 'A newer version is required for this release.';
     }
     if (versions) {
-      versions.textContent = `Current: ${status.currentVersion || 'unknown'} • Required: ${status.latestVersion || 'latest'}`;
+      versions.textContent = `Current: ${status.currentVersion || 'unknown'} • Required: ${status.minimumRequiredVersion || status.latestVersion || 'latest'}`;
     }
   }
 
@@ -3523,7 +3619,9 @@ class DiscoveryBrowser {
     this.passwords = [];
     this.downloadHistory = [];
     this.notifications = [];
-    this.installedAddons = new Map();
+    this.installedAddons = new Map([
+      [DISCOVERY_AD_BLOCKER_NAME, createDiscoveryAdBlockerAddon()],
+    ]);
     this.bookmarkFolders = new Map();
     this.favoriteBookmarks = [];
     if (window.electronAPI && window.electronAPI.saveFavorites) {
@@ -3704,6 +3802,14 @@ class DiscoveryBrowser {
     } catch (e) {
       console.warn('Failed to load addons from storage', e);
     }
+    const builtInAdBlocker = this.installedAddons.get(DISCOVERY_AD_BLOCKER_NAME);
+    this.installedAddons.set(DISCOVERY_AD_BLOCKER_NAME, {
+      ...createDiscoveryAdBlockerAddon(),
+      ...(builtInAdBlocker || {}),
+      name: DISCOVERY_AD_BLOCKER_NAME,
+      builtInId: DISCOVERY_AD_BLOCKER_ID,
+      builtIn: true,
+    });
     this.renderAddons();
     // Ensure main process applies persisted addons on startup.
     try {
@@ -3736,33 +3842,39 @@ class DiscoveryBrowser {
   renderAddons() {
     if (!this.addonsListEl) return;
     this.addonsListEl.innerHTML = '';
-    const items = Array.from(this.installedAddons.values());
+    const items = Array.from(this.installedAddons.values())
+      .sort((a, b) => Number(Boolean(b.builtIn)) - Number(Boolean(a.builtIn)));
     if (this.noAddonsMsg) {
       this.noAddonsMsg.style.display = items.length ? 'none' : 'block';
     }
     items.forEach((meta) => {
       const name = meta.name || meta.url || 'Addon';
       const enabled = meta.enabled !== false;
+      const isBuiltIn = meta.builtInId === DISCOVERY_AD_BLOCKER_ID;
       const card = document.createElement('div');
-      card.className = 'addon-card';
+      card.className = `addon-card${isBuiltIn ? ' built-in-addon' : ''}`;
+      const defaultAddonIcon = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7 2h2v5h2V2h2v5a5 5 0 0 1 4 4.9v1.1h3v2h-3v1a5 5 0 0 1-4 4.9V22h-2v-3H9v3H7v-3.1a5 5 0 0 1-4-4.9v-1H0v-2h3v-1.1A5 5 0 0 1 7 7V2Zm0 7a3 3 0 0 0-3 3v1.1h10V12a3 3 0 0 0-3-3H7Z"/></svg>';
+      const blockerIcon = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2 4 5v6c0 5.1 3.4 9.8 8 11 4.6-1.2 8-5.9 8-11V5l-8-3Zm3.7 7.7-4.3 4.3a1 1 0 0 1-1.4 0l-2-2 1.4-1.4 1.3 1.3 3.6-3.6 1.4 1.4Z"/></svg>';
       card.innerHTML = `
-        <div class="addon-icon">${meta.icon || '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7 2h2v5h2V2h2v5a5 5 0 0 1 4 4.9v1.1h3v2h-3v1a5 5 0 0 1-4 4.9V22h-2v-3H9v3H7v-3.1a5 5 0 0 1-4-4.9v-1H0v-2h3v-1.1A5 5 0 0 1 7 7V2Zm0 7a3 3 0 0 0-3 3v1.1h10V12a3 3 0 0 0-3-3H7Z"/></svg>'}</div>
+        <div class="addon-icon">${isBuiltIn ? blockerIcon : (meta.icon || defaultAddonIcon)}</div>
         <div class="addon-info">
-          <h4>${name}</h4>
+          <h4>${name}${isBuiltIn ? '<span class="addon-built-in-badge">Built in</span>' : ''}</h4>
           <p>${meta.description || meta.url || ''}</p>
           <div class="addon-version">${enabled ? 'Enabled' : 'Disabled'}</div>
         </div>
         <div class="addon-controls">
           <button class="addon-toggle ${enabled ? 'enabled' : 'disabled'}" data-addon="${name}">${enabled ? 'On' : 'Off'}</button>
-          <button class="btn uninstall-btn" data-addon="${name}">Remove</button>
+          ${isBuiltIn ? '' : `<button class="btn uninstall-btn" data-addon="${name}">Remove</button>`}
         </div>
       `;
       const removeBtn = card.querySelector('.uninstall-btn');
-      removeBtn.addEventListener('click', () => {
-        this.installedAddons.delete(name);
-        this.saveAddons();
-        this.renderAddons();
-      });
+      if (removeBtn) {
+        removeBtn.addEventListener('click', () => {
+          this.installedAddons.delete(name);
+          this.saveAddons();
+          this.renderAddons();
+        });
+      }
       const toggle = card.querySelector('.addon-toggle');
       toggle.addEventListener('click', () => {
         const current = this.installedAddons.get(name) || {};
@@ -3913,7 +4025,7 @@ class DiscoveryBrowser {
     this.cards.set(cardId, cardData);
 
     try {
-      const result = await window.electronAPI.createCard(cardId, url, { x, y }, this.cardThemeKey, effectiveLaunchMode, null, this.cardShapeKey);
+      const result = await window.electronAPI.createCard(cardId, url, { x, y }, this.cardThemeKey, effectiveLaunchMode, null, this.cardShapeKey, this.loadingAnimationKey);
 
       if (!result || !result.success) {
         this.cards.delete(cardId);
@@ -4389,6 +4501,10 @@ class DiscoveryBrowser {
   }
 
   handleMenuAction(action) {
+    if (action === 'view-help') { this.openHelpCenter('overview'); return; }
+    if (action === 'keyboard-shortcuts') { this.openHelpCenter('shortcuts'); return; }
+    if (action === 'about') { this.openHelpCenter('about'); return; }
+    if (action === 'support') { this.supportBtn?.click(); return; }
     if (!window.electronAPI) return;
 
     switch (action) {
@@ -4458,14 +4574,8 @@ class DiscoveryBrowser {
         break;
 
       // Help
-      case 'view-help':
-        this.supportBtn?.click();
-        break;
       case 'check-updates':
         this.notificationsBtn?.click();
-        break;
-      case 'about':
-        alert('Discovery Browser v' + (this.updateStatus?.currentVersion || '2.0.1') + '\nA beautiful, unique card-style web browser.');
         break;
     }
   }

@@ -128,6 +128,15 @@
       line-height: 1.5;
     }
 
+    .release-intro {
+      color: var(--text-muted);
+      font-size: 12px;
+      line-height: 1.6;
+      padding: 14px 16px;
+      border-left: 3px solid var(--accent);
+      background: var(--accent-soft);
+      border-radius: 0 10px 10px 0;
+    }
     .badge {
       display: inline-block;
       font-size: 9px;
@@ -164,40 +173,119 @@
       <div class="app-logo">D</div>
       <div>
         <div class="app-name">Discovery Browser</div>
-        <span class="version">Version 2.1.1</span>
+        <span class="version">Version 3.0.0</span>
       </div>
     </div>
   </div>
 
-  <div class="section-title">Maintenance & Bug Fixes</div>
+  <div class="release-intro">
+    Version 3.0.0 is a major Discovery Browser update focused on richer media playback, clearer controls, smoother site cards, safer challenge handling, built-in privacy, and easier guidance for every feature.
+  </div>
+
+  <div class="section-title">Visualizer &amp; Viewing Modes</div>
 
   <div class="feature-card">
     <div class="feature-header">
-      <div class="feature-icon">P</div>
-      <div class="feature-name">Media Progress Visibility <span class="badge badge-fixed">Fixed</span></div>
+      <div class="feature-icon">F</div>
+      <div class="feature-name">Side Flames <span class="badge badge-improved">New</span></div>
     </div>
     <div class="feature-desc">
-      Resolved an issue where the media progress bar would occasionally fail to appear upon user interaction, ensuring consistent tracking of playback length.
+      The visualizer header can add animated flames along the sides of supported Wave and Curve site cards, giving active media a more immersive visual frame. Use the Flames control to turn the effect on or off.
     </div>
   </div>
 
   <div class="feature-card">
     <div class="feature-header">
-      <div class="feature-icon">D</div>
-      <div class="feature-name">Desktop Shortcut Reliability <span class="badge badge-fixed">Fixed</span></div>
+      <div class="feature-icon">C</div>
+      <div class="feature-name">Cinema Mode <span class="badge badge-improved">New</span></div>
     </div>
     <div class="feature-desc">
-      Fixed a deployment bug that prevented the application shortcut from appearing on the desktop after installation, allowing for quicker access to the browser.
+      Cinema Mode expands the active site video into a distraction-free viewing layout while keeping it inside Discovery Browser. Unsupported or black-screen sites are detected and a compatibility message explains why the mode could not be used.
     </div>
   </div>
 
   <div class="feature-card">
     <div class="feature-header">
-      <div class="feature-icon">V</div>
-      <div class="feature-name">Instant Visualizer Activation <span class="badge badge-improved">Improved</span></div>
+      <div class="feature-icon">Full</div>
+      <div class="feature-name">Full Mode <span class="badge badge-improved">New</span></div>
     </div>
     <div class="feature-desc">
-      Optimized the audio visualizer to initialize immediately upon page load, providing instant visual feedback without the need to wait for active media detection.
+      Full Mode asks the active video to use its native full-video presentation. When native fullscreen is unavailable, Discovery Browser can use the compatible expanded video experience instead.
+    </div>
+  </div>
+
+  <div class="section-title">Cards, Security &amp; Performance</div>
+
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">FX</div>
+      <div class="feature-name">Smoother Site Cards <span class="badge badge-improved">Improved</span></div>
+    </div>
+    <div class="feature-desc">
+      Opening and closing animations have been redesigned and optimized. Site cards now feel smoother and more responsive, with less visual delay and better overall performance during launch, minimize, restore, and close transitions.
+    </div>
+  </div>
+
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">CF</div>
+      <div class="feature-name">Color Fill Animation <span class="badge badge-improved">New</span></div>
+    </div>
+    <div class="feature-desc">
+      Color Fill is a new selectable site-card loading animation. A droplet using the card's theme color falls into view and triggers a vibrant rising sequence of colors before the website is revealed. Choose it from Settings under Loading Animation for cards opened afterward.
+    </div>
+  </div>
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">S</div>
+      <div class="feature-name">Automatic Security-Challenge Return <span class="badge badge-improved">Improved</span></div>
+    </div>
+    <div class="feature-desc">
+      When a site requires a security challenge, Discovery Browser promotes it to a full browser window at the established fast timing. After verification succeeds, that temporary window closes and the original site is relaunched automatically in its normal card-style web view.
+    </div>
+  </div>
+
+  <div class="section-title">Media, Privacy &amp; Help</div>
+
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">M</div>
+      <div class="feature-name">New Media Player <span class="badge badge-improved">New</span></div>
+    </div>
+    <div class="feature-desc">
+      The rebuilt media player opens local audio and video files or entire folders, presents recently played media in a thumbnail grid, displays native video thumbnails and available audio album art, and provides playback, seeking, volume, playlists, visualizer, fullscreen, and compact floating playback controls.
+    </div>
+  </div>
+
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">AD</div>
+      <div class="feature-name">Discovery Ad Blocker <span class="badge badge-improved">New</span></div>
+    </div>
+    <div class="feature-desc">
+      A built-in ad blocker is now available at the top of the Add-ons area. Turn it on to block common advertising hosts, trackers, pop-ups, and advertising redirects without searching for or downloading a third-party extension.
+    </div>
+  </div>
+
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">?</div>
+      <div class="feature-name">Complete Help Center <span class="badge badge-improved">New</span></div>
+    </div>
+    <div class="feature-desc">
+      The new Help menu explains Discovery Browser features, everyday workflows, media tools, privacy behavior, settings, keyboard shortcuts, troubleshooting, Google sign-in limitations, updates, and support information. Topics are searchable so answers are easier to find.
+    </div>
+  </div>
+
+  <div class="section-title">Quality Improvements</div>
+
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">OK</div>
+      <div class="feature-name">Bug Fixes &amp; Reliability <span class="badge badge-fixed">Fixed</span></div>
+    </div>
+    <div class="feature-desc">
+      Version 3.0.0 includes fixes across media controls, paused-media home behavior, floating playback, folder and recent-media thumbnails, audio artwork, playlist layering, pagination visibility, cinema compatibility notices, card behavior, and general interface reliability.
     </div>
   </div>
 

@@ -11,7 +11,7 @@ const electronAPI = {
   // ========================
   // Card management
   // ========================
-  createCard: (cardId, url, position, themeKey, launchSizeMode, isBubbleMode, shapeKey) => ipcRenderer.invoke('create-card', cardId, url, position, themeKey, launchSizeMode, isBubbleMode, shapeKey),
+  createCard: (cardId, url, position, themeKey, launchSizeMode, isBubbleMode, shapeKey, loadingAnimationKey) => ipcRenderer.invoke('create-card', cardId, url, position, themeKey, launchSizeMode, isBubbleMode, shapeKey, loadingAnimationKey),
   closeCard: (cardId) => ipcRenderer.invoke('close-card', cardId),
 
   // Card navigation
