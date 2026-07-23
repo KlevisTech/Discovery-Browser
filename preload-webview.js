@@ -11,11 +11,30 @@ if (!isChallengeUrl) {
     const link = e.target.closest('a');
     if (link && link.href) {
       const target = link.getAttribute('target');
-      // If the link has target="_blank" or target="_new", prevent it and navigate in current window
-      if (target === '_blank' || target === '_new') {
+      let destinationUrl = link.href;
+      let isGoogleResult = false;
+      try {
+        const pageUrl = new URL(window.location.href);
+        const linkUrl = new URL(link.href, pageUrl.href);
+        const onGoogleResults = /(^|\.)google\./i.test(pageUrl.hostname) && pageUrl.pathname === '/search';
+        if (onGoogleResults) {
+          isGoogleResult = true;
+          if (/(^|\.)google\./i.test(linkUrl.hostname) && linkUrl.pathname === '/url') {
+            const decodedTarget = linkUrl.searchParams.get('q') || linkUrl.searchParams.get('url');
+            if (decodedTarget && /^https?:\/\//i.test(decodedTarget)) destinationUrl = decodedTarget;
+          }
+        }
+      } catch (error) { }
+
+      // Google results and new-window links are opened explicitly in this card.
+      if (isGoogleResult || target === '_blank' || target === '_new') {
         e.preventDefault();
-        e.stopPropagation();
-        window.location.href = link.href;
+        e.stopImmediatePropagation();
+        try {
+          require('electron').ipcRenderer.sendToHost('open-link-current', destinationUrl);
+        } catch (error) {
+          window.location.assign(destinationUrl);
+        }
       }
     }
   }, true);
@@ -146,6 +165,10 @@ try {
     document.addEventListener('mousedown', signal, true);
     document.addEventListener('touchstart', signal, true);
     document.addEventListener('keydown', signal, true);
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      try { ipcRenderer.sendToHost('escape-key'); } catch (e) {}
+    }, true);
   }
 } catch (e) {}
 

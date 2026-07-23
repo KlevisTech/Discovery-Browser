@@ -90,7 +90,10 @@
         <div class="header-left">
           <div class="logo"> <img class="app-logo" src="../assets/discoverybrowser.jpeg" alt="Discovery Browser" />
           </div><!-- Search/Address Bar -->
-          <input type="text" id="search-input" class="search-input" placeholder="Enter web address or search..." />
+          <div class="address-search-wrap">
+            <input type="text" id="search-input" class="search-input" placeholder="Enter web address or search..." autocomplete="off" aria-autocomplete="list" aria-controls="address-suggestions" aria-expanded="false" />
+            <div id="address-suggestions" class="address-suggestions" role="listbox" aria-label="Site suggestions"></div>
+          </div>
           <!-- Notification dropdown trigger (placed right after the address bar) -->
           <div class="notifications-btn-wrap">
             <button class="btn btn-icon" id="notifications-btn" title="Updates">
@@ -137,24 +140,27 @@
       </div>
     </header>
 
-    <!-- Tabs Section -->
-    <div class="tabs-section">
-      <div class="tabs-header">
-        <span>Visited Sites</span>
-        <span class="tabs-count"><span id="tab-count">0</span>/8</span>
-      </div>
-      <div id="tabs-container" class="tabs-container">
-        <div class="tabs-empty">No sites visited yet</div>
+    <div class="home-dashboard">
+      <div class="home-main-column">
+    <div class="favorites-stage">
+      <div class="favorites-tray" aria-label="Favorite sites">
+        <div class="favorites-tray__header">
+          <span class="favorites-tray__title">Favorites</span>
+          <span class="favorites-tray__count"><span id="favorites-count">0/20</span> saved</span>
+        </div>
+        <div class="favorites-tray__list" id="favorites-tray-list"></div>
       </div>
     </div>
 
     <div class="clock-row">
-      <div class="favorites-tray" aria-label="Favorite sites">
-        <div class="favorites-tray__header">
-          <span class="favorites-tray__title">Favorites</span>
-          <span class="favorites-tray__count" id="favorites-count">0/8</span>
+      <div class="tabs-section">
+        <div class="tabs-header">
+          <span>Visited Sites</span>
+          <span class="tabs-count"><span id="tab-count">0</span>/10</span>
         </div>
-        <div class="favorites-tray__list" id="favorites-tray-list"></div>
+        <div id="tabs-container" class="tabs-container">
+          <div class="tabs-empty">No sites visited yet</div>
+        </div>
       </div>
       <div class="clock-widget" aria-live="polite">
         <div class="clock-time" id="clock-time">--:--</div>
@@ -162,25 +168,22 @@
       </div>
     </div>
 
+      </div>
+
     <!-- News Section -->
     <div class="news-section">
       <div class="news-header">
         <span class="news-title">Top Stories</span>
         <div class="news-header-actions">
-          <button class="news-page-btn" id="news-prev-btn" title="Previous stories">
-            <span>&#8249;</span>
-          </button>
           <button class="news-refresh-btn" id="news-refresh-btn" title="Refresh news">
             <span class="refresh-icon">&#8635;</span>
-          </button>
-          <button class="news-page-btn" id="news-next-btn" title="Next stories">
-            <span>&#8250;</span>
           </button>
         </div>
       </div>
       <div id="news-container" class="news-container">
         <div class="news-loading">Loading news...</div>
       </div>
+    </div>
     </div>
 
     <!-- Extensions panel (hidden by default) -->
@@ -413,6 +416,7 @@
             <button class="help-nav-btn is-active" data-help-section="overview">Overview</button>
             <button class="help-nav-btn" data-help-section="getting-started">Getting started</button>
             <button class="help-nav-btn" data-help-section="cards">Card browsing</button>
+            <button class="help-nav-btn" data-help-section="visualizer">Visualizer Controller</button>
             <button class="help-nav-btn" data-help-section="media">Media Player</button>
             <button class="help-nav-btn" data-help-section="reading">Reader Mode</button>
             <button class="help-nav-btn" data-help-section="library">Library and home</button>
@@ -426,7 +430,7 @@
           <main id="help-center-content" class="help-center__content">
             <article class="help-section is-active" data-help-content="overview">
               <div class="help-hero">
-                <div><span class="help-badge">Version 3.0.0</span><h3>Browse in focused, independent cards</h3><p>Discovery Browser keeps the home screen as a control center and opens sites in movable card windows. Each card has navigation, layout, reading, media, bookmark, download, and site-app tools.</p></div>
+                <div><span class="help-badge">Version 3.0.1</span><h3>Browse in focused, independent cards</h3><p>Discovery Browser keeps the home screen as a control center and opens sites in movable card windows. Each card has navigation, layout, reading, media, bookmark, download, and site-app tools.</p></div>
                 <div class="help-hero__mark">DB</div>
               </div>
               <div class="help-grid help-grid--3">
@@ -441,8 +445,8 @@
               <h3>Getting started</h3><p class="help-lead">The main window is your launcher and library; websites open in separate card windows.</p>
               <ol class="help-steps">
                 <li><span>1</span><div><h4>Open a site or search</h4><p>Enter a URL or words in the main address field, then press <kbd>Enter</kbd>. The selected search engine is used when the text is not a web address.</p></div></li>
-                <li><span>2</span><div><h4>Manage active sites</h4><p>Visited Sites shows recent destinations and supports up to eight visible entries. Close a card when finished or minimize it into a background bubble when media should continue.</p></div></li>
-                <li><span>3</span><div><h4>Pin important sites</h4><p>Add up to eight Favorites from the home tray for one-click access. Give a favorite an optional custom title.</p></div></li>
+                <li><span>2</span><div><h4>Manage active sites</h4><p>Visited Sites shows recent destinations and supports up to ten visible entries. Close a card when finished or minimize it into a background bubble when media should continue.</p></div></li>
+                <li><span>3</span><div><h4>Pin important sites</h4><p>Add up to twenty Favorites from the home tray for one-click access. Give a favorite an optional custom title.</p></div></li>
                 <li><span>4</span><div><h4>Choose your defaults</h4><p>Open Settings to select the search engine, card launch size, per-site layouts, card shape, header theme, loading animation, and audio visualizer.</p></div></li>
               </ol>
               <div class="help-grid help-grid--2">
@@ -456,12 +460,22 @@
               <div class="help-grid help-grid--2">
                 <section class="help-card"><h4>Navigation and layout</h4><ul><li>Back, Forward, and Reload navigate the active site.</li><li>Wide View expands the card horizontally.</li><li>Fullscreen expands the complete site view.</li><li>Split Screen opens a second site beside the first.</li><li>Zoom controls change the active page scale.</li></ul></section>
                 <section class="help-card"><h4>Save and reopen</h4><ul><li>Bookmark saves the current page into a chosen folder.</li><li>Read Mode extracts readable article content.</li><li>Add Site App To Desktop creates or updates a Windows shortcut.</li><li>The download ring reports active downloads.</li></ul></section>
-                <section class="help-card"><h4>Media tools on a card</h4><ul><li>Hover the centered visualizer to open playback controls.</li><li>Play/pause, seek 10 seconds, mute, and adjust volume.</li><li>Change visualizer style, side flames, and progress widget.</li><li>Visual Lock keeps the media visualization available.</li><li>Cinema and Full modes expand compatible video players.</li></ul></section>
+                <section class="help-card"><h4>Media tools on a card</h4><ul><li>Click or press the centered visualizer to open the controller.</li><li>Play/pause, seek 10 seconds, mute, and adjust volume.</li><li>Change visualizer style, side flames, and progress widget.</li><li>Visual Lock keeps the media visualization available.</li><li>Cinema and Full modes expand compatible video players.</li></ul></section>
                 <section class="help-card"><h4>Compatibility notes</h4><p>Some protected or cross-origin players cannot be pulled into Cinema mode. Discovery checks for a renderable frame, restores the original page on failure, and recommends the site's own fullscreen control.</p></section>
               </div>
               <div class="help-callout"><strong>Split Screen:</strong> click the split button, enter the second URL, and press Enter. Use <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd> to toggle it quickly.</div>
             </article>
 
+            <article class="help-section" data-help-content="visualizer">
+              <h3>Visualizer Controller</h3><p class="help-lead">Control media playing inside a site card from the animated visualizer in the card title bar.</p>
+              <div class="help-grid help-grid--2">
+                <section class="help-card"><h4>Open the controller</h4><ul><li>Enable Audio Visualizer in Settings.</li><li>Start audio or video inside a site card.</li><li>Click or press the centered visualizer to display its controller.</li><li>The controller follows the active card and hides when no supported media is active.</li></ul></section>
+                <section class="help-card"><h4>Playback controls</h4><ul><li><strong>Play/Pause</strong> controls the active media.</li><li><strong>Rewind 10s</strong> and <strong>Forward 10s</strong> move through supported media.</li><li><strong>Mute/Unmute</strong> toggles sound.</li><li>The volume slider changes the active player's volume.</li><li>The time display shows remaining time or indicates a live stream.</li></ul></section>
+                <section class="help-card"><h4>Appearance and widgets</h4><ul><li><strong>Theme</strong> cycles the card and visualizer color theme.</li><li><strong>Flames</strong> adds side-flame animation to Wave and Curve card shapes; it is unavailable for the default shape.</li><li><strong>Progress</strong> toggles the separate media-progress widget.</li><li><strong>Lock View</strong> expands and keeps the visualization visible. Select Unlock to return to the normal card.</li></ul></section>
+                <section class="help-card"><h4>Video viewing modes</h4><ul><li><strong>Cinema</strong> emphasizes the active video and temporarily hides the surrounding website.</li><li>Press Cinema again or press <kbd>Escape</kbd> to restore the complete site card and its original size.</li><li><strong>Full</strong> requests the video's expanded full-view presentation.</li><li>If a protected or cross-origin player cannot be expanded, use the website player's own fullscreen control.</li></ul></section>
+              </div>
+              <div class="help-callout"><strong>Tip:</strong> if the controller does not appear, confirm that Audio Visualizer is enabled, start playback, click or press the visualizer, and keep the site card active. Some websites expose media controls only after the user presses Play.</div>
+            </article>
             <article class="help-section" data-help-content="media">
               <h3>Media Player</h3><p class="help-lead">Play local audio and video without opening a website.</p>
               <div class="help-grid help-grid--2">
@@ -554,7 +568,7 @@
 
             <article class="help-section" data-help-content="about">
               <h3>About Discovery Browser</h3>
-              <div class="about-discovery"><img src="../assets/discoverybrowser.jpeg" alt="Discovery Browser"><div><h4>Discovery Browser 3.0.0</h4><p>A card-style desktop web browser built with Electron, designed around focused site windows, reading, local media, and a customizable home control center.</p></div></div>
+              <div class="about-discovery"><img src="../assets/discoverybrowser.jpeg" alt="Discovery Browser"><div><h4>Discovery Browser 3.0.1</h4><p>A card-style desktop web browser built with Electron, designed around focused site windows, reading, local media, and a customizable home control center.</p></div></div>
               <div class="help-grid help-grid--2"><section class="help-card"><h4>Updates</h4><p>Use Help &gt; Check for Updates or the bell on the home screen.</p></section><section class="help-card"><h4>Support</h4><p>Use Help &gt; Support or the Support button to find developer contact and contribution details.</p></section></div>
               <p class="help-footnote">Feature availability can vary by website, media codec, operating-system support, and embedded-player restrictions.</p>
             </article>

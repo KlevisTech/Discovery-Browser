@@ -27,8 +27,8 @@ class DiscoveryBrowser {
 
     // Tab management
     this.visitedTabs = new Map(); // url -> tabData
-    this.maxTabs = 8;
-    this.maxFavoriteBookmarks = 8;
+    this.maxTabs = 10;
+    this.maxFavoriteBookmarks = 20;
     this.tabRenderTimeout = null; // Timeout for delayed tab rendering
 
     // History management
@@ -265,35 +265,161 @@ class DiscoveryBrowser {
     this.windowShapeOptionsEl = document.getElementById('window-shape-options');
     this.googleSearchInput = googleSearchInput;
 
-    // Search input handler - create card on Enter key
+    const suggestionsEl = document.getElementById('address-suggestions');
+    let currentSuggestions = [];
+    let activeSuggestionIndex = -1;
+
+    const collectAddressSuggestions = (query) => {
+      const term = String(query || '').trim().toLowerCase();
+      if (!term) return [];
+      const candidates = [];
+      const add = (entry, source, priority) => {
+        if (!entry || !entry.url || !this.isTrackableVisitedUrl(entry.url)) return;
+        let parsedUrl;
+        try { parsedUrl = new URL(entry.url); } catch (e) { return; }
+        const host = parsedUrl.hostname.replace(/^www\./, '');
+        const isGoogleSearch = /(^|\.)google\./i.test(parsedUrl.hostname) && parsedUrl.pathname === '/search';
+        const searchQuery = isGoogleSearch ? String(parsedUrl.searchParams.get('q') || '').trim() : '';
+        const title = searchQuery
+          ? searchQuery
+          : String(entry.title || host || entry.url).trim();
+        const displayHost = searchQuery ? `Google search - ${host}` : host;
+        const displaySource = searchQuery ? 'Google Search' : source;
+        const haystack = `${title} ${displayHost} ${entry.url} ${searchQuery}`.toLowerCase();
+        if (!haystack.includes(term)) return;
+        const starts = title.toLowerCase().startsWith(term) || host.startsWith(term);
+        candidates.push({
+          url: entry.url,
+          title,
+          host: displayHost,
+          favicon: entry.favicon || this.getFaviconUrl(entry.url),
+          source: displaySource,
+          score: priority + (starts ? 0 : 10),
+          timestamp: Number(entry.timestamp || entry.lastVisited || 0),
+        });
+      };
+
+      this.favoriteBookmarks.forEach(entry => add(entry, 'Favorite', 0));
+      for (const folder of this.bookmarkFolders.values()) {
+        (folder.bookmarks || []).forEach(entry => add(entry, 'Bookmark', 1));
+      }
+      for (const entry of this.visitedTabs.values()) add(entry, 'Visited', 2);
+      this.history.forEach(entry => add(entry, 'History', 3));
+
+      const unique = new Map();
+      candidates.sort((a, b) => a.score - b.score || b.timestamp - a.timestamp).forEach(entry => {
+        const key = entry.url.replace(/#.*$/, '').replace(/\/$/, '').toLowerCase();
+        if (!unique.has(key)) unique.set(key, entry);
+      });
+      return Array.from(unique.values()).slice(0, 7);
+    };
+
+    const closeAddressSuggestions = () => {
+      currentSuggestions = [];
+      activeSuggestionIndex = -1;
+      suggestionsEl.innerHTML = '';
+      suggestionsEl.classList.remove('is-open');
+      searchInput.setAttribute('aria-expanded', 'false');
+    };
+
+    const openSuggestion = (suggestion) => {
+      if (!suggestion) return;
+      this.createCard(suggestion.url);
+      searchInput.value = '';
+      searchInput.classList.remove('active');
+      closeAddressSuggestions();
+    };
+
+    const renderAddressSuggestions = () => {
+      currentSuggestions = collectAddressSuggestions(searchInput.value);
+      activeSuggestionIndex = -1;
+      suggestionsEl.innerHTML = '';
+      if (!currentSuggestions.length) {
+        closeAddressSuggestions();
+        return;
+      }
+      currentSuggestions.forEach((suggestion, index) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'address-suggestion';
+        item.setAttribute('role', 'option');
+        item.innerHTML = `
+          <img class="address-suggestion__icon" src="${this.escapeHtml(suggestion.favicon)}" alt="">
+          <span class="address-suggestion__text">
+            <span class="address-suggestion__title">${this.escapeHtml(suggestion.title)}</span>
+            <span class="address-suggestion__host">${this.escapeHtml(suggestion.host)}</span>
+          </span>
+          <span class="address-suggestion__source">${this.escapeHtml(suggestion.source)}</span>
+        `;
+        item.addEventListener('mousedown', event => event.preventDefault());
+        item.addEventListener('click', () => openSuggestion(suggestion));
+        suggestionsEl.appendChild(item);
+      });
+      suggestionsEl.classList.add('is-open');
+      searchInput.setAttribute('aria-expanded', 'true');
+    };
+
+    const setActiveSuggestion = (index) => {
+      const items = Array.from(suggestionsEl.querySelectorAll('.address-suggestion'));
+      if (!items.length) return;
+      activeSuggestionIndex = (index + items.length) % items.length;
+      items.forEach((item, itemIndex) => item.classList.toggle('is-active', itemIndex === activeSuggestionIndex));
+      items[activeSuggestionIndex].scrollIntoView({ block: 'nearest' });
+    };
+
+    this.refreshAddressSuggestions = () => {
+      if (document.activeElement === searchInput && searchInput.value.trim()) {
+        renderAddressSuggestions();
+      } else {
+        closeAddressSuggestions();
+      }
+    };
+
     searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' && currentSuggestions.length) {
+        e.preventDefault();
+        setActiveSuggestion(activeSuggestionIndex + 1);
+        return;
+      }
+      if (e.key === 'ArrowUp' && currentSuggestions.length) {
+        e.preventDefault();
+        setActiveSuggestion(activeSuggestionIndex - 1);
+        return;
+      }
+      if (e.key === 'Escape') {
+        closeAddressSuggestions();
+        return;
+      }
       if (e.key === 'Enter') {
+        if (activeSuggestionIndex >= 0 && currentSuggestions[activeSuggestionIndex]) {
+          e.preventDefault();
+          openSuggestion(currentSuggestions[activeSuggestionIndex]);
+          return;
+        }
         let url = searchInput.value.trim();
         if (url) {
-          url = this.normalizeUrl(url); // Add https:// if missing
+          url = this.normalizeUrl(url);
           this.createCard(url);
-          searchInput.value = ''; // Clear input after creating card
-          searchInput.classList.remove('active'); // Remove glow
+          searchInput.value = '';
+          searchInput.classList.remove('active');
+          closeAddressSuggestions();
         }
       }
     });
 
-    // Add active class when user focuses or starts typing
     searchInput.addEventListener('focus', () => {
       searchInput.classList.add('active');
+      renderAddressSuggestions();
     });
 
     searchInput.addEventListener('input', () => {
-      if (searchInput.value.trim()) {
-        searchInput.classList.add('active');
-      }
+      searchInput.classList.toggle('active', !!searchInput.value.trim());
+      renderAddressSuggestions();
     });
 
-    // Remove active class when input loses focus (if empty)
     searchInput.addEventListener('blur', () => {
-      if (!searchInput.value.trim()) {
-        searchInput.classList.remove('active');
-      }
+      window.setTimeout(closeAddressSuggestions, 120);
+      if (!searchInput.value.trim()) searchInput.classList.remove('active');
     });
 
     if (this.uploadBtn) {
@@ -1202,11 +1328,7 @@ class DiscoveryBrowser {
        try {
          const authHost = authUrl ? new URL(authUrl).hostname : '';
          if (authHost && (authHost === 'accounts.google.com' || authHost.endsWith('.google.com') || authHost.includes('google'))) {
-           if (sameTarget) {
-             message = `Discovery Browser cannot complete secure Google sign-in for ${host || 'this site'} inside the app. If you have a Google password saved for this site, you can use it to sign in directly. Continue in Chrome/Edge?`;
-           } else {
-             message = `Discovery Browser cannot complete secure Google sign-in inside the app. If you have a Google password saved for this site, you can use it to sign in directly. Continue in Chrome/Edge?`;
-           }
+           message = 'Google blocks account sign-in inside embedded browsers such as Discovery Browser. Open YouTube in Chrome, Edge, or Firefox to sign in securely?';
          }
        } catch (e) { /* ignore */ }
 
@@ -1712,10 +1834,22 @@ class DiscoveryBrowser {
     }
   }
 
+  isTrackableVisitedUrl(url) {
+    try {
+      const parsed = new URL(String(url || ''));
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Add or update a tab for a visited site
   addOrUpdateTab(url, title) {
-    // First normalize the URL to ensure it has a protocol
-    url = this.normalizeUrl(url);
+    // Only real web destinations belong in Visited Sites.
+    const rawUrl = String(url || '').trim();
+    if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl) && !/^https?:/i.test(rawUrl)) return;
+    url = this.normalizeUrl(rawUrl);
+    if (!this.isTrackableVisitedUrl(url)) return;
 
     // ADD TO HISTORY HERE - same place as tabs!
     this.addToHistory(url, title);
@@ -1785,8 +1919,19 @@ class DiscoveryBrowser {
   // Remove a tab
   removeTab(url) {
     this.visitedTabs.delete(url);
+    const target = String(url || '').replace(/#.*$/, '').replace(/\/$/, '');
+    const previousHistoryLength = this.history.length;
+    this.history = this.history.filter(entry => {
+      const entryUrl = String(entry && entry.url || '').replace(/#.*$/, '').replace(/\/$/, '');
+      return entryUrl !== target;
+    });
     this.saveTabs();
+    if (this.history.length !== previousHistoryLength) {
+      this.saveHistory();
+      this.renderHistory();
+    }
     this.renderTabs();
+    this.refreshSuggestionsAfterRemoval();
   }
 
   // Render all tabs
@@ -1931,9 +2076,15 @@ class DiscoveryBrowser {
       const saved = localStorage.getItem('visitedTabs');
       if (saved) {
         const tabsArray = JSON.parse(saved);
+        let removedInternalEntries = false;
         tabsArray.forEach(tabData => {
-          this.visitedTabs.set(tabData.url, tabData);
+          if (tabData && this.isTrackableVisitedUrl(tabData.url)) {
+            this.visitedTabs.set(tabData.url, tabData);
+          } else {
+            removedInternalEntries = true;
+          }
         });
+        if (removedInternalEntries) this.saveTabs();
         this.renderTabs();
       }
     } catch (e) {
@@ -3045,6 +3196,7 @@ class DiscoveryBrowser {
     this.saveFavoriteBookmarks();
     this.renderFavoritesTray();
     this.renderBookmarks();
+    this.refreshSuggestionsAfterRemoval();
     return true;
   }
 
@@ -3111,10 +3263,21 @@ class DiscoveryBrowser {
       favoriteBtn.title = bookmark.title || bookmark.url || 'Favorite site';
 
       const faviconUrl = this.getFaviconUrl(bookmark.url);
-      const shortLabel = (bookmark.title || bookmark.url || '?').trim().charAt(0).toUpperCase() || '?';
+      const shortLabel = (bookmark.title || bookmark.url || '').trim().charAt(0).toUpperCase();
+      let hostname = bookmark.url || '';
+      try {
+        hostname = new URL(bookmark.url).hostname.replace(/^www\./, '');
+      } catch (e) {
+        // Keep the stored value when a legacy favorite cannot be parsed.
+      }
+      const displayTitle = (bookmark.title || hostname || 'Favorite site').trim();
       favoriteBtn.innerHTML = `
-        <img class="favorite-site__icon" src="${this.escapeHtml(faviconUrl)}" alt="">
-        <span class="favorite-site__fallback">${this.escapeHtml(shortLabel)}</span>
+        <span class="favorite-site__icon-wrap">
+          <img class="favorite-site__icon" src="${this.escapeHtml(faviconUrl)}" alt="">
+          <span class="favorite-site__fallback">${this.escapeHtml(shortLabel)}</span>
+        </span>
+        <span class="favorite-site__title">${this.escapeHtml(displayTitle)}</span>
+        <span class="favorite-site__url">${this.escapeHtml(hostname)}</span>
       `;
 
       const icon = favoriteBtn.querySelector('.favorite-site__icon');
@@ -3141,6 +3304,7 @@ class DiscoveryBrowser {
         event.stopPropagation();
         this.showFavoriteContextMenu(event.clientX, event.clientY, bookmark);
       });
+
 
       trayList.appendChild(favoriteBtn);
     });
@@ -3494,6 +3658,7 @@ class DiscoveryBrowser {
           folder.bookmarks.splice(index, 1);
           this.saveBookmarkFolders();
           this.renderBookmarks();
+          this.refreshSuggestionsAfterRemoval();
         }
       }
     });
@@ -3586,11 +3751,41 @@ class DiscoveryBrowser {
     }
   }
 
+  removeVisitedSuggestionForUrl(url) {
+    let target = '';
+    try {
+      const parsed = new URL(url);
+      target = `${parsed.protocol}//${parsed.host}${parsed.pathname}`.replace(/\/$/, '');
+    } catch (e) { return; }
+
+    let changed = false;
+    for (const key of this.visitedTabs.keys()) {
+      if (key.replace(/\/$/, '') === target) {
+        this.visitedTabs.delete(key);
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.saveTabs();
+      this.renderTabs();
+    }
+  }
+
+  refreshSuggestionsAfterRemoval() {
+    if (typeof this.refreshAddressSuggestions === 'function') {
+      this.refreshAddressSuggestions();
+    }
+  }
+
   clearHistory() {
     if (confirm('Clear all browsing history? This cannot be undone.')) {
       this.history = [];
+      this.visitedTabs.clear();
       this.saveHistory();
+      this.saveTabs();
       this.renderHistory();
+      this.renderTabs();
+      this.refreshSuggestionsAfterRemoval();
     }
   }
 
@@ -3779,8 +3974,10 @@ class DiscoveryBrowser {
         const index = this.history.indexOf(entry);
         if (index > -1) {
           this.history.splice(index, 1);
+          this.removeVisitedSuggestionForUrl(entry.url);
           this.saveHistory();
           this.renderHistory();
+          this.refreshSuggestionsAfterRemoval();
         }
       });
 
@@ -4180,7 +4377,8 @@ class DiscoveryBrowser {
   updateCardUrl(cardId, url) {
     const cardData = this.cards.get(cardId);
     if (cardData) {
-      // Normalize URL
+      // Ignore the outer card shell (file:// card.html, about:blank, and similar).
+      if (!this.isTrackableVisitedUrl(url)) return;
       url = this.normalizeUrl(url);
 
       const oldUrl = cardData.url;
@@ -4219,6 +4417,31 @@ class DiscoveryBrowser {
     if (force || !this.newsCache || (Date.now() - this.newsCacheTime) >= this.newsCacheDuration) {
       this.renderNewsLoading();
       await this.fetchNews();
+    }
+  }
+
+  getHighResolutionNewsImageUrl(rawUrl) {
+    if (!rawUrl) return null;
+
+    try {
+      const imageUrl = new URL(rawUrl);
+      const host = imageUrl.hostname.toLowerCase();
+
+      // BBC RSS thumbnails encode their requested width in the path.
+      if (host.includes('bbci.co.uk')) {
+        imageUrl.pathname = imageUrl.pathname
+          .replace(/\/(standard|news)\/(\d+)\//, '/$1/976/')
+          .replace(/\/(\d+)x(\d+)\//, '/976x549/');
+      }
+
+      // Guardian and several other feeds expose width controls as query params.
+      ['width', 'w'].forEach((key) => {
+        if (imageUrl.searchParams.has(key)) imageUrl.searchParams.set(key, '960');
+      });
+
+      return imageUrl.toString();
+    } catch (e) {
+      return rawUrl;
     }
   }
 
@@ -4261,14 +4484,23 @@ class DiscoveryBrowser {
             // Extract image URL from various RSS image sources
             let imageUrl = null;
 
-            // Try media:thumbnail or media:content (Media RSS)
-            const mediaThumbnail = item.getElementsByTagNameNS('http://search.yahoo.com/mrss/', 'thumbnail')[0];
-            const mediaContent = item.getElementsByTagNameNS('http://search.yahoo.com/mrss/', 'content')[0];
-            if (mediaThumbnail?.getAttribute('url')) {
-              imageUrl = mediaThumbnail.getAttribute('url');
-            } else if (mediaContent?.getAttribute('url') && mediaContent.getAttribute('type')?.startsWith('image/')) {
-              imageUrl = mediaContent.getAttribute('url');
-            }
+            // Prefer the largest Media RSS content image; thumbnails are a last resort.
+            const mediaContents = Array.from(
+              item.getElementsByTagNameNS('http://search.yahoo.com/mrss/', 'content')
+            ).filter(media => {
+              const type = media.getAttribute('type') || '';
+              return media.getAttribute('url') && (!type || type.startsWith('image/'));
+            }).sort((a, b) => {
+              const area = media => (Number(media.getAttribute('width')) || 0) * (Number(media.getAttribute('height')) || 0);
+              return area(b) - area(a);
+            });
+            const mediaThumbnails = Array.from(
+              item.getElementsByTagNameNS('http://search.yahoo.com/mrss/', 'thumbnail')
+            ).sort((a, b) => {
+              const area = media => (Number(media.getAttribute('width')) || 0) * (Number(media.getAttribute('height')) || 0);
+              return area(b) - area(a);
+            });
+            imageUrl = mediaContents[0]?.getAttribute('url') || mediaThumbnails[0]?.getAttribute('url') || null;
 
             // Try enclosure element
             if (!imageUrl) {
@@ -4280,8 +4512,18 @@ class DiscoveryBrowser {
 
             // Try extracting <img> from description HTML
             if (!imageUrl) {
-              const imgMatch = rawDesc.match(/<img[^>]+src=["']([^"']+)["']/i);
-              if (imgMatch) imageUrl = imgMatch[1];
+              const srcsetMatch = rawDesc.match(/<img[^>]+srcset=["']([^"']+)["']/i);
+              if (srcsetMatch) {
+                const candidates = srcsetMatch[1].split(',').map(candidate => {
+                  const parts = candidate.trim().split(/\s+/);
+                  return { url: parts[0], width: parseInt(parts[1], 10) || 0 };
+                }).sort((a, b) => b.width - a.width);
+                imageUrl = candidates[0]?.url || null;
+              }
+              if (!imageUrl) {
+                const imgMatch = rawDesc.match(/<img[^>]+src=["']([^"']+)["']/i);
+                if (imgMatch) imageUrl = imgMatch[1];
+              }
             }
 
             // Try content:encoded for images
@@ -4298,7 +4540,7 @@ class DiscoveryBrowser {
                 item.querySelector('guid')?.textContent?.trim() || '',
               publishedAt: item.querySelector('pubDate')?.textContent || null,
               source: { name: feed.source },
-              imageUrl: imageUrl,
+              imageUrl: this.getHighResolutionNewsImageUrl(imageUrl),
             };
           }).filter(a => a.title && a.title !== '[Removed]');
 
@@ -4357,12 +4599,10 @@ class DiscoveryBrowser {
     this.newsContainer.innerHTML = '';
 
     const validArticles = articles.filter(a => a.title && a.title !== '[Removed]');
-    const offset = this.newsPage * 4;
-    const featuredArticles = validArticles.slice(offset, offset + 4);
-    // Update pagination button states
-    const maxPage = Math.max(0, Math.floor((validArticles.length - 1) / 4));
-    if (this.newsPrevBtn) this.newsPrevBtn.disabled = this.newsPage <= 0;
-    if (this.newsNextBtn) this.newsNextBtn.disabled = this.newsPage >= maxPage;
+    const featuredArticles = validArticles;
+    // The side rail scrolls through the full feed, so page arrows are unnecessary.
+    if (this.newsPrevBtn) this.newsPrevBtn.hidden = true;
+    if (this.newsNextBtn) this.newsNextBtn.hidden = true;
 
     // Featured row (4 large cards)
     const featuredRow = document.createElement('div');

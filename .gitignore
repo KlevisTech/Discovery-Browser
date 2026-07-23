@@ -7,6 +7,9 @@ yarn.lock
 dist/
 build/
 out/
+/webview2-auth/bin/
+/webview2-auth/obj/
+/webview2-auth/publish/
 
 # Development
 .DS_Store

@@ -1,6 +1,6 @@
 {
   "name": "discovery-browser",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "A beautiful, unique card-style web browser built with Electron",
   "author": "Modern Tech",
   "license": "Apache-2.0",
@@ -11,7 +11,10 @@
     "build": "electron-builder",
     "build:win": "electron-builder --win --x64",
     "build:mac": "electron-builder --mac --x64",
-    "build:linux": "electron-builder --linux --x64"
+    "build:linux": "electron-builder --linux --x64",
+    "build:auth": "dotnet publish webview2-auth/Discovery.YouTubeAuth.csproj -c Release -r win-x64 --self-contained false -o webview2-auth/publish",
+    "prebuild": "npm run build:auth",
+    "prebuild:win": "npm run build:auth"
   },
   "dependencies": {
     "express": "^4.21.2"
@@ -39,7 +42,9 @@
       "src/**/*",
       "assets/**/*",
       "package.json",
-      "installer.nsh"
+      "installer.nsh",
+      "google-webview2-auth.js",
+      "google-auth-url-classifier.js"
     ],
     "protocols": [
       {
@@ -80,6 +85,15 @@
           "name": "HTM Document",
           "description": "HTM Document",
           "role": "Viewer"
+        }
+      ],
+      "extraResources": [
+        {
+          "from": "webview2-auth/publish",
+          "to": "webview2-auth",
+          "filter": [
+            "**/*"
+          ]
         }
       ]
     },

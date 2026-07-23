@@ -32,6 +32,9 @@ contextBridge.exposeInMainWorld('cardAPI', {
   // Toggle fullscreen
   toggleFullscreen: (cardId, shouldBeFullscreen, mode) =>
     ipcRenderer.invoke('toggle-fullscreen', cardId, shouldBeFullscreen, mode),
+  toggleCardExpansion: (cardId, expanded) =>
+    ipcRenderer.invoke('toggle-card-expansion', cardId, expanded),
+
 
   // Minimize card
   minimizeCard: (cardId, pageUrl, pageTitle, themeKey) =>
@@ -134,6 +137,10 @@ contextBridge.exposeInMainWorld('cardAPI', {
 // Receive requests from main to load a URL into this card's webview
 ipcRenderer.on('card-load-url', (event, url) => {
   window.dispatchEvent(new CustomEvent('card-load-url', { detail: url }));
+});
+
+ipcRenderer.on('card-opening-start', () => {
+  window.dispatchEvent(new CustomEvent('card-opening-start'));
 });
 
 ipcRenderer.on('card-restore-animate', (event, payload = {}) => {

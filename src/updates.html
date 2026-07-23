@@ -173,13 +173,13 @@
       <div class="app-logo">D</div>
       <div>
         <div class="app-name">Discovery Browser</div>
-        <span class="version">Version 3.0.0</span>
+        <span class="version">Version 3.0.1</span>
       </div>
     </div>
   </div>
 
   <div class="release-intro">
-    Version 3.0.0 is a major Discovery Browser update focused on richer media playback, clearer controls, smoother site cards, safer challenge handling, built-in privacy, and easier guidance for every feature.
+    Version 3.0.1 is a maintenance update that improves application shutdown, reliable relaunching, and online video streaming while retaining all features introduced in version 3.0.0.
   </div>
 
   <div class="section-title">Visualizer &amp; Viewing Modes</div>
@@ -281,11 +281,31 @@
 
   <div class="feature-card">
     <div class="feature-header">
+      <div class="feature-icon">HD</div>
+      <div class="feature-name">Reliable Online Video Playback <span class="badge badge-fixed">Fixed</span></div>
+    </div>
+    <div class="feature-desc">
+      Fixed an issue that could leave YouTube and other video sites stuck buffering until the page was reloaded. Discovery Browser now uses Chromium's modern QUIC and HTTP/3 streaming transports by default for smoother playback and better recovery from temporary network interruptions.
+    </div>
+  </div>
+
+  <div class="feature-card">
+    <div class="feature-header">
+      <div class="feature-icon">FX</div>
+      <div class="feature-name">Reliable App Relaunch <span class="badge badge-fixed">Fixed</span></div>
+    </div>
+    <div class="feature-desc">
+      Fixed an issue where hidden background windows could keep Discovery Browser running after the main window was closed, causing later launches to display a black, unresponsive layout. The app now shuts down cleanly and can be reopened normally without restarting the computer.
+    </div>
+  </div>
+
+  <div class="feature-card">
+    <div class="feature-header">
       <div class="feature-icon">OK</div>
       <div class="feature-name">Bug Fixes &amp; Reliability <span class="badge badge-fixed">Fixed</span></div>
     </div>
     <div class="feature-desc">
-      Version 3.0.0 includes fixes across media controls, paused-media home behavior, floating playback, folder and recent-media thumbnails, audio artwork, playlist layering, pagination visibility, cinema compatibility notices, card behavior, and general interface reliability.
+      Version 3.0.1 includes the reliable relaunch fix alongside fixes across media controls, paused-media home behavior, floating playback, folder and recent-media thumbnails, audio artwork, playlist layering, pagination visibility, cinema compatibility notices, card behavior, and general interface reliability.
     </div>
   </div>
 

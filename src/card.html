@@ -14,6 +14,7 @@
         const rawShape = String(params.get('shape') || 'default').toLowerCase();
         const rawLoadingAnimation = String(params.get('loadingAnimation') || 'static-tv').toLowerCase();
         const rawLaunchExperience = String(params.get('launchExperience') || '').toLowerCase();
+        const rawLaunchSize = String(params.get('launchSize') || 'normal').toLowerCase();
         const normalizedTheme = rawTheme === 'alt'
           ? 'sunset'
           : (rawTheme === 'frost' ? 'solstice' : rawTheme);
@@ -22,12 +23,14 @@
         const normalizedShape = rawShape === 'wave' || rawShape === 'curve' ? rawShape : 'default';
         const normalizedLoadingAnimation = allowedLoadingAnimations.has(rawLoadingAnimation) ? rawLoadingAnimation : 'static-tv';
         const normalizedLaunchExperience = rawLaunchExperience === 'site-app' ? 'site-app' : '';
+        const normalizedLaunchSize = rawLaunchSize === 'wide' || rawLaunchSize === 'fullscreen' ? rawLaunchSize : 'normal';
         const themeClass = allowedThemes.has(normalizedTheme) ? `theme-${normalizedTheme}` : 'theme-primary';
         document.documentElement.classList.add(themeClass);
         document.documentElement.setAttribute('data-card-theme', themeClass.replace('theme-', ''));
         document.documentElement.classList.add(`card-shape-${normalizedShape}`);
         document.documentElement.setAttribute('data-card-shape', normalizedShape);
         document.documentElement.setAttribute('data-loading-animation', normalizedLoadingAnimation);
+        document.documentElement.setAttribute('data-card-launch-size', normalizedLaunchSize);
         if (normalizedLaunchExperience) {
           document.documentElement.setAttribute('data-launch-experience', normalizedLaunchExperience);
         }
@@ -91,6 +94,21 @@ body {
         transform: translate3d(0, 0, 0) scale(1);
         opacity: 1;
       }
+    }
+
+    /* Keep the opening footprint consistent as the target window gets larger. */
+    @keyframes zoomInExpandWide {
+      0% { transform: translate3d(0, 26px, 0) scale(0.14); opacity: 0; }
+      34% { transform: translate3d(0, 0, 0) scale(0.62); opacity: 1; }
+      72% { transform: translate3d(0, 0, 0) scale(1.02); opacity: 1; }
+      100% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+    }
+
+    @keyframes zoomInExpandFullscreen {
+      0% { transform: translate3d(0, 26px, 0) scale(0.09); opacity: 0; }
+      34% { transform: translate3d(0, 0, 0) scale(0.46); opacity: 1; }
+      72% { transform: translate3d(0, 0, 0) scale(1.012); opacity: 1; }
+      100% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
     }
 
     @keyframes tvOpenExpand {
@@ -582,6 +600,20 @@ body {
       pointer-events: none;
       transform-origin: center;
       will-change: transform, opacity;
+    }
+
+    .card-window.is-opening-tv.is-opening-paused {
+      animation-play-state: paused !important;
+    }
+
+    html[data-card-launch-size="wide"] .card-window.is-opening-tv {
+      animation-name: zoomInExpandWide;
+      animation-duration: 560ms;
+    }
+
+    html[data-card-launch-size="fullscreen"] .card-window.is-opening-tv {
+      animation-name: zoomInExpandFullscreen;
+      animation-duration: 620ms;
     }
 
     .card-window.site-app-launch.is-opening-tv {
@@ -3019,8 +3051,21 @@ body {
       }
       // Set opening animation based on mode (skip for bubble mode - show instantly)
       if (!isBubbleMode) {
-        cardWindowEl.classList.add('is-opening-tv');
+        cardWindowEl.classList.add('is-opening-tv', 'is-opening-paused');
       }
+    }
+
+    // Hold the expansion on frame zero until the hidden native window is
+    // visible, preventing a completed-card flash before the animation.
+    if (!isBubbleMode && cardWindowEl) {
+      window.addEventListener('card-opening-start', () => {
+        requestAnimationFrame(() => cardWindowEl.classList.remove('is-opening-paused'));
+      }, { once: true });
+      setTimeout(() => {
+        if (window.cardAPI && window.cardAPI.sendToMain) {
+          window.cardAPI.sendToMain('card-opening-ready', { cardId });
+        }
+      }, 0);
     }
 
     // Get DOM elements
@@ -3196,6 +3241,9 @@ body {
     let originalBounds = null;
     let preFullscreenBounds = null;
     let wasWideBeforeFullscreen = false;
+    let headerExpansionActive = false;
+    let headerExpansionInFlight = false;
+    let headerExpansionWasWide = false;
     let isSplitView = false;
     let currentSplitUrl = '';
     let zoomFactor = 1.0;
@@ -3768,10 +3816,17 @@ body {
           (() => {
             const state = window.__discoveryCinemaMode;
             if (!state) return false;
+            const toKebab = (key) => String(key).replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase());
             const restore = (el, styles) => {
               if (!el || !styles) return;
-              for (const [key, value] of Object.entries(styles)) {
-                el.style[key] = value || '';
+              for (const [key, captured] of Object.entries(styles)) {
+                const property = toKebab(key);
+                const value = captured && typeof captured === 'object' ? captured.value : captured;
+                const priority = captured && typeof captured === 'object' ? captured.priority : '';
+                // Cinema uses !important to override site players. Remove that
+                // declaration completely before restoring the site's value.
+                el.style.removeProperty(property);
+                if (value) el.style.setProperty(property, value, priority || '');
               }
             };
             restore(state.video, state.videoStyles);
@@ -3806,11 +3861,15 @@ body {
 
           const styleKeys = ['position', 'display', 'inset', 'top', 'right', 'bottom', 'left', 'width', 'height', 'maxWidth', 'maxHeight', 'minWidth', 'minHeight', 'zIndex', 'objectFit', 'objectPosition', 'background', 'boxShadow', 'borderRadius', 'transform', 'margin', 'boxSizing', 'aspectRatio'];
           const pageStyleKeys = ['overflow', 'background'];
+          const toKebab = (key) => String(key).replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase());
           const capture = (el, keys) => keys.reduce((acc, key) => {
-            acc[key] = el && el.style ? el.style[key] : '';
+            const property = toKebab(key);
+            acc[key] = el && el.style ? {
+              value: el.style.getPropertyValue(property),
+              priority: el.style.getPropertyPriority(property)
+            } : { value: '', priority: '' };
             return acc;
           }, {});
-          const toKebab = (key) => String(key).replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase());
           const applyImportantStyles = (el, styles) => {
             if (!el || !el.style) return;
             for (const [key, value] of Object.entries(styles || {})) {
@@ -4102,7 +4161,106 @@ body {
                    !!document.querySelector('.html5-video-player, #movie_player, ytd-player');
           };
           if (isYouTubeLike()) {
-            // Leave YouTube playback alone and let Chromium handle buffering natively.
+            if (!window.__discoveryYouTubeRecoveryInstalled) {
+              window.__discoveryYouTubeRecoveryInstalled = true;
+              const FREEZE_THRESHOLD_MS = 14000;
+              const RETRY_COOLDOWN_MS = 8000;
+              const MAX_RECOVERY_ATTEMPTS = 4;
+              const getPlayer = () => document.querySelector('#movie_player, .html5-video-player');
+              const getRecoveryState = (video) => {
+                if (!video.__discoveryYouTubeRecoveryState) {
+                  video.__discoveryYouTubeRecoveryState = {
+                    lastTime: Number(video.currentTime) || 0,
+                    lastProgressAt: Date.now(),
+                    lastAttemptAt: 0,
+                    attempts: 0,
+                    timer: null,
+                  };
+                }
+                return video.__discoveryYouTubeRecoveryState;
+              };
+              const bufferedAhead = (video) => {
+                try {
+                  const current = Number(video.currentTime) || 0;
+                  for (let index = 0; index < video.buffered.length; index += 1) {
+                    if (video.buffered.start(index) <= current && video.buffered.end(index) >= current) {
+                      return Math.max(0, video.buffered.end(index) - current);
+                    }
+                  }
+                } catch (e) {}
+                return 0;
+              };
+              const resumeYouTubeVideo = (video, state) => {
+                const now = Date.now();
+                if ((now - state.lastAttemptAt) < RETRY_COOLDOWN_MS || state.attempts >= MAX_RECOVERY_ATTEMPTS) return;
+                state.lastAttemptAt = now;
+                state.attempts += 1;
+                const player = getPlayer();
+                try {
+                  if (player && typeof player.playVideo === 'function') player.playVideo();
+                } catch (e) {}
+                try {
+                  const playResult = video.play();
+                  if (playResult && typeof playResult.catch === 'function') playResult.catch(() => {});
+                } catch (e) {}
+                // Re-request only a missing segment; preserve the page, playlist and login.
+                if (bufferedAhead(video) < 0.15 && state.attempts >= 2) {
+                  const current = Number(video.currentTime);
+                  if (Number.isFinite(current)) {
+                    try {
+                      if (player && typeof player.seekTo === 'function') player.seekTo(current + 0.01, true);
+                      else video.currentTime = current + 0.01;
+                    } catch (e) {}
+                  }
+                }
+              };
+              const bindYouTubeRecovery = (video) => {
+                if (!(video instanceof HTMLVideoElement) || video.__discoveryYouTubeRecoveryBound) return;
+                video.__discoveryYouTubeRecoveryBound = true;
+                const state = getRecoveryState(video);
+                const markProgress = () => {
+                  const current = Number(video.currentTime) || 0;
+                  if (Math.abs(current - state.lastTime) > 0.1) {
+                    state.lastTime = current;
+                    state.lastProgressAt = Date.now();
+                    state.attempts = 0;
+                  }
+                };
+                video.addEventListener('playing', () => {
+                  state.lastProgressAt = Date.now();
+                  state.attempts = 0;
+                }, { passive: true });
+                video.addEventListener('timeupdate', markProgress, { passive: true });
+                video.addEventListener('seeked', () => {
+                  state.lastTime = Number(video.currentTime) || 0;
+                  state.lastProgressAt = Date.now();
+                }, { passive: true });
+                state.timer = setInterval(() => {
+                  if (!video.isConnected || video.ended || video.paused || video.seeking || video.readyState === 0) return;
+                  markProgress();
+                  if ((Date.now() - state.lastProgressAt) >= FREEZE_THRESHOLD_MS) resumeYouTubeVideo(video, state);
+                }, 2500);
+              };
+              const scanYouTubeVideos = () => document.querySelectorAll('video').forEach(bindYouTubeRecovery);
+              let scanScheduled = false;
+              const scheduleYouTubeScan = () => {
+                if (scanScheduled) return;
+                scanScheduled = true;
+                setTimeout(() => { scanScheduled = false; scanYouTubeVideos(); }, 250);
+              };
+              scanYouTubeVideos();
+              const youtubeObserver = new MutationObserver(scheduleYouTubeScan);
+              youtubeObserver.observe(document.documentElement || document.body, { childList: true, subtree: true });
+              window.addEventListener('beforeunload', () => {
+                try { youtubeObserver.disconnect(); } catch (e) {}
+                document.querySelectorAll('video').forEach((video) => {
+                  const state = video.__discoveryYouTubeRecoveryState;
+                  if (state && state.timer) clearInterval(state.timer);
+                });
+              }, { once: true });
+              window.__discoveryInstallYouTubeRecovery = true;
+            }
+            // YouTube uses its own conservative recovery path above.
             return true;
           }
           if (window.__discoveryMediaRecoveryInstalled) return true;
@@ -5324,6 +5482,11 @@ body {
     });
 
     window.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && isFullscreen && activeDisplayMode === 'cinema') {
+        event.preventDefault();
+        toggleCinemaMode();
+        return;
+      }
       if (event.key === 'Escape' && mediaPanelOpen) {
         setMediaPanelOpen(false);
       }
@@ -5567,6 +5730,10 @@ body {
       }
       if (action === 'cinema-toggle') {
         toggleCinemaMode();
+        return;
+      }
+      if (action === 'cinema-exit') {
+        if (isFullscreen && activeDisplayMode === 'cinema') toggleCinemaMode();
         return;
       }
       if (action === 'video-full-toggle') {
@@ -6600,6 +6767,38 @@ body {
 
     // Receive messages from the webview preload and forward to main app or UI
     webview.addEventListener('ipc-message', (e) => {
+      if (e.channel === 'escape-key' && isFullscreen && activeDisplayMode === 'cinema') {
+        toggleCinemaMode();
+        return;
+      }
+      if (e.channel === 'open-link-current') {
+        const targetUrl = (e.args && e.args[0]) ? String(e.args[0]) : '';
+        if (isHttpUrl(targetUrl)) {
+          (async () => {
+            try {
+              const sourceUrl = currentPageUrl || (webview && webview.getURL ? webview.getURL() : '');
+              if (window.cardAPI && typeof window.cardAPI.shouldBlockPopupUrl === 'function') {
+                const result = await window.cardAPI.shouldBlockPopupUrl({
+                  url: targetUrl,
+                  sourceUrl,
+                  referrerUrl: sourceUrl,
+                  disposition: 'current-tab',
+                  hadRecentUserGesture: true
+                });
+                if (result && result.blocked) return;
+              }
+              markNavigationApproved(targetUrl);
+              webview.loadURL(targetUrl);
+              urlInput.value = targetUrl;
+              currentPageUrl = targetUrl;
+            } catch (error) {
+              console.error('Failed to open clicked link:', error);
+            }
+          })();
+        }
+        return;
+      }
+
       if (e.channel === 'web-notification') {
         const payload = (e.args && e.args[0]) ? e.args[0] : null;
         if (payload && window.cardAPI && window.cardAPI.sendNotification) {
@@ -6656,6 +6855,10 @@ body {
 
     if (splitWebview) {
       splitWebview.addEventListener('ipc-message', (e) => {
+        if (e.channel === 'escape-key' && isFullscreen && activeDisplayMode === 'cinema') {
+          toggleCinemaMode();
+          return;
+        }
         if (e.channel === 'web-notification') {
           const payload = (e.args && e.args[0]) ? e.args[0] : null;
           if (payload && window.cardAPI && window.cardAPI.sendNotification) {
@@ -6802,6 +7005,17 @@ if (isClosingCard || isMinimizingCard) return;
     // Wide view button (1000px width)
     wideBtn.addEventListener('click', async () => {
       try {
+        // Wide and header fullscreen are mutually exclusive layout states.
+        // Restore the card first so the wide resize never touches Cinema/media state.
+        if (headerExpansionActive) {
+          const result = await window.cardAPI.toggleCardExpansion(cardId, false);
+          if (result && result.success === false) throw new Error(result.error || 'Card restore failed');
+          headerExpansionActive = false;
+          isWideView = headerExpansionWasWide;
+          fullscreenBtn.style.background = 'rgba(100, 200, 255, 0.7)';
+          fullscreenBtn.title = 'Fullscreen Mode';
+        }
+
         if (!isWideView) {
           // Save current bounds before going wide
           const pos = window.cardAPI.getWindowPosition();
@@ -6844,6 +7058,33 @@ if (isClosingCard || isMinimizingCard) return;
 
     // Fullscreen toggle button
     fullscreenBtn.addEventListener('click', async () => {
+      if (headerExpansionInFlight) return;
+      headerExpansionInFlight = true;
+      try {
+        if (!headerExpansionActive) {
+          headerExpansionWasWide = isWideView;
+          const result = await window.cardAPI.toggleCardExpansion(cardId, true);
+          if (result && result.success === false) throw new Error(result.error || 'Card expansion failed');
+          headerExpansionActive = true;
+          fullscreenBtn.style.background = 'rgba(100, 255, 100, 0.8)';
+          fullscreenBtn.title = 'Exit Fullscreen View';
+        } else {
+          const result = await window.cardAPI.toggleCardExpansion(cardId, false);
+          if (result && result.success === false) throw new Error(result.error || 'Card restore failed');
+          headerExpansionActive = false;
+          isWideView = headerExpansionWasWide;
+          wideBtn.style.background = isWideView ? 'rgba(100, 255, 100, 0.8)' : 'rgba(100, 200, 255, 0.7)';
+          wideBtn.title = isWideView ? `Normal View (${NORMAL_WIDTH}px)` : `Wide View (${WIDE_WIDTH}px)`;
+          fullscreenBtn.style.background = 'rgba(100, 200, 255, 0.7)';
+          fullscreenBtn.title = 'Fullscreen Mode';
+        }
+        setSplitVisibility();
+      } catch (err) {
+        console.error('Error toggling card expansion:', err);
+      } finally {
+        headerExpansionInFlight = false;
+      }
+      return;
       if (cinemaToggleInFlight) return;
       cinemaToggleInFlight = true;
       pendingDisplayMode = null;
@@ -7101,8 +7342,9 @@ window.addEventListener('card-restore-animate', (event) => {
 if (cardWindowEl) {
       cardWindowEl.addEventListener('animationend', (evt) => {
         if (!evt || evt.target !== cardWindowEl) return;
-        if (evt.animationName === 'zoomInExpand') {
+        if (['zoomInExpand', 'zoomInExpandWide', 'zoomInExpandFullscreen'].includes(evt.animationName)) {
           cardWindowEl.classList.remove('is-opening-tv');
+          cardWindowEl.classList.remove('is-opening-paused');
           cardWindowEl.classList.remove('is-restoring');
         }
         if (evt.animationName === 'tvOpenExpand') {

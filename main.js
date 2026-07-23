@@ -13,6 +13,8 @@ const { clipboard } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { createGoogleWebView2Auth } = require('./google-webview2-auth');
+const { isPassiveGoogleAccountUrl, shouldLaunchGoogleAuthFromRequest } = require('./google-auth-url-classifier');
 const { pathToFileURL, fileURLToPath } = require('url');
 
 const { Menu, MenuItem } = require('electron');
@@ -341,9 +343,15 @@ if (!app.isPackaged && process.env.DISCOVERY_DISABLE_GPU_SANDBOX === '1') {
 }
 app.commandLine.appendSwitch('use-angle', 'd3d11'); // Use D3D11 ANGLE backend for Windows stability
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-// QUIC/HTTP3 can cause ERR_QUIC_PROTOCOL_ERROR in some environments.
-app.commandLine.appendSwitch('disable-quic');
-app.commandLine.appendSwitch('disable-http3');
+// Keep Chromium's modern transport enabled by default. YouTube delivers video in
+// many small media segments and recovers much more reliably over QUIC/HTTP/3;
+// forcing every request onto TCP can leave its player waiting on a stalled
+// connection until the whole page is reloaded. Retain an opt-out for diagnosing
+// networks or security software that genuinely break QUIC.
+if (process.env.DISCOVERY_DISABLE_HTTP3 === '1') {
+  app.commandLine.appendSwitch('disable-quic');
+  app.commandLine.appendSwitch('disable-http3');
+}
 // Reduce automation fingerprints that can break bot challenges.
 app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
 // Enable Private Access Token challenges (Private State Tokens) for Cloudflare Turnstile compatibility
@@ -415,6 +423,7 @@ async function safeExecuteJavaScript(webContents, script, userGesture = false) {
 
 // Track which webContents have been initialized to prevent duplicate listeners
 const initializedWebContents = new WeakSet();
+const recentUserGestureByWebContentsId = new Map();
 let recapWindow = null;
 let mediaPlayerWindow = null;
 
@@ -428,6 +437,12 @@ app.on('web-contents-created', (event, contents) => {
 
   // Set max listeners for this specific webContents to prevent warnings
   contents.setMaxListeners(20);
+
+  // Escape must work even while keyboard focus is inside a guest webview.
+  contents.on('before-input-event', (inputEvent, input) => {
+    if (!input || input.type !== 'keyDown' || input.key !== 'Escape') return;
+    requestCinemaExitForWebContents(contents);
+  });
 
   // Ensure all new windows/popups become card windows with the same layout
   try {
@@ -456,7 +471,9 @@ app.on('web-contents-created', (event, contents) => {
   contents.on('will-navigate', (navEvent, navigationUrl) => {
     try {
       const sourceUrl = contents.getURL();
-      if (shouldBlockPopupOrRedirect(navigationUrl, sourceUrl, '')) {
+      const lastGestureAt = recentUserGestureByWebContentsId.get(contents.id) || 0;
+      const hasRecentUserGesture = Date.now() - lastGestureAt < 5000;
+      if (!hasRecentUserGesture && shouldBlockPopupOrRedirect(navigationUrl, sourceUrl, '')) {
         navEvent.preventDefault();
         notifyAdRedirectBlocked(navigationUrl, sourceUrl, '');
       }
@@ -865,6 +882,49 @@ if (require('electron').app.isPackaged) {
 // Keep references to main window and all card windows
 let mainWindow;
 const cardWindows = new Map(); // cardId -> BrowserWindow
+const youtubeWebView2Auth = createGoogleWebView2Auth({
+  isGoogleAuthSensitiveUrl,
+  isGoogleAuthIntentUrl,
+  getMainWindow: () => mainWindow,
+});
+const cardExpandedRestoreBounds = new Map(); // cardId -> bounds captured before Cinema/Full mode
+const cardHeaderExpandedRestoreBounds = new Map(); // cardId -> bounds captured by header expansion only
+
+function revealPreparedCardWindow(cardId, cardWindow) {
+  if (!cardWindow || cardWindow.isDestroyed() || cardWindow.__openingStarted) return;
+  cardWindow.__openingStarted = true;
+  try {
+    if (!cardWindow.isVisible()) cardWindow.show();
+  } catch (e) { }
+  setTimeout(() => {
+    if (!cardWindow || cardWindow.isDestroyed() || !cardWindow.webContents || cardWindow.webContents.isDestroyed()) return;
+    safeIpcSend(cardWindow.webContents, 'card-opening-start');
+  }, 32);
+}
+
+function armCardOpeningFallback(cardId, cardWindow) {
+  if (!cardWindow || cardWindow.isDestroyed()) return;
+  // DOM-ready fires only after card.html has applied and paused frame zero.
+  cardWindow.webContents.once('dom-ready', () => {
+    revealPreparedCardWindow(cardId, cardWindow);
+  });
+  cardWindow.webContents.once('did-finish-load', () => {
+    setTimeout(() => revealPreparedCardWindow(cardId, cardWindow), 800);
+  });
+}
+
+function requestCinemaExitForWebContents(sourceContents) {
+  if (!sourceContents || sourceContents.isDestroyed()) return false;
+  let hostContents = null;
+  try { hostContents = sourceContents.hostWebContents || null; } catch (e) { }
+  for (const [, cardWindow] of cardWindows) {
+    if (!cardWindow || cardWindow.isDestroyed() || !cardWindow.webContents || cardWindow.webContents.isDestroyed()) continue;
+    if (cardWindow.webContents !== sourceContents && cardWindow.webContents !== hostContents) continue;
+    safeIpcSend(cardWindow.webContents, 'visualizer-widget-command', { action: 'cinema-exit' });
+    return true;
+  }
+  return false;
+}
 const promotedChallengeWindows = new Map(); // normalizedUrl -> BrowserWindow
 const trustedSiteWindows = new Map(); // siteKey -> BrowserWindow
 const trustedSiteWebContentsIds = new Set(); // webContents ids that must never be re-promoted
@@ -2019,6 +2079,46 @@ function isGoogleAuthSensitiveUrl(rawUrl) {
     if (hostname.endsWith('.google.com') && parsed.pathname.startsWith('/o/oauth2')) return true;
     if (hostname.endsWith('.google.com') && parsed.pathname.includes('/signin')) return true;
     return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+function isGoogleAuthIntentUrl(rawUrl) {
+  if (isPassiveGoogleAccountUrl(rawUrl)) return false;
+  if (isGoogleAuthSensitiveUrl(rawUrl)) return true;
+  try {
+    const parsed = new URL(String(rawUrl || ''));
+    const signal = `${parsed.hostname} ${parsed.pathname} ${parsed.search}`.toLowerCase();
+    const namesGoogleProvider = /(?:google-oauth|google_oauth|provider(?:=|%3d)google|connection(?:=|%3d)google|accounts\.google|[\/=]google(?:[\/?&#\s]|$))/i.test(signal);
+    const namesAuthentication = /(?:auth|oauth|sso|sign.?in|log.?in|connect|continue)/i.test(signal);
+    return namesGoogleProvider && namesAuthentication;
+  } catch (e) {
+    return false;
+  }
+}
+
+function isFederatedAuthFlowUrl(rawUrl) {
+  if (isGoogleAuthSensitiveUrl(rawUrl)) return true;
+  try {
+    const parsed = new URL(String(rawUrl || ''));
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+    const query = parsed.searchParams;
+    const providerSignal = [
+      query.get('connection'),
+      query.get('provider'),
+      query.get('idp'),
+      query.get('identity_provider'),
+    ].filter(Boolean).join(' ').toLowerCase();
+    const namesGoogleProvider = /(?:^|[^a-z])google(?:-oauth2)?(?:[^a-z]|$)/i.test(providerSignal);
+    const redditGoogleSso = (host === 'reddit.com' || host.endsWith('.reddit.com'))
+      && /\/sso\/google(?:\/|$)/i.test(path);
+    const authHost = /^(?:auth|login|accounts|sso|oauth)[.-]/i.test(host);
+    const authRoute = /(?:^|[/_.-])(?:auth|authorize|oauth|sso|sign.?in|log.?in|connect)(?:[/_.-]|$)/i.test(path);
+    const oauthParameters = ['client_id', 'redirect_uri', 'response_type', 'code_challenge']
+      .some((name) => query.has(name));
+    return redditGoogleSso || (namesGoogleProvider && authRoute && (authHost || oauthParameters));
   } catch (e) {
     return false;
   }
@@ -3186,6 +3286,13 @@ function queueAuthRedirectExternally(authUrl, context = {}) {
   };
 }
 
+function queueAuthRedirect(authUrl, context = {}) {
+  if (youtubeWebView2Auth.start(authUrl, context)) {
+    return { queued: true, webView2: true };
+  }
+  return queueAuthRedirectExternally(authUrl, context);
+}
+
 // Counter for generating unique card IDs for direct creation
 let directCardIdCounter = 100000;
 let prewarmedCardWindow = null;
@@ -3328,7 +3435,7 @@ function createCardDirectly(url, options = {}) {
     }
 
     if (REDIRECT_AUTH_URLS_EXTERNALLY && isAuthSensitiveUrl(targetUrl)) {
-      queueAuthRedirectExternally(targetUrl);
+      queueAuthRedirect(targetUrl);
       return null;
     }
 
@@ -3373,7 +3480,7 @@ function createCardDirectly(url, options = {}) {
       x: finalX,
       y: finalY,
       skipTaskbar: minimizeAfterShow,
-      show: true,
+      show: !!isBubbleMode,
     }, `direct-card-${cardId}`);
 
     // Make site-app windows independent in the taskbar
@@ -3393,19 +3500,14 @@ function createCardDirectly(url, options = {}) {
     cardWindow.__initialUrl = targetUrl;
 
     if (launchMode === CARD_LAUNCH_MODE_FULLSCREEN && !minimizeAfterShow) {
-      const applyFullscreen = () => {
-        try {
-          if (cardWindow && !cardWindow.isDestroyed()) {
-            applyCardPseudoFullscreen(cardWindow);
-          }
-        } catch (e) { }
-      };
-      cardWindow.once('ready-to-show', applyFullscreen);
-      setTimeout(applyFullscreen, 120);
+      // Set final native bounds before showing the window. Resizing during the
+      // CSS opening animation makes fullscreen launches visibly jump.
+      applyCardPseudoFullscreen(cardWindow);
     }
 
     // Store reference before loading
     cardWindows.set(cardId, cardWindow);
+    if (!isBubbleMode) armCardOpeningFallback(cardId, cardWindow);
 
     // Add network error handlers at main process level
     cardWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
@@ -3456,7 +3558,8 @@ function createCardDirectly(url, options = {}) {
         shape: cardShape,
         bubble: isBubbleMode ? '1' : '0',
         loadingAnimation: normalizedLoadingAnimation,
-        launchExperience
+        launchExperience,
+        launchSize: launchMode
       }
     }).catch((err) => {
       console.error('Error loading card HTML:', err);
@@ -3597,6 +3700,8 @@ function createCardDirectly(url, options = {}) {
       visualizerWidgetStates.delete(cardId);
       sideFlamesEnabledStates.delete(cardId);
       mediaProgressEnabledStates.delete(cardId);
+      cardExpandedRestoreBounds.delete(cardId);
+      cardHeaderExpandedRestoreBounds.delete(cardId);
       cardWindows.delete(cardId);
       if (mainWindow && !mainWindow.isDestroyed()) {
         safeIpcSend(mainWindow.webContents, 'card-closed', cardId);
@@ -3618,6 +3723,10 @@ function openUrlInCard(url, context = {}) {
     if (!isHttpUrl(targetUrl)) {
       return;
     }
+    if (isGoogleAuthIntentUrl(targetUrl) && youtubeWebView2Auth.start(targetUrl, context)) {
+      return;
+    }
+
     if (PROMOTE_GOOGLE_AUTH_TO_TRUSTED_WINDOW && isGoogleAuthSensitiveUrl(targetUrl)) {
       openTrustedGoogleAuthWindow(targetUrl, context);
       return;
@@ -3629,7 +3738,7 @@ function openUrlInCard(url, context = {}) {
     }
 
     if (REDIRECT_AUTH_URLS_EXTERNALLY && isAuthSensitiveUrl(targetUrl)) {
-      queueAuthRedirectExternally(targetUrl, context);
+      queueAuthRedirect(targetUrl, context);
       return;
     }
 
@@ -3660,7 +3769,7 @@ function openUrlAsBubble(url, meta = {}) {
 
     if (REDIRECT_AUTH_URLS_EXTERNALLY && isAuthSensitiveUrl(targetUrl)) {
       // Auth URLs should still open externally, not as bubbles
-      queueAuthRedirectExternally(targetUrl, { sourceUrl: meta.sourceUrl });
+      queueAuthRedirect(targetUrl, { sourceUrl: meta.sourceUrl });
       return null;
     }
 
@@ -4349,6 +4458,7 @@ process.on('uncaughtException', (error) => {
 });
 
 let storageFlushTimer = null;
+let isAppQuitting = false;
 
 function getPersistentBrowserSessions() {
   const sessions = [];
@@ -4392,12 +4502,15 @@ app.on('ready', () => {
     loadCardPreferencesFromDisk();
     startStoragePersistenceFlush();
     createMainWindow();
+    youtubeWebView2Auth.startSessionSync();
   } catch (error) {
     console.error('[App] Error in createMainWindow:', error);
   }
 });
 
 app.on('before-quit', () => {
+  isAppQuitting = true;
+  youtubeWebView2Auth.stop();
   flushBrowserSessionStorage();
   writeCardPreferencesToDisk();
   flushPermissionDecisionPersist();
@@ -4461,7 +4574,7 @@ function createMainWindow() {
 
   let windowX = 100;
   let windowY = 60;
-  const CARD_WIDTH = 1100;
+  const CARD_WIDTH = 1200;
   const CARD_HEIGHT = 620;
 
   try {
@@ -4564,6 +4677,13 @@ function createMainWindow() {
   });
 
   attachWindowHangRecovery(mainWindow, 'main-window');
+
+  // Hidden prewarmed card/media windows can keep Electron alive after the
+  // dashboard closes. Quit the whole application so the next launch starts in
+  // a clean process instead of reusing a half-closed first instance.
+  mainWindow.on('close', () => {
+    if (!isAppQuitting) app.quit();
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -4805,6 +4925,7 @@ function getSiteBase(hostname) {
   return parts.slice(-2).join('.');
 }
 
+
 function isLikelyAdRedirectUrl(rawUrl, sourceUrl = '', referrerUrl = '') {
   if (!rawUrl || blocklist.size === 0) return false;
   let urlObj;
@@ -4855,6 +4976,7 @@ function shouldBlockPopupOrRedirect(rawUrl, sourceUrl = '', referrerUrl = '') {
 
 function shouldBlockNewWindowUrl(rawUrl, sourceUrl = '', referrerUrl = '') {
   if (shouldBlockPopupOrRedirect(rawUrl, sourceUrl, referrerUrl)) return true;
+  if (isFederatedAuthFlowUrl(rawUrl)) return false;
   if (blocklist.size === 0) return false;
   const targetHost = getHostnameFromUrl(rawUrl);
   const sourceHost = getHostnameFromUrl(sourceUrl) || getHostnameFromUrl(referrerUrl);
@@ -5024,7 +5146,14 @@ function setupAddonBlocking() {
             if (wc && !wc.isDestroyed()) sourceUrl = wc.getURL();
           }
         } catch (e) { }
-        queueAuthRedirectExternally(details.url, {
+        let authSourceUrl = sourceUrl;
+        if ((!authSourceUrl || isGoogleAuthSensitiveUrl(authSourceUrl)) && details.referrer) {
+          authSourceUrl = details.referrer;
+        }
+        if (isGoogleAuthSensitiveUrl(details.url) && !shouldLaunchGoogleAuthFromRequest(details.url, authSourceUrl, isGoogleAuthSensitiveUrl)) {
+          return callback({ cancel: false });
+        }
+        queueAuthRedirect(details.url, {
           sourceUrl,
           referrerUrl: details.referrer || '',
         });
@@ -5139,6 +5268,14 @@ function setupAddonBlocking() {
 // ========================
 
 // Enhanced create-card handler with beautiful animations
+ipcMain.on('card-opening-ready', (event, payload = {}) => {
+  const cardId = Number(payload && payload.cardId);
+  const cardWindow = cardWindows.get(cardId);
+  if (!Number.isFinite(cardId) || !cardWindow || cardWindow.isDestroyed()) return;
+  if (cardWindow.webContents !== event.sender) return;
+  revealPreparedCardWindow(cardId, cardWindow);
+});
+
 ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'primary', launchSizeMode = null, isBubbleMode = null, shapeKey = null, loadingAnimationKey = null) => {
   try {
     if (updateEnforcementState.isForcedUpdate) {
@@ -5194,7 +5331,7 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
     }
 
     if (REDIRECT_AUTH_URLS_EXTERNALLY && isAuthSensitiveUrl(targetUrl)) {
-      queueAuthRedirectExternally(targetUrl);
+      queueAuthRedirect(targetUrl);
       if (deferInitialMainShow) {
         deferInitialMainShow = false;
         pendingStartupUrl = null;
@@ -5238,22 +5375,21 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       x: finalX,
       y: finalY,
       skipTaskbar: false,
-      show: true,
+      show: !!isBubbleMode,
     }, `card-${cardId}`);
     attachWindowHangRecovery(cardWindow, `card-${cardId}`);
     registerVisualizerWidgetLifecycle(cardId, cardWindow, cardTheme);
     cardWindow.__cardShape = cardShape;
 
     if (launchMode === CARD_LAUNCH_MODE_FULLSCREEN) {
-      cardWindow.once('ready-to-show', () => {
-        try {
-          if (!cardWindow.isDestroyed()) applyCardPseudoFullscreen(cardWindow);
-        } catch (e) { }
-      });
+      // Set final native bounds before showing the window. Resizing during the
+      // CSS opening animation makes fullscreen launches visibly jump.
+      applyCardPseudoFullscreen(cardWindow);
     }
 
     // Store reference before loading
     cardWindows.set(cardId, cardWindow);
+    if (!isBubbleMode) armCardOpeningFallback(cardId, cardWindow);
 
     // Force any window.open/target=_blank to open as a card window
     try {
@@ -5290,7 +5426,8 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
         theme: cardTheme,
         shape: cardShape,
         bubble: isBubbleMode ? '1' : '0',
-        loadingAnimation: normalizedLoadingAnimation
+        loadingAnimation: normalizedLoadingAnimation,
+        launchSize: launchMode
       }
     }).catch((err) => {
       console.error('Error loading card HTML:', err);
@@ -5345,6 +5482,8 @@ ipcMain.handle('create-card', async (event, cardId, url, position, themeKey = 'p
       visualizerWidgetStates.delete(cardId);
       sideFlamesEnabledStates.delete(cardId);
       mediaProgressEnabledStates.delete(cardId);
+      cardExpandedRestoreBounds.delete(cardId);
+      cardHeaderExpandedRestoreBounds.delete(cardId);
       cardWindows.delete(cardId);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('card-closed', cardId);
@@ -5416,7 +5555,7 @@ ipcMain.handle('navigate-card', async (event, cardId, url) => {
     }
 
     if (REDIRECT_AUTH_URLS_EXTERNALLY && isAuthSensitiveUrl(targetUrl)) {
-      queueAuthRedirectExternally(targetUrl);
+      queueAuthRedirect(targetUrl);
       return { success: false, externalOpened: true, reason: 'auth-url-opened-externally' };
     }
 
@@ -5545,13 +5684,59 @@ ipcMain.handle('toggle-fullscreen', async (event, cardId, shouldBeFullscreen, mo
     }
 
     if (shouldBeFullscreen) {
+      if (!cardExpandedRestoreBounds.has(cardId)) {
+        cardExpandedRestoreBounds.set(cardId, cardWindow.getBounds());
+      }
       applyCardPseudoFullscreen(cardWindow, mode);
-    } else if (typeof cardWindow.setFullScreen === 'function') {
-      cardWindow.setFullScreen(false);
+      if (!cardWindow.isVisible()) cardWindow.show();
+      cardWindow.focus();
+    } else {
+      if (typeof cardWindow.setFullScreen === 'function') {
+        cardWindow.setFullScreen(false);
+      }
+      const restoreBounds = cardExpandedRestoreBounds.get(cardId);
+      cardExpandedRestoreBounds.delete(cardId);
+      if (restoreBounds) cardWindow.setBounds(restoreBounds, false);
+      if (!cardWindow.isVisible()) cardWindow.show();
+      cardWindow.focus();
     }
+    setTimeout(() => {
+      syncVisualizerWidget(cardId);
+      syncSideFlamesWidget(cardId);
+      syncMediaProgressWidget(cardId);
+    }, 80);
     return { success: true };
   } catch (error) {
     console.error('Error toggling fullscreen:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+
+// Header expansion only: no Cinema/media state or widget synchronization.
+ipcMain.handle('toggle-card-expansion', async (event, cardId, expanded) => {
+  try {
+    const cardWindow = cardWindows.get(cardId);
+    if (!cardWindow || cardWindow.isDestroyed()) {
+      return { success: false, error: 'Card window not found' };
+    }
+    if (expanded) {
+      if (!cardHeaderExpandedRestoreBounds.has(cardId)) {
+        cardHeaderExpandedRestoreBounds.set(cardId, cardWindow.getBounds());
+      }
+      applyCardPseudoFullscreen(cardWindow, 'full');
+      if (!cardWindow.isVisible()) cardWindow.show();
+      cardWindow.focus();
+    } else {
+      const restoreBounds = cardHeaderExpandedRestoreBounds.get(cardId);
+      cardHeaderExpandedRestoreBounds.delete(cardId);
+      if (restoreBounds) cardWindow.setBounds(restoreBounds, false);
+      if (!cardWindow.isVisible()) cardWindow.show();
+      cardWindow.focus();
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error toggling card expansion:', error);
     return { success: false, error: error.message };
   }
 });
@@ -6961,6 +7146,16 @@ ipcMain.handle('update-addons', async (event, addonsArray) => {
   }
 });
 
+ipcMain.on('webview-user-gesture', (event, payload = {}) => {
+  const id = Number(payload && payload.id);
+  if (!Number.isFinite(id) || id <= 0) return;
+  recentUserGestureByWebContentsId.set(id, Date.now());
+  setTimeout(() => {
+    const recordedAt = recentUserGestureByWebContentsId.get(id) || 0;
+    if (Date.now() - recordedAt >= 5000) recentUserGestureByWebContentsId.delete(id);
+  }, 5500);
+});
+
 ipcMain.handle('should-block-popup-url', async (event, payload = {}) => {
   try {
     const rawUrl = payload && payload.url;
@@ -6968,10 +7163,13 @@ ipcMain.handle('should-block-popup-url', async (event, payload = {}) => {
     const referrerUrl = payload && payload.referrerUrl;
     const hadRecentUserGesture = payload && payload.hadRecentUserGesture !== false;
     const isNewWindow = payload && payload.disposition === 'new-window';
-    let blocked = isNewWindow
-      ? shouldBlockNewWindowUrl(rawUrl, sourceUrl, referrerUrl)
-      : shouldBlockPopupOrRedirect(rawUrl, sourceUrl, referrerUrl);
-    if (!blocked && !hadRecentUserGesture && blocklist.size > 0) {
+    const targetHost = getHostnameFromUrl(rawUrl);
+    let blocked = hadRecentUserGesture
+      ? isBlockedAdHost(targetHost) || isKnownRedirectHost(targetHost)
+      : (isNewWindow
+        ? shouldBlockNewWindowUrl(rawUrl, sourceUrl, referrerUrl)
+        : shouldBlockPopupOrRedirect(rawUrl, sourceUrl, referrerUrl));
+    if (!blocked && !hadRecentUserGesture && blocklist.size > 0 && !isFederatedAuthFlowUrl(rawUrl)) {
       const targetHost = getHostnameFromUrl(rawUrl);
       const sourceHost = getHostnameFromUrl(sourceUrl) || getHostnameFromUrl(referrerUrl);
       if (
